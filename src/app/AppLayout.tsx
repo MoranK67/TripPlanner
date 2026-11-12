@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet } from 'react-router-dom';
 import { HeaderSlotProvider } from '@/components/ui';
+import { SignOutButton } from '@/features/auth';
 import { ServerStatus } from './ServerStatus';
 
 export const MAIN_CONTENT_ID = 'main-content';
@@ -35,6 +36,7 @@ export function AppLayout() {
           </h1>
         </Link>
         <ServerStatus />
+        <SignOutButton />
         {/* Page controls (prototype `.trip-bar`): a full row on phones, inline from tablet up. */}
         <div
           ref={setHeaderSlot}

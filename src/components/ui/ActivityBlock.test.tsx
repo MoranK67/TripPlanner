@@ -83,6 +83,20 @@ describe('ActivityBlock', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
+  it('marks only the delete × with data-no-drag, so pressing it never starts a drag', () => {
+    render(
+      <ActivityBlock
+        name="קפה"
+        durationMinutes={60}
+        color="#FFD6E0"
+        onOpen={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'מחיקת קפה' })).toHaveAttribute('data-no-drag');
+    expect(screen.getByRole('button', { name: /^קפה/ })).not.toHaveAttribute('data-no-drag');
+  });
+
   it('forwards ref, className, style and extra props to the outer element', () => {
     const ref = createRef<HTMLDivElement>();
     const { container } = render(

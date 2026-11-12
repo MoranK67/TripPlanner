@@ -1,0 +1,147 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ActivityBlock, Button, ConfirmDialog, useToast } from '@/components/ui';
+import { isInBank, type Activity, type Trip } from '@/domain';
+import { errorMessage, isAbortedError } from '@/i18n/errors';
+import { ActivityDialog } from './ActivityDialog';
+import { useDeleteActivity } from './hooks';
+
+export interface BankPanelProps {
+  trip: Trip;
+  /** All of the trip's activities; the panel shows the unplaced ones in bank order. */
+  activities: readonly Activity[];
+}
+
+type DialogKind = 'add' | 'edit' | 'delete';
+
+/** After a delete: which block gets focus once the deleted one has left the list. */
+interface FocusAfterDelete {
+  deletedId: string;
+  /** The next block, else the previous one; `null` = the bank heading. */
+  targetId: string | null;
+}
+
+/**
+ * The activity bank (prototype `.bank`, FR-3.1–FR-3.5): unplaced activities ordered by
+ * `bankPosition`, add / edit dialog, delete with confirmation. Blocks use the shared height scale
+ * (FR-3.3). Phones show two blocks per row, as in the prototype.
+ */
+export function BankPanel({ trip, activities }: BankPanelProps) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const deleteActivity = useDeleteActivity(trip.id);
+  // `open` and the item are separate, so a closing dialog keeps showing the item it was opened for.
+  const [open, setOpen] = useState<DialogKind | null>(null);
+  const [item, setItem] = useState<Activity | null>(null);
+  const focusAfterDelete = useRef<FocusAfterDelete | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const blockRefs = useRef(new Map<string, HTMLDivElement>());
+
+  const bank = useMemo(
+    () => activities.filter(isInBank).sort((a, b) => a.bankPosition - b.bankPosition),
+    [activities],
+  );
+
+  // Move focus off the deleted block (keyboard users would otherwise land on <body>).
+  useEffect(() => {
+    const pending = focusAfterDelete.current;
+    if (!pending || bank.some((a) => a.id === pending.deletedId)) return;
+    focusAfterDelete.current = null;
+    const target =
+      pending.targetId === null
+        ? null
+        : blockRefs.current.get(pending.targetId)?.querySelector('button');
+    (target ?? headingRef.current)?.focus();
+  }, [bank]);
+
+  function openDialog(kind: DialogKind, activity: Activity | null) {
+    setItem(activity);
+    setOpen(kind);
+  }
+
+  function confirmDelete(activity: Activity) {
+    const index = bank.findIndex((a) => a.id === activity.id);
+    const neighbor = bank[index + 1] ?? bank[index - 1] ?? null;
+    setOpen(null);
+    focusAfterDelete.current = { deletedId: activity.id, targetId: neighbor?.id ?? null };
+    deleteActivity.mutate(activity.id, {
+      onError: (error) => {
+        focusAfterDelete.current = null;
+        if (!isAbortedError(error)) {
+          toast.show(t('bank.deleteFailed', { reason: errorMessage(error, t) }), {
+            tone: 'error',
+          });
+        }
+      },
+    });
+  }
+
+  const closeDialog = () => setOpen(null);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-card)]">
+      <div className="flex items-center justify-between gap-2 border-b border-line px-4 pt-3.5 pb-2.5">
+        <h2 ref={headingRef} tabIndex={-1} className="m-0 text-base font-semibold outline-none">
+          {t('bank.title')}
+          {bank.length > 0 && ' '}
+          {bank.length > 0 && (
+            <span className="ms-1 text-xs font-normal text-ink-soft">
+              {t('bank.count', { count: bank.length })}
+            </span>
+          )}
+        </h2>
+        <Button variant="primary" size="sm" onClick={() => openDialog('add', null)}>
+          {t('bank.add')}
+        </Button>
+      </div>
+
+      {bank.length === 0 ? (
+        <p className="m-0 flex-1 px-2 py-6 text-center text-[13.5px] leading-relaxed whitespace-pre-line text-ink-soft">
+          {t('bank.empty')}
+        </p>
+      ) : (
+        <ul
+          aria-label={t('bank.listLabel')}
+          className="m-0 flex min-h-0 flex-1 list-none flex-row flex-wrap content-start items-start gap-2 overflow-auto p-3 tablet:flex-col tablet:flex-nowrap tablet:items-stretch"
+        >
+          {bank.map((activity) => (
+            <li key={activity.id} className="w-[calc(50%-4px)] shrink-0 tablet:w-auto">
+              <ActivityBlock
+                ref={(el) => {
+                  if (el) blockRefs.current.set(activity.id, el);
+                  else blockRefs.current.delete(activity.id);
+                }}
+                name={activity.name}
+                durationMinutes={activity.durationMinutes}
+                color={activity.color}
+                onOpen={() => openDialog('edit', activity)}
+                onDelete={() => openDialog('delete', activity)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="m-0 hidden border-t border-line px-4 pt-2 pb-3 text-xs leading-normal text-ink-soft tablet:block">
+        {t('bank.hint')}
+      </p>
+
+      <ActivityDialog
+        open={open === 'add' || open === 'edit'}
+        onClose={closeDialog}
+        tripId={trip.id}
+        colorCursor={trip.colorCursor}
+        activity={open === 'add' ? undefined : (item ?? undefined)}
+      />
+      <ConfirmDialog
+        open={open === 'delete'}
+        title={t('bank.deleteConfirm.title')}
+        message={item ? t('bank.deleteConfirm.message', { name: item.name }) : ''}
+        onConfirm={() => {
+          if (item) confirmDelete(item);
+        }}
+        onCancel={closeDialog}
+      />
+    </div>
+  );
+}

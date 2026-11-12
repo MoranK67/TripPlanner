@@ -33,6 +33,17 @@
   --color-danger-hover: #f2aeba;
   --color-ok: #9ed8b4;
 
+  /*
+   * Disabled timetable cells (before the trip starts on day 1 / after it ends on the last day,
+   * FR-4.2). Decorative 45° hatch, same as the prototype's `.slot.off`:
+   *   background: repeating-linear-gradient(45deg, var(--color-slot-disabled-hatch) 0 6px,
+   *                                         var(--color-slot-disabled) 6px 12px);
+   * Not text colours: no contrast requirement; the cells must also be marked unavailable in a
+   * non-visual way (e.g. not offered as drop targets / tap targets).
+   */
+  --color-slot-disabled: #fbfafb;
+  --color-slot-disabled-hatch: #f6f3f7;
+
   /* Modal backdrop */
   --color-overlay: rgb(74 68 88 / 0.28);
 

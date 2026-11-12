@@ -9,10 +9,10 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | Milestone | Status | Notes |
 |---|---|---|
 | M0 Foundation | done | Commit `05e0513` |
-| M1 Database & auth | in progress | CLI linked 2026-11-12 |
+| M1 Database & auth | done — awaiting owner demo | Owner user created on dev; profile trigger verified |
 | M2 Domain core | done | Domain coverage 99% |
 | M3 Design system & shell | done | Owner approved the /dev/ui demo 2026-11-12 |
-| M4 Trips & bank | todo | Starts after M1.7 |
+| M4 Trips & bank | M4.1–M4.4 done — awaiting owner demo | M4.5 E2E (qa) next |
 | M5 Timetable | in progress | M5.1 spike started |
 | M6–M11 | todo | — |
 | M10 iOS native | deferred | iPhone covered by PWA (M8.3–M8.5) |
@@ -29,7 +29,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M1.5 | DB tests (constraints, triggers, RPCs, RLS with 2 users) | db-engineer | M1.3, M1.4 | done | |
 | M1.6 | Generate `database.types.ts`; AppError mapping skeleton | db-engineer (types) → core-engineer (errors) | M1.4 | done | Types `a1ea2f0` |
 | M1.7 | Repositories: authRepo, tripsRepo, activitiesRepo + tests | core-engineer | M1.6, M2.1 | done | |
-| M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | in progress | Sign-ups already disabled (DEC-007); owner creates her user |
+| M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | done | Sign-ups already disabled (DEC-007); owner creates her user |
 | M2.1 | Domain types & constants | core-engineer | — | done | |
 | M2.2 | Time utilities | core-engineer | M2.1 | done | |
 | M2.3 | Placement rules | core-engineer | M2.1 | done | Also owns `isValidTripWindow` (FR-2.5: end after start, span ≤ 89 days) |
@@ -40,7 +40,9 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M3.3 | ColorSwatches, ActivityBlock | frontend-engineer | M3.1, M2.1 | done | |
 | M3.4 | Layout & breakpoints | frontend-engineer | M3.1 | done | |
 
-| M5.1 | Spike: dnd-kit in RTL scrollable grid (ADR) | scheduler-engineer | M3.3 | in progress | |
+| M5.1 | Spike: drag engine in RTL scrollable grid (ADR-002, proposed) | scheduler-engineer | M3.3 | done | ADR stays Proposed until a real browser/phone check at /dev/dnd-spike |
+| M4.1–M4.4 | Trips list, trip dialog, edit/delete trip, bank panel | frontend-engineer | M1.7, M3.x | done | Follow-ups: per-trip mutation keys; verify the real reset email does not flash "invalid link" |
+| M4.5 | E2E: trip CRUD + bank CRUD | qa-engineer | M4.3, M4.4 | ready | |
 
 ## Done
 

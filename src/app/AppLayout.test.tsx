@@ -4,10 +4,23 @@ import { Button, HeaderActions } from '@/components/ui';
 import { AppLayout, MAIN_CONTENT_ID } from './AppLayout';
 import { Providers } from './Providers';
 
-vi.mock('@/data', () => ({
-  isSupabaseConfigured: () => false,
-  checkServerConnection: vi.fn(async () => false),
-}));
+vi.mock('@/data', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/data')>();
+  return {
+    ...actual,
+    isSupabaseConfigured: () => false,
+    checkServerConnection: vi.fn(async () => false),
+    authRepo: {
+      onAuthChange: (listener: (event: string, session: unknown) => void) => {
+        queueMicrotask(() =>
+          listener('initial_session', { user: { id: 'u1', email: 'a@b.c' }, expiresAt: null }),
+        );
+        return () => {};
+      },
+      signOut: vi.fn(async () => {}),
+    },
+  };
+});
 
 function renderLayout(page: React.ReactNode) {
   const router = createMemoryRouter(
@@ -63,6 +76,14 @@ describe('AppLayout', () => {
     const slot = screen.getByTestId('header-slot');
     expect(slot).toBeEmptyDOMElement();
     expect(slot.className).toContain('empty:hidden');
+  });
+});
+
+describe('AppLayout sign-out', () => {
+  it('offers sign-out in the header while signed in (FR-1.4)', async () => {
+    renderLayout(<p>תוכן</p>);
+    const banner = screen.getByRole('banner');
+    expect(await within(banner).findByRole('button', { name: 'יציאה' })).toBeInTheDocument();
   });
 });
 

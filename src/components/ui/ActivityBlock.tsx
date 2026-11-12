@@ -130,6 +130,8 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
           type="button"
           onClick={onDelete}
           aria-label={t('common.activityBlock.delete', { name })}
+          // The timetable's pointer engine (M5) never starts a drag from elements marked like this.
+          data-no-drag=""
           className={cx(
             'absolute end-1 grid size-5 cursor-pointer place-items-center rounded-full border-0 bg-panel/75 p-0',
             'text-sm leading-none text-ink-soft transition hover:bg-panel hover:text-danger-ink',

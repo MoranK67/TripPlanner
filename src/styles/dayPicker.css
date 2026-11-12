@@ -1,0 +1,75 @@
+/*
+ * Pastel theme for react-day-picker (trip dialog calendar, M4.2). Scoped to `.trip-calendar` so
+ * it overrides the library stylesheet regardless of CSS order. Endpoints use `accent` (accent-ink
+ * on it passes AA), the days in between `accent-soft`.
+ */
+.trip-calendar .rdp-root {
+  --rdp-accent-color: var(--color-accent-ink);
+  --rdp-accent-background-color: var(--color-accent-soft);
+  --rdp-day-height: 38px;
+  --rdp-day-width: 38px;
+  --rdp-day_button-height: 36px;
+  --rdp-day_button-width: 36px;
+  --rdp-day_button-border-radius: 12px;
+  --rdp-selected-border: 2px solid var(--color-accent-strong);
+  --rdp-range_middle-background-color: var(--color-accent-soft);
+  --rdp-range_middle-color: var(--color-ink);
+  --rdp-range_start-color: var(--color-accent-ink);
+  --rdp-range_end-color: var(--color-accent-ink);
+  --rdp-range_start-date-background-color: var(--color-accent);
+  --rdp-range_end-date-background-color: var(--color-accent);
+  --rdp-today-color: var(--color-accent-ink);
+  /* Outside days: ink-soft at full opacity (5.7:1) instead of a faded ink (2.8:1). */
+  --rdp-outside-opacity: 1;
+  --rdp-nav-height: 2.5rem;
+  font-size: 14px;
+  color: var(--color-ink);
+}
+
+@media (min-width: 37.5625rem) {
+  .trip-calendar .rdp-root {
+    --rdp-day-height: 42px;
+    --rdp-day-width: 42px;
+    --rdp-day_button-height: 40px;
+    --rdp-day_button-width: 40px;
+  }
+}
+
+.trip-calendar .rdp-caption_label {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.trip-calendar .rdp-weekday {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-soft);
+  opacity: 1;
+}
+
+.trip-calendar .rdp-outside:not(.rdp-selected) {
+  color: var(--color-ink-soft);
+}
+
+.trip-calendar .rdp-today:not(.rdp-selected) .rdp-day_button {
+  font-weight: 700;
+}
+
+.trip-calendar .rdp-day_button:focus-visible {
+  outline: 2px solid var(--color-accent-ink);
+  outline-offset: 1px;
+}
+
+.trip-calendar .rdp-chevron {
+  fill: var(--color-accent-ink);
+}
+
+.trip-calendar .rdp-button_previous,
+.trip-calendar .rdp-button_next {
+  border-radius: 999px;
+}
+
+.trip-calendar .rdp-button_previous:hover,
+.trip-calendar .rdp-button_next:hover {
+  background: var(--color-accent-soft);
+}
