@@ -29,10 +29,10 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M1.7 | Repositories: authRepo, tripsRepo, activitiesRepo + tests | core-engineer | M1.6, M2.1 | todo | |
 | M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | todo | Owner disables sign-ups in dashboard |
 | M2.1 | Domain types & constants | core-engineer | — | done | |
-| M2.2 | Time utilities | core-engineer | M2.1 | review | |
-| M2.3 | Placement rules | core-engineer | M2.1 | review | Also owns `isValidTripWindow` (FR-2.5: end after start, span ≤ 89 days) |
-| M2.4 | Duration & import parser | core-engineer | M2.1 | review | Port from prototype |
-| M2.5 | Export layout model | core-engineer | M2.2 | todo | P1 |
+| M2.2 | Time utilities | core-engineer | M2.1 | done | |
+| M2.3 | Placement rules | core-engineer | M2.1 | done | Also owns `isValidTripWindow` (FR-2.5: end after start, span ≤ 89 days) |
+| M2.4 | Duration & import parser | core-engineer | M2.1 | done | Port from prototype |
+| M2.5 | Export layout model | core-engineer | M2.2 | ready | P1 |
 | M3.1 | UI primitives (Button, Input, Select, Field, Modal, Toast) + `/dev/ui` gallery | frontend-engineer | — | done | |
 | M3.2 | ConfirmDialog | frontend-engineer | M3.1 | in progress | |
 | M3.3 | ColorSwatches, ActivityBlock | frontend-engineer | M3.1, M2.1 | in progress | |

@@ -123,6 +123,8 @@ export type ImportRow =
  * is a contract change (the UI must map every code to a message).
  */
 export type ImportRowError =
+  /** No `;` or tab between the name and the duration. Added in M2.4. */
+  | 'missing_separator'
   | 'missing_name'
   | 'name_too_long'
   | 'missing_duration'
