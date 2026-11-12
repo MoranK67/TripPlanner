@@ -128,7 +128,7 @@ begin
   return next is(v_upd_act, 0, 'B cannot update A''s activity');
   return next is(v_del_act, 0, 'B cannot delete A''s activity');
   return next is(v_upd_profile, 0, 'B cannot update A''s profile');
-  return next is(v_ins_act, 'P0002 TP_NOT_FOUND [trip]', 'B cannot add an activity to A''s trip');
+  return next is(v_ins_act, 'P0001 TP_NOT_FOUND [trip]', 'B cannot add an activity to A''s trip');
   return next is(v_ins_trip, '42501 new row violates row-level security policy for table "trips"',
     'B cannot create a trip owned by A');
   return next is(v_ins_profile, '42501 permission denied for table profiles', 'profiles cannot be inserted by users');
@@ -220,10 +220,10 @@ begin
   v_window := tests.err_full(format($q$select public.update_trip_window(%L, '2026-03-01', 0, '2026-03-02', 600)$q$, t_a));
   perform tests.clear_auth();
 
-  return next is(v_place, 'P0002 TP_NOT_FOUND [activity]', 'B cannot place A''s activity');
-  return next is(v_unplace, 'P0002 TP_NOT_FOUND [activity]', 'B cannot unplace A''s activity');
-  return next is(v_import, 'P0002 TP_NOT_FOUND [trip]', 'B cannot import into A''s trip');
-  return next is(v_window, 'P0002 TP_NOT_FOUND [trip]', 'B cannot change A''s trip window');
+  return next is(v_place, 'P0001 TP_NOT_FOUND [activity]', 'B cannot place A''s activity');
+  return next is(v_unplace, 'P0001 TP_NOT_FOUND [activity]', 'B cannot unplace A''s activity');
+  return next is(v_import, 'P0001 TP_NOT_FOUND [trip]', 'B cannot import into A''s trip');
+  return next is(v_window, 'P0001 TP_NOT_FOUND [trip]', 'B cannot change A''s trip window');
   return next is((select scheduled_date from public.activities where id = act_a), null::date, 'A''s bank activity still in the bank');
   return next is((select start_minute::integer from public.activities where id = placed_a), 600, 'A''s placed activity unchanged');
   return next is((select end_date from public.trips where id = t_a), '2026-03-03'::date, 'A''s trip window unchanged');

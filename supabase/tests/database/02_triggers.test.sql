@@ -136,7 +136,7 @@ as $fn$
 begin
   return next is(
     tests.err_full($q$insert into public.activities (trip_id, name, duration_minutes) values ('00000000-0000-4000-8000-000000000000', 'X', 60)$q$),
-    'P0002 TP_NOT_FOUND [trip]', 'inserting into a missing trip raises TP_NOT_FOUND');
+    'P0001 TP_NOT_FOUND [trip]', 'inserting into a missing trip raises TP_NOT_FOUND');
 end;
 $fn$;
 

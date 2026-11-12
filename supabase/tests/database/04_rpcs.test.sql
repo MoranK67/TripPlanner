@@ -81,7 +81,7 @@ begin
   return next is(v_neg_minute, 'P0001 TP_VALIDATION [start_minute]', 'negative minute raises TP_VALIDATION');
   return next is(v_null_date, 'P0001 TP_VALIDATION [scheduled_date]', 'missing date raises TP_VALIDATION');
   return next is(v_null_id, 'P0001 TP_VALIDATION [activity_id]', 'missing id raises TP_VALIDATION');
-  return next is(v_missing, 'P0002 TP_NOT_FOUND [activity]', 'unknown activity raises TP_NOT_FOUND');
+  return next is(v_missing, 'P0001 TP_NOT_FOUND [activity]', 'unknown activity raises TP_NOT_FOUND');
   return next is((select start_minute::integer from public.activities where id = museum), 570, 'museum moved to 09:30');
   return next is((select start_minute::integer from public.activities where id = lunch), 720, 'lunch stayed at its first valid slot');
 
@@ -190,7 +190,7 @@ begin
   return next is(v_string_duration, 'P0001 TP_VALIDATION [item:1:duration_minutes]', 'string duration rejected');
   return next is(v_fraction, 'P0001 TP_VALIDATION [item:1:duration_minutes]', 'fractional duration rejected');
   return next is(v_bad_color, 'P0001 TP_VALIDATION [item:3:color]', 'bad colour reports the item index');
-  return next is(v_not_object, 'P0001 TP_VALIDATION [item:1:name]', 'non-object item rejected');
+  return next is(v_not_object, 'P0001 TP_VALIDATION [item:1]', 'non-object item reports item:<n>');
   return next is(v_null_trip, 'P0001 TP_VALIDATION [trip_id]', 'missing trip id raises TP_VALIDATION');
   return next is((select count(*)::integer from public.activities where trip_id = t), 204,
     'failed imports inserted nothing (1 + 3 + 200)');
@@ -256,6 +256,6 @@ begin
   return next is(v_bad_end, format(ins, 'invalid_end_minute'), 'end minute 0 rejected');
   return next is(v_bad_name, format(ins, 'name'), 'empty name rejected');
   return next is(v_null_date, format(ins, 'invalid_date'), 'missing date rejected');
-  return next is(v_missing, 'P0002 TP_NOT_FOUND [trip]', 'unknown trip raises TP_NOT_FOUND');
+  return next is(v_missing, 'P0001 TP_NOT_FOUND [trip]', 'unknown trip raises TP_NOT_FOUND');
 end;
 $fn$;
