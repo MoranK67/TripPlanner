@@ -41,6 +41,11 @@ export interface ModalProps {
   closeOnBackdrop?: boolean;
   /** Show the × button in the header. Default true. */
   showCloseButton?: boolean;
+  /**
+   * ARIA role. Use `alertdialog` for confirmations that interrupt the user (ConfirmDialog).
+   * Default `dialog`.
+   */
+  role?: 'dialog' | 'alertdialog';
   className?: string;
 }
 
@@ -62,6 +67,7 @@ export function Modal({
   initialFocusRef,
   closeOnBackdrop = true,
   showCloseButton = true,
+  role = 'dialog',
   className,
 }: ModalProps) {
   const { t } = useTranslation();
@@ -132,7 +138,7 @@ export function Modal({
       >
         <div
           ref={dialogRef}
-          role="dialog"
+          role={role}
           aria-modal="true"
           aria-labelledby={titleId}
           aria-describedby={description ? descriptionId : undefined}

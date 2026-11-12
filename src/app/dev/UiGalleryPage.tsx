@@ -1,20 +1,15 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Field, Input, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { Button, Field, Input, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { ActivityBlockDemo } from './ActivityBlockDemo';
+import { ConfirmDialogDemo } from './ConfirmDialogDemo';
+import { LayoutDemo } from './LayoutDemo';
+import { Section } from './Section';
 
 // Development-only gallery of the UI primitives (M3.1). The route is registered only when
 // import.meta.env.DEV is true, so this module is not part of production builds.
 
 const HOURS = Array.from({ length: 6 }, (_, i) => `${String(8 + i).padStart(2, '0')}:00`);
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Card className="mb-4">
-      <h3 className="mt-0 mb-4 text-base font-bold">{title}</h3>
-      {children}
-    </Card>
-  );
-}
 
 export function UiGalleryPage() {
   const { t } = useTranslation();
@@ -96,6 +91,12 @@ export function UiGalleryPage() {
           <Button onClick={() => setModal('wide')}>{t('devUi.openWideModal')}</Button>
         </div>
       </Section>
+
+      <ConfirmDialogDemo />
+
+      <ActivityBlockDemo />
+
+      <LayoutDemo />
 
       <Section title={t('devUi.toast')}>
         <div className="flex flex-wrap gap-2">

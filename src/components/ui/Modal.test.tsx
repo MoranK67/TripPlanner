@@ -47,6 +47,12 @@ describe('Modal', () => {
     expect(dialog).toHaveAccessibleDescription('תיאור');
   });
 
+  it('can be rendered as an alertdialog', () => {
+    render(<Harness role="alertdialog" />);
+    fireEvent.click(screen.getByRole('button', { name: 'פתיחה' }));
+    expect(screen.getByRole('alertdialog', { name: 'אטרקציה חדשה' })).toBeInTheDocument();
+  });
+
   it('moves focus to the first field in the body on open', () => {
     render(<Harness />);
     openModal();

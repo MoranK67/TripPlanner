@@ -3,6 +3,14 @@
  * Exposed to Tailwind via @theme, e.g. `bg-panel`, `text-muted`, `border-line`.
  */
 @theme {
+  /*
+   * Layout breakpoints (M3.4), mobile-first: phone ≤ 600 px is the unprefixed default,
+   * `tablet:` = 601–899 px and up, `desktop:` = ≥ 900 px. Mirrored in BREAKPOINTS (useBreakpoint.ts).
+   * Tailwind's default sm/md/lg/xl stay available but layout code should use these names.
+   */
+  --breakpoint-tablet: 37.5625rem; /* 601px */
+  --breakpoint-desktop: 56.25rem; /* 900px */
+
   --font-sans: 'Rubik', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
 
   --color-bg: #fbf8f4;
@@ -39,6 +47,14 @@
   --color-pastel-lilac: #f3d3f2;
   --color-pastel-coral: #fcd5c8;
   --color-pastel-stone: #e6e1da;
+
+  /* Text and edge on activity blocks (any pastel above). Contrast is unit-tested in
+     ActivityBlock.contrast.test.ts: block-ink >= 7.7:1, block-ink-soft >= 5.2:1 on every pastel. */
+  --color-block-ink: #40394f;
+  --color-block-ink-soft: #5a5268; /* replaces the prototype's 72% opacity (4.0:1 on lavender) */
+  --color-block-edge: #5a4a6a; /* mixed 16% into the block color for its border */
+  --shadow-block: 0 1px 2px rgba(80, 60, 100, 0.07);
+  --shadow-block-hover: 0 3px 10px rgba(80, 60, 100, 0.12);
 
   --radius-card: 20px;
   --radius-block: 10px;
