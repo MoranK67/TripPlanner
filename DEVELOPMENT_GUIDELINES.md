@@ -41,7 +41,7 @@ Run commands from the repo root `C:\dev\trip-planner`.
 - Function components and hooks only (error boundaries excepted).
 - Server state: **TanStack Query** (queries/mutations live in `features/*/hooks`). Mutations that move blocks are optimistic with rollback (FR-5.7).
 - Local UI state: React state; a small Zustand store only for cross-component drag/selection state (to be added by the Orchestrator when needed).
-- Forms validate with **zod** schemas shared with the data layer.
+- Forms validate with the **domain guards** (`src/domain`) and the `src/data/validation.ts` reason codes, shared with the data layer (DEC-023; no zod).
 - No `dangerouslySetInnerHTML`.
 
 ## 5. Text, language, RTL
@@ -96,7 +96,7 @@ Unit tests never call the real Supabase project.
 
 - Only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` may appear in client config (`.env.local`, git-ignored).
 - Never request, print, store or commit the DB password or the secret / service_role key. CLI steps that need them are done by the owner locally.
-- Validate inputs on both sides (zod + DB constraints).
+- Validate inputs on both sides (domain guards + DB constraints).
 
 ## 12. Git
 

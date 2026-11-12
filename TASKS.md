@@ -11,8 +11,10 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M0 Foundation | done | Commit `05e0513` |
 | M1 Database & auth | in progress | CLI linked 2026-11-12 |
 | M2 Domain core | done | Domain coverage 99% |
-| M3 Design system & shell | done — awaiting owner demo | /dev/ui gallery |
-| M4–M11 | todo | — |
+| M3 Design system & shell | done | Owner approved the /dev/ui demo 2026-11-12 |
+| M4 Trips & bank | todo | Starts after M1.7 |
+| M5 Timetable | in progress | M5.1 spike started |
+| M6–M11 | todo | — |
 | M10 iOS native | deferred | iPhone covered by PWA (M8.3–M8.5) |
 
 ## Current wave — M1 ‖ M2 ‖ M3
@@ -25,9 +27,9 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M1.3 | RLS: can_access_trip + policies | db-engineer | M1.1 | done | |
 | M1.4 | RPCs: place/unplace/import/update_trip_window with TP_* errors | db-engineer | M1.2 | done | Colour/bank defaults via BEFORE INSERT trigger (DEC-019) |
 | M1.5 | DB tests (constraints, triggers, RPCs, RLS with 2 users) | db-engineer | M1.3, M1.4 | done | |
-| M1.6 | Generate `database.types.ts`; AppError mapping skeleton | db-engineer (types) → core-engineer (errors) | M1.4 | ready | |
-| M1.7 | Repositories: authRepo, tripsRepo, activitiesRepo + tests | core-engineer | M1.6, M2.1 | todo | |
-| M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | todo | Owner disables sign-ups in dashboard |
+| M1.6 | Generate `database.types.ts`; AppError mapping skeleton | db-engineer (types) → core-engineer (errors) | M1.4 | review | Types committed `a1ea2f0` |
+| M1.7 | Repositories: authRepo, tripsRepo, activitiesRepo + tests | core-engineer | M1.6, M2.1 | review | |
+| M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | todo | Sign-ups already disabled (DEC-007); owner creates her user |
 | M2.1 | Domain types & constants | core-engineer | — | done | |
 | M2.2 | Time utilities | core-engineer | M2.1 | done | |
 | M2.3 | Placement rules | core-engineer | M2.1 | done | Also owns `isValidTripWindow` (FR-2.5: end after start, span ≤ 89 days) |
@@ -37,6 +39,8 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M3.2 | ConfirmDialog | frontend-engineer | M3.1 | done | |
 | M3.3 | ColorSwatches, ActivityBlock | frontend-engineer | M3.1, M2.1 | done | |
 | M3.4 | Layout & breakpoints | frontend-engineer | M3.1 | done | |
+
+| M5.1 | Spike: dnd-kit in RTL scrollable grid (ADR) | scheduler-engineer | M3.3 | in progress | |
 
 ## Done
 

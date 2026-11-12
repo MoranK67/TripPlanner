@@ -315,11 +315,11 @@ sequenceDiagram
 
 | Concern | Approach |
 |---|---|
-| **Error taxonomy** | Data layer maps errors to a small set: `network`, `auth_expired`, `conflict_overlap`, `out_of_range`, `validation`, `not_found`, `unknown`. UI shows a Hebrew message per type. |
+| **Error taxonomy** | Data layer maps errors to a small set: `network`, `auth_expired`, `invalid_credentials`, `rate_limited`, `conflict_overlap`, `out_of_range`, `validation`, `not_found`, `unknown`. UI shows a Hebrew message per type. |
 | **User-facing errors** | Toasts for failed mutations (with rollback); inline messages in forms; full-screen error boundary with "reload" for crashes. |
 | **Auth expiry** | supabase-js auto-refreshes tokens; on `auth_expired` the app routes to login and preserves the current trip id. |
 | **Logging** | MVP: structured `console` logging behind a tiny `logger` module (levels; disabled in production except errors). Supabase dashboard logs for DB/API. Phase 2: Sentry free tier [R] if real users arrive. |
-| **Security** | RLS on every table, deny-by-default; only the **publishable key** (`sb_publishable_…`, formerly "anon key") ships in the client; the **secret / service_role key** and the database password never leave the owner's machine/CI secrets and are never pasted into chats or committed; sign-ups disabled; all inputs validated client-side (zod) **and** by DB check constraints; React escaping prevents HTML injection; no `dangerouslySetInnerHTML`. |
+| **Security** | RLS on every table, deny-by-default; only the **publishable key** (`sb_publishable_…`, formerly "anon key") ships in the client; the **secret / service_role key** and the database password never leave the owner's machine/CI secrets and are never pasted into chats or committed; sign-ups disabled; all inputs validated client-side (domain guards) **and** by DB check constraints; React escaping prevents HTML injection; no `dangerouslySetInnerHTML`. |
 | **Secrets** | `.env.local` (git-ignored) holds `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY`; `.env.example` (committed) documents them; CI secrets for deploy keys, Android signing. |
 | **Supabase project security settings** (set at project creation [C]) | *Data API* enabled; *Automatically expose new tables* **disabled** → every migration must explicitly `GRANT` table privileges to the `authenticated` role (never to `anon`); *Automatic RLS* **enabled** as a safety net (migrations still enable RLS explicitly). |
 
@@ -347,7 +347,7 @@ sequenceDiagram
 | Drag & drop | **dnd-kit** | Custom pointer code (prototype), react-dnd | Mouse + touch + keyboard sensors, accessibility, auto-scroll. Trade-off: must verify RTL coordinate handling (prototype logic is the fallback). |
 | Date range calendar | **react-day-picker** (range mode, `he` locale, RTL) | Custom calendar, MUI pickers | Exactly matches FR-2.3 (one calendar, start + end), lightweight, accessible. |
 | Dates | **date-fns** + `he` locale | Day.js, Luxon | Tree-shakable, pure functions; Luxon only needed once time zones arrive (Phase 2). |
-| Validation | **zod** | yup | Shared schemas for forms and repository input. |
+| Validation | **Domain guards** in `src/domain` (DEC-023) | zod, yup | Same rules for forms and repository input; mirrors the DB checks with no extra dependency. |
 | Styling | **Tailwind CSS** with design tokens from the prototype (CSS variables) | CSS Modules, styled-components | Logical properties (`ms-`, `pe-`) make RTL natural; fast for agents. Trade-off: long class lists — mitigated by `components/ui`. |
 | i18n | **i18next + react-i18next**, Hebrew only | Hard-coded strings | Cheap now, expensive to retrofit (FR-9.2). |
 | PDF | **jsPDF** (bundled via npm) | pdf-lib, print-to-PDF | Proven in prototype; bundled → works offline. |
@@ -558,7 +558,8 @@ authRepo
   signOut()                            -> void
   getSession()                         -> Session | null
   onAuthChange(cb)                     -> unsubscribe
-  requestPasswordReset(email)          -> void
+  requestPasswordReset(email, redirectTo?) -> void
+  updatePassword(newPassword)          -> void
 
 tripsRepo
   list()                               -> TripSummary[]        (id, name, window, dayCount)
@@ -580,7 +581,7 @@ backupRepo
   importAll(json, mode: 'add')         -> { trips: n, activities: m }
 ```
 
-All functions throw `AppError { kind, message, cause }` (§4.6).
+All functions throw `AppError { kind, reason, retryable, code, status, message, cause }` (§4.6); `message` is a fixed English text per kind, never raw server text.
 
 ### 7.3 Domain types (shared)
 
