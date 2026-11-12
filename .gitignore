@@ -1,0 +1,29 @@
+# Secrets / local environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies & build output
+node_modules/
+dist/
+dist-ssr/
+coverage/
+playwright-report/
+test-results/
+
+# Supabase local state
+supabase/.temp/
+supabase/.branches/
+
+# Native build output
+src-tauri/target/
+android/app/build/
+android/.gradle/
+ios/App/Pods/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json

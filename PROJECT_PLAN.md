@@ -3,7 +3,8 @@
 | | |
 |---|---|
 | **Status** | Approved direction, ready for implementation |
-| **Version** | 1.1 — 2026-11-12 (iOS deferred) |
+| **Version** | 1.2 — 2026-11-12 (cloud DB confirmed, `dev` project created, iPhone via PWA, repo moved to `C:\dev\trip-planner`) |
+| **Repository** | GitHub `MoranK67/TripPlanner`, local clone `C:\dev\trip-planner` |
 | **Hebrew translation** | [`PROJECT_PLAN.he.md`](PROJECT_PLAN.he.md) — the English version is authoritative if they differ |
 | **Owner** | Product owner (single user, builds with AI coding agents) |
 | **Reference prototype** | [`index.html`](index.html) — working single-file prototype; the UX source of truth for look & feel |
@@ -49,7 +50,7 @@ Most travel planners (TripIt, Wanderlog, Google Travel) are lists + maps. This p
 |---|---|---|
 | G1 | Plan a multi-day trip visually: trip window → activity bank → drag into timetable. | [C] |
 | G2 | Data lives in a real database, not in the browser, and is the same on every device. | [C] |
-| G3 | Available as a desktop app (Windows) and a mobile app (Android). iOS is deferred — the architecture keeps it possible. | [C] |
+| G3 | Available as a desktop app (Windows), a mobile app (Android), and on iPhone as a free installable web app (PWA). A native iOS app is deferred — the architecture keeps it possible. | [C] |
 | G4 | Single user now; architecture ready for multiple users later without data-model rewrites. | [C] |
 | G5 | Hebrew, RTL, soft pastel visual identity of the prototype. | [C] |
 | G6 | Maintainable by one non-specialist owner working with AI agents: few technologies, clear module boundaries, strong tests. | [R] |
@@ -318,8 +319,9 @@ sequenceDiagram
 | **User-facing errors** | Toasts for failed mutations (with rollback); inline messages in forms; full-screen error boundary with "reload" for crashes. |
 | **Auth expiry** | supabase-js auto-refreshes tokens; on `auth_expired` the app routes to login and preserves the current trip id. |
 | **Logging** | MVP: structured `console` logging behind a tiny `logger` module (levels; disabled in production except errors). Supabase dashboard logs for DB/API. Phase 2: Sentry free tier [R] if real users arrive. |
-| **Security** | RLS on every table, deny-by-default; only the public anon key ships in the client; the service-role key never leaves the owner's machine/CI secrets; sign-ups disabled; all inputs validated client-side (zod) **and** by DB check constraints; React escaping prevents HTML injection; no `dangerouslySetInnerHTML`. |
-| **Secrets** | `.env.local` (git-ignored) for Supabase URL + anon key; CI secrets for deploy keys, Apple/Android signing. |
+| **Security** | RLS on every table, deny-by-default; only the **publishable key** (`sb_publishable_…`, formerly "anon key") ships in the client; the **secret / service_role key** and the database password never leave the owner's machine/CI secrets and are never pasted into chats or committed; sign-ups disabled; all inputs validated client-side (zod) **and** by DB check constraints; React escaping prevents HTML injection; no `dangerouslySetInnerHTML`. |
+| **Secrets** | `.env.local` (git-ignored) holds `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY`; `.env.example` (committed) documents them; CI secrets for deploy keys, Android signing. |
+| **Supabase project security settings** (set at project creation [C]) | *Data API* enabled; *Automatically expose new tables* **disabled** → every migration must explicitly `GRANT` table privileges to the `authenticated` role (never to `anon`); *Automatic RLS* **enabled** as a safety net (migrations still enable RLS explicitly). |
 
 ### 4.7 Scalability & extensibility
 
@@ -360,7 +362,8 @@ sequenceDiagram
 | Lint / format | **ESLint + Prettier**, `import/no-restricted-paths` for module boundaries | Biome | Boundary rules enforce the architecture. |
 | Package manager | **pnpm** | npm | Fast, strict. (npm acceptable if owner prefers.) |
 | Source control & CI | **GitHub + GitHub Actions** | GitLab | Free private repos, tauri-action, macOS runners for iOS. |
-| Web hosting (optional) | **Cloudflare Pages** or Netlify (free) | Vercel | Web build is a convenient fallback ("open in any browser") and a review preview per PR. |
+| Web hosting (**required** — serves the iPhone PWA) | **Cloudflare Pages** (free) | Netlify, Vercel | Hosts the web build as an installable PWA for iPhone (free alternative to a native iOS app), plus "open in any browser" and a preview per PR. |
+| PWA support | **vite-plugin-pwa** (manifest, icons, service worker) | Hand-written service worker | Standard, low-effort; also provides the offline read cache shell. |
 | AI (Phase 2) | **Claude API** called from a **Supabase Edge Function** (API key server-side only) | Calling AI directly from the client | Never expose AI keys in apps; central place for prompt, limits and cost control. |
 
 ### 5.2 What we deliberately do **not** use
@@ -526,14 +529,15 @@ Errors raised by functions use stable codes in the message (`TP_OVERLAP`, `TP_OU
 | `trips` | `can_access_trip(id,'viewer')` | `owner_id = auth.uid()` | `can_access_trip(id,'editor')` | `owner_id = auth.uid()` |
 | `activities` | `can_access_trip(trip_id,'viewer')` | `can_access_trip(trip_id,'editor')` | `can_access_trip(trip_id,'editor')` | `can_access_trip(trip_id,'editor')` |
 
-RLS enabled and forced on all tables; anon role has no table grants.
+RLS enabled and forced on all tables; anon role has no table grants. Because automatic table exposure is disabled in the project, each migration that creates a table also contains the explicit `GRANT SELECT, INSERT, UPDATE, DELETE … TO authenticated` (and `GRANT EXECUTE` on RPCs to `authenticated`).
 
 ### 6.5 Environments
 
 | Environment | Purpose |
 |---|---|
 | `dev` Supabase project | Development, DB tests, E2E tests (seeded test users). |
-| `prod` Supabase project | Owner's real data. Migrations applied via CLI from `main` only. Daily automatic backups (free tier: verify retention; see §11). |
+| `dev` — **created 2026-11-12** | Project name `trip-planner-dev`, region Central EU (Frankfurt), ref `hnabofhgpefcjjzlxwbm`, URL `https://hnabofhgpefcjjzlxwbm.supabase.co`. Note: public sign-up is currently **enabled** by default — disable it in M1.8. |
+| `prod` Supabase project (create in M11.2; free tier allows 2 projects) | Owner's real data. Migrations applied via CLI from `main` only. Daily automatic backups (free tier: verify retention; see §11). |
 
 ---
 
@@ -640,7 +644,8 @@ Complexity: **S** (≤ 1 day for an agent), **M** (1–3 days), **L** (3–6 day
 | F14 | Platform adapter | Native save/share/online | Web/Tauri/Capacitor implementations | F0 | Tauri & Capacitor plugins | S |
 | F15 | Desktop app | Windows app | Tauri 2 shell, icons, installer, CI build | F5–F14 | Tauri, tauri-action | M |
 | F16 | Android app | Android app | Capacitor project, icons/splash, signed APK/AAB, CI build | F9, F14 | Capacitor, Android SDK | M |
-| F17 | iOS app — **deferred** (not required for now [C]) | iPhone app | Capacitor iOS project, signing, TestFlight | F16 | Xcode (Mac), Apple Developer account | L |
+| F17 | Native iOS app — **deferred** (not required for now [C]) | iPhone app | Capacitor iOS project, signing, TestFlight | F16 | Xcode (Mac), Apple Developer account ($99/yr) | L |
+| F18 | **iPhone via PWA (free)** [C] | Use the app on iPhone at no cost | Web build hosted on Cloudflare Pages; web manifest, icons, splash, standalone display, safe-area handling; "Add to Home Screen" guide in Hebrew | F9, F13 | vite-plugin-pwa, Cloudflare Pages | S–M |
 
 ### 8.2 Phase 2 (important enhancements)
 
@@ -710,7 +715,7 @@ Priority: P0 = MVP blocker, P1 = MVP should-have, P2 = can slip.
 | M0.3 | Folder structure (§10.4) with placeholder index files and boundary rules | Agents can work in parallel without conflicts | M0.2 | P0 | S | all |
 | M0.4 | Tailwind + design tokens ported from prototype (palette, radii, shadows, Rubik bundled), RTL base | Tokens available as CSS vars & Tailwind theme | M0.2 | P0 | S | styles |
 | M0.5 | i18n setup (i18next, `he.json`), `dir="rtl"` handling | All strings go through `t()` | M0.2 | P0 | S | i18n |
-| M0.6 | Create Supabase `dev` and `prod` projects (EU), link CLI, `.env.example` | Env documented; client connects | M0.1 | P0 | S | supabase, data |
+| M0.6 | ~~Create Supabase `dev` project~~ ✅ done (2026-11-12; `.env.local`, `.env.example`, `.gitignore` committed/created). Remaining: install Supabase CLI and link it to `dev` (requires DB password, entered locally by the owner, never shared). `prod` is created later (M11.2). | CLI linked; client connects | M0.1 | P0 | S | supabase, data |
 | M0.7 | CI: install, lint, typecheck, unit tests on every PR | Green pipeline required to merge | M0.2 | P0 | S | .github |
 | M0.8 | App shell: router (`/login`, `/trips`, `/trips/:id`), QueryClient, error boundary, toast host | Navigable empty app | M0.3–M0.5 | P0 | S | app |
 
@@ -795,6 +800,9 @@ Priority: P0 = MVP blocker, P1 = MVP should-have, P2 = can slip.
 |---|---|---|---|---|---|---|
 | M8.1 | Tauri 2 shell: window config, icons, deep-link-free auth, Tauri `saveFile` | App runs on Windows | M6.2, M7 | P0 | M | src-tauri, platform |
 | M8.2 | CI build of Windows installer (tauri-action), release artifact | Downloadable `.msi`/`.exe` | M8.1 | P0 | S | .github |
+| M8.3 | PWA: vite-plugin-pwa manifest, icons, splash, standalone mode, iOS safe areas | Installable from Safari "Add to Home Screen" | M7 | P0 | S | app, platform |
+| M8.4 | Deploy web build to Cloudflare Pages from `main` (+ preview per PR); Supabase auth redirect URLs updated | Public HTTPS URL; login works there | M8.3 | P0 | S | .github |
+| M8.5 | Test on a real iPhone (Safari + installed PWA): login, view, tap-to-place, export via share sheet; Hebrew install guide | iPhone usable for free | M8.4 | P0 | S | QA, docs |
 | M9.1 | Capacitor Android: project, icons/splash, status bar, back-button handling, Capacitor `saveFile`/share | App runs on Android phone | M7, M6.2 | P0 | M | android, platform |
 | M9.2 | Signed release build (APK for side-loading; AAB if Play Store wanted) in CI | Installable APK | M9.1 | P0 | S | .github |
 | M10.1 | *(Deferred)* Capacitor iOS project, safe areas, share sheet | App runs on iPhone | M9.1, Mac access | P2 | L | ios |
@@ -950,9 +958,10 @@ trip-planner/
 | ID | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
 | R1 | **Drag & drop complexity** (RTL coordinates, scrolling grid with sticky elements, touch) | High | High | Early spike + ADR (M5.1); prototype pointer engine as proven fallback; tap-to-place on mobile; E2E coverage. |
-| R2 | **iOS builds require macOS and an Apple Developer account ($99/yr)**; owner works on Windows | High | Low (iOS deferred) | iOS deferred; when scheduled, use GitHub Actions macOS runners for builds + TestFlight (Q1). |
+| R2 | **Native iOS builds require macOS and an Apple Developer account ($99/yr)**; owner works on Windows | High | Low | iPhone served by the free PWA (F18); native iOS only if later needed, via GitHub Actions macOS runners + TestFlight (Q1). |
+| R2b | **iOS PWA limitations**: Safari may clear a PWA's offline storage if unused for weeks; no App Store presence; file export goes through the share sheet | Medium | Low | Data lives in the cloud (only the offline cache can be cleared); test export on a real iPhone (M8.5). |
 | R3 | **Supabase free projects pause after a period of inactivity** and have limited backup retention | Medium | High | Weekly scheduled CI job that pings the API and exports a JSON backup to a private location; upgrade to paid plan if needed. |
-| R4 | Code repository inside a **OneDrive** folder (sync of `node_modules`, file locks during builds) | High | Medium | Keep the code repo outside OneDrive (e.g., `C:\dev\trip-planner`); GitHub is the backup. |
+| R4 | Code repository inside a **OneDrive** folder (sync of `node_modules`, file locks during builds) | — | — | **Resolved** 2026-11-12: repo moved to `C:\dev\trip-planner`; GitHub is the backup. |
 | R5 | Two native toolchains (Rust for Tauri, Android Studio / Xcode for Capacitor) are heavy for a non-specialist | Medium | Medium | Native builds run in CI; local native setup only for debugging; detailed setup docs by Platform agent. |
 | R6 | Mobile usability of a 48-row timetable | High | Medium | Dedicated phone layout (M7) instead of shrinking the desktop grid. |
 | R7 | Scope creep toward "comprehensive" planner | Medium | High | Non-goals list (§1.4); Lead enforces task cards; Phase 2 only after MVP sign-off. |
@@ -983,6 +992,10 @@ trip-planner/
 | D10 | Built by the owner with Claude and AI agents. |
 | D11 | Apps for desktop and mobile. Android now; **iOS deferred** (not required for now, decided 2026-11-12). |
 | D12 | A real database ("let's build a DB") — implemented as a cloud database to share data across devices. |
+| D13 | **Cloud Supabase from the start** (no local Docker setup). `dev` project `trip-planner-dev` created in Central EU (Frankfurt). |
+| D14 | **iPhone: free PWA first** (installable web app); native iOS app remains deferred. |
+| D15 | Code repository: GitHub `MoranK67/TripPlanner`, local folder `C:\dev\trip-planner` (outside OneDrive). |
+| D16 | Supabase security settings: Data API on, automatic table exposure off, automatic RLS on. |
 
 ### 12.2 Assumptions
 
@@ -993,7 +1006,7 @@ trip-planner/
 | A3 | All times are the destination's local wall-clock time; no time zones in MVP. | Introduce `timezone` handling early (affects §4.5, §6). |
 | A4 | Granularity stays 30 minutes in MVP. | Data model already supports other granularities. |
 | A5 | Distribution is personal (side-loaded APK, TestFlight, direct installer), not public app stores. | Add store listing, privacy policy, signing certificates. |
-| A6 | Supabase region EU is acceptable. | Choose another region at project creation (cannot move later). |
+| A6 | ~~Supabase region EU is acceptable.~~ Confirmed: Central EU (Frankfurt). | — |
 | A7 | Free tiers are acceptable; Apple's $99/yr is the only potential cost. | Revisit hosting tier. |
 | A8 | Maximum trip length 90 days; max 200 activities per import. | Adjust constants. |
 | A9 | Login by email + password (no Google sign-in in MVP). | Add OAuth provider (Supabase supports it). |
@@ -1008,5 +1021,5 @@ The owner chose to decide these later (2026-11-12); the defaults below apply unt
 | Q2 | Should the apps be published in Google Play / App Store, or only installed on your own devices? | M9 | Personal installation only (A5). |
 | Q3 | App name and icon? | M8 | Working name "מתכנן הטיולים"; pastel map-pin icon from the prototype. |
 | Q4 | Email address for the owner account? | M1.8 | Provided by owner at setup time (never committed to the repo). |
-| Q5 | Should a web version also be hosted publicly (handy from any computer)? | M8 | Yes, private URL, same login. |
-| Q6 | Where should the code repository live (outside OneDrive recommended)? | M0.1 | `C:\dev\trip-planner` + private GitHub repo. |
+| Q5 | ~~Should a web version also be hosted?~~ **Resolved:** yes — required for the iPhone PWA (D14). | — | — |
+| Q6 | ~~Where should the code repository live?~~ **Resolved:** `C:\dev\trip-planner` + GitHub `MoranK67/TripPlanner` (D15). | — | — |
