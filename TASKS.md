@@ -20,12 +20,12 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | ID | Task | Owner | Depends on | Status | Notes |
 |---|---|---|---|---|---|
 | M0.6 | Install Supabase CLI, link to `trip-planner-dev` | owner + Orchestrator | — | done | CLI as devDependency (`npx.cmd supabase` in PowerShell) |
-| M1.1 | Schema migration: profiles, trips, activities, checks, indexes, btree_gist, exclusion constraint, GRANTs | db-engineer | M0.6 | in progress | |
-| M1.2 | Triggers: updated_at, handle_new_user, validate_activity_in_trip, unplace_out_of_range_activities | db-engineer | M1.1 | todo | |
-| M1.3 | RLS: can_access_trip + policies | db-engineer | M1.1 | todo | |
-| M1.4 | RPCs: place/unplace/import/update_trip_window with TP_* errors | db-engineer | M1.2 | todo | Open: atomic colour-cursor assignment for single activity create (DB default/trigger vs data layer) — decide before M1.7 |
-| M1.5 | DB tests (constraints, triggers, RPCs, RLS with 2 users) | db-engineer | M1.3, M1.4 | todo | |
-| M1.6 | Generate `database.types.ts`; AppError mapping skeleton | db-engineer (types) → core-engineer (errors) | M1.4 | todo | |
+| M1.1 | Schema migration: profiles, trips, activities, checks, indexes, btree_gist, exclusion constraint, GRANTs | db-engineer | M0.6 | done | |
+| M1.2 | Triggers: updated_at, handle_new_user, validate_activity_in_trip, unplace_out_of_range_activities | db-engineer | M1.1 | done | |
+| M1.3 | RLS: can_access_trip + policies | db-engineer | M1.1 | done | |
+| M1.4 | RPCs: place/unplace/import/update_trip_window with TP_* errors | db-engineer | M1.2 | done | Colour/bank defaults via BEFORE INSERT trigger (DEC-019) |
+| M1.5 | DB tests (constraints, triggers, RPCs, RLS with 2 users) | db-engineer | M1.3, M1.4 | done | |
+| M1.6 | Generate `database.types.ts`; AppError mapping skeleton | db-engineer (types) → core-engineer (errors) | M1.4 | ready | |
 | M1.7 | Repositories: authRepo, tripsRepo, activitiesRepo + tests | core-engineer | M1.6, M2.1 | todo | |
 | M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | todo | Owner disables sign-ups in dashboard |
 | M2.1 | Domain types & constants | core-engineer | — | done | |
