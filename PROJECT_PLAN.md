@@ -7,7 +7,7 @@
 | **Repository** | GitHub `MoranK67/TripPlanner`, local clone `C:\dev\trip-planner` |
 | **Hebrew translation** | [`PROJECT_PLAN.he.md`](PROJECT_PLAN.he.md) — the English version is authoritative if they differ |
 | **Owner** | Product owner (single user, builds with AI coding agents) |
-| **Reference prototype** | [`index.html`](index.html) — working single-file prototype; the UX source of truth for look & feel |
+| **Reference prototype** | [`prototype/index.html`](prototype/index.html) — working single-file prototype; the UX source of truth for look & feel |
 
 **Legend used throughout this document**
 
@@ -360,7 +360,7 @@ sequenceDiagram
 | E2E tests | **Playwright** (web build, desktop + mobile viewports) | Cypress | Real drag-and-drop & touch emulation, parallel, free. |
 | DB tests | **pgTAP** via Supabase CLI, or SQL test scripts run against the `dev` project | — | Proves RLS and constraints (NFR-2, NFR-5). |
 | Lint / format | **ESLint + Prettier**, `import/no-restricted-paths` for module boundaries | Biome | Boundary rules enforce the architecture. |
-| Package manager | **pnpm** | npm | Fast, strict. (npm acceptable if owner prefers.) |
+| Package manager | **npm** (changed from pnpm — [ADR-001](docs/decisions/001-npm-instead-of-pnpm.md)) | pnpm | Ships with Node; one tool fewer for the owner. |
 | Source control & CI | **GitHub + GitHub Actions** | GitLab | Free private repos, tauri-action, macOS runners for iOS. |
 | Web hosting (**required** — serves the iPhone PWA) | **Cloudflare Pages** (free) | Netlify, Vercel | Hosts the web build as an installable PWA for iPhone (free alternative to a native iOS app), plus "open in any browser" and a preview per PR. |
 | PWA support | **vite-plugin-pwa** (manifest, icons, service worker) | Hand-written service worker | Standard, low-effort; also provides the offline read cache shell. |
@@ -707,6 +707,8 @@ Each milestone ends with a **demo to the owner** (human checkpoint) before the n
 Priority: P0 = MVP blocker, P1 = MVP should-have, P2 = can slip.
 
 #### M0 — Foundation
+
+> **Status 2026-11-12:** M0.1–M0.5, M0.7, M0.8 done (Vite 8 + React 18 + TS strict, Tailwind 4 tokens, i18n, ESLint boundaries, Vitest, CI, app shell with server-status check). The prototype moved to `prototype/index.html`. **Remaining:** M0.6 Supabase CLI link (needs the DB password, entered locally by the owner) — can be done at the start of M1.
 
 | ID | Task | Expected outcome | Depends on | Pri | Cx | Modules |
 |---|---|---|---|---|---|---|
