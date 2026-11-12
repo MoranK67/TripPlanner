@@ -1,9 +1,13 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from './database.types';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-let client: SupabaseClient | null = null;
+/** Supabase client typed with the generated schema (`database.types.ts`). Internal to src/data. */
+export type TypedSupabaseClient = SupabaseClient<Database>;
+
+let client: TypedSupabaseClient | null = null;
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(url && publishableKey);
@@ -13,13 +17,13 @@ export function isSupabaseConfigured(): boolean {
  * The single Supabase client. Internal to src/data — never export it from the
  * data layer's public index (PROJECT_PLAN §4.3).
  */
-export function getSupabase(): SupabaseClient {
+export function getSupabase(): TypedSupabaseClient {
   if (!url || !publishableKey) {
     throw new Error(
       'Supabase is not configured: set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local (see .env.example).',
     );
   }
-  client ??= createClient(url, publishableKey, {
+  client ??= createClient<Database>(url, publishableKey, {
     auth: { persistSession: true, autoRefreshToken: true },
   });
   return client;

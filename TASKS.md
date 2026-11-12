@@ -27,9 +27,9 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M1.3 | RLS: can_access_trip + policies | db-engineer | M1.1 | done | |
 | M1.4 | RPCs: place/unplace/import/update_trip_window with TP_* errors | db-engineer | M1.2 | done | Colour/bank defaults via BEFORE INSERT trigger (DEC-019) |
 | M1.5 | DB tests (constraints, triggers, RPCs, RLS with 2 users) | db-engineer | M1.3, M1.4 | done | |
-| M1.6 | Generate `database.types.ts`; AppError mapping skeleton | db-engineer (types) → core-engineer (errors) | M1.4 | review | Types committed `a1ea2f0` |
-| M1.7 | Repositories: authRepo, tripsRepo, activitiesRepo + tests | core-engineer | M1.6, M2.1 | review | |
-| M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | todo | Sign-ups already disabled (DEC-007); owner creates her user |
+| M1.6 | Generate `database.types.ts`; AppError mapping skeleton | db-engineer (types) → core-engineer (errors) | M1.4 | done | Types `a1ea2f0` |
+| M1.7 | Repositories: authRepo, tripsRepo, activitiesRepo + tests | core-engineer | M1.6, M2.1 | done | |
+| M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | in progress | Sign-ups already disabled (DEC-007); owner creates her user |
 | M2.1 | Domain types & constants | core-engineer | — | done | |
 | M2.2 | Time utilities | core-engineer | M2.1 | done | |
 | M2.3 | Placement rules | core-engineer | M2.1 | done | Also owns `isValidTripWindow` (FR-2.5: end after start, span ≤ 89 days) |
