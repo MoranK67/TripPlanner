@@ -39,6 +39,11 @@ describe('app shell routing', () => {
     expect(await screen.findByRole('heading', { name: 'הדף לא נמצא' })).toBeInTheDocument();
   });
 
+  it('serves the UI gallery at /dev/ui in development', async () => {
+    renderAt('/dev/ui');
+    expect(await screen.findByRole('heading', { name: 'גלריית רכיבי ממשק' })).toBeInTheDocument();
+  });
+
   it('sets the document direction to RTL', () => {
     expect(document.documentElement.dir).toBe('rtl');
     expect(document.documentElement.lang).toBe('he');

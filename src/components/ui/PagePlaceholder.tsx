@@ -6,7 +6,7 @@ export function PagePlaceholder({ title, note }: { title: string; note: string }
     <div className="mx-auto max-w-3xl">
       <Card>
         <h2 className="mb-2 text-xl font-bold">{title}</h2>
-        <p className="m-0 text-muted">{note}</p>
+        <p className="m-0 text-ink-soft">{note}</p>
       </Card>
     </div>
   );

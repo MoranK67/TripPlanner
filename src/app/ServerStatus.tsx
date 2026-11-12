@@ -31,7 +31,7 @@ export function ServerStatus() {
 
   return (
     <span
-      className="flex items-center gap-2 rounded-full bg-bg px-3 py-1 text-xs text-muted"
+      className="flex items-center gap-2 rounded-full bg-bg px-3 py-1 text-xs text-ink-soft"
       role="status"
     >
       <span className={`inline-block size-2 rounded-full ${dot}`} aria-hidden="true" />
