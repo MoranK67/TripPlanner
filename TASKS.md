@@ -10,7 +10,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 |---|---|---|
 | M0 Foundation | done | Commit `05e0513` |
 | M1 Database & auth | in progress | CLI linked 2026-11-12 |
-| M2 Domain core | ready | Parallel with M1 |
+| M2 Domain core | done | Domain coverage 99% |
 | M3 Design system & shell | ready | Parallel with M1 |
 | M4–M11 | todo | — |
 | M10 iOS native | deferred | iPhone covered by PWA (M8.3–M8.5) |
@@ -32,7 +32,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M2.2 | Time utilities | core-engineer | M2.1 | done | |
 | M2.3 | Placement rules | core-engineer | M2.1 | done | Also owns `isValidTripWindow` (FR-2.5: end after start, span ≤ 89 days) |
 | M2.4 | Duration & import parser | core-engineer | M2.1 | done | Port from prototype |
-| M2.5 | Export layout model | core-engineer | M2.2 | ready | P1 |
+| M2.5 | Export layout model | core-engineer | M2.2 | done | P1 |
 | M3.1 | UI primitives (Button, Input, Select, Field, Modal, Toast) + `/dev/ui` gallery | frontend-engineer | — | done | |
 | M3.2 | ConfirmDialog | frontend-engineer | M3.1 | in progress | |
 | M3.3 | ColorSwatches, ActivityBlock | frontend-engineer | M3.1, M2.1 | in progress | |

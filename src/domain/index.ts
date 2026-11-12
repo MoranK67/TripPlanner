@@ -2,6 +2,7 @@
 // Pure TypeScript only: no React, no Supabase, no I/O.
 export * from './constants';
 export * from './duration';
+export * from './exportLayout';
 export * from './guards';
 export * from './importParser';
 export * from './placement';
