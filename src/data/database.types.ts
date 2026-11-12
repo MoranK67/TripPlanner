@@ -229,6 +229,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_activity: {
+        Args: {
+          activity_id: string
+          color?: string
+          duration_minutes?: number
+          name?: string
+        }
+        Returns: Json
+      }
       update_trip_window: {
         Args: {
           end_date: string
