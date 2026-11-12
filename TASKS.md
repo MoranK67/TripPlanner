@@ -23,17 +23,17 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M1.1 | Schema migration: profiles, trips, activities, checks, indexes, btree_gist, exclusion constraint, GRANTs | db-engineer | M0.6 | todo | |
 | M1.2 | Triggers: updated_at, handle_new_user, validate_activity_in_trip, unplace_out_of_range_activities | db-engineer | M1.1 | todo | |
 | M1.3 | RLS: can_access_trip + policies | db-engineer | M1.1 | todo | |
-| M1.4 | RPCs: place/unplace/import/update_trip_window with TP_* errors | db-engineer | M1.2 | todo | |
+| M1.4 | RPCs: place/unplace/import/update_trip_window with TP_* errors | db-engineer | M1.2 | todo | Open: atomic colour-cursor assignment for single activity create (DB default/trigger vs data layer) — decide before M1.7 |
 | M1.5 | DB tests (constraints, triggers, RPCs, RLS with 2 users) | db-engineer | M1.3, M1.4 | todo | |
 | M1.6 | Generate `database.types.ts`; AppError mapping skeleton | db-engineer (types) → core-engineer (errors) | M1.4 | todo | |
 | M1.7 | Repositories: authRepo, tripsRepo, activitiesRepo + tests | core-engineer | M1.6, M2.1 | todo | |
 | M1.8 | Auth UI: login, sign-out, reset, route guard; disable sign-ups | frontend-engineer | M1.7, M3.2 | todo | Owner disables sign-ups in dashboard |
-| M2.1 | Domain types & constants | core-engineer | — | ready | Constants partly exist |
-| M2.2 | Time utilities | core-engineer | M2.1 | todo | |
-| M2.3 | Placement rules | core-engineer | M2.1 | todo | |
-| M2.4 | Duration & import parser | core-engineer | M2.1 | todo | Port from prototype |
+| M2.1 | Domain types & constants | core-engineer | — | done | |
+| M2.2 | Time utilities | core-engineer | M2.1 | ready | |
+| M2.3 | Placement rules | core-engineer | M2.1 | ready | Also owns `isValidTripWindow` (FR-2.5: end after start, span ≤ 89 days) |
+| M2.4 | Duration & import parser | core-engineer | M2.1 | ready | Port from prototype |
 | M2.5 | Export layout model | core-engineer | M2.2 | todo | P1 |
-| M3.1 | UI primitives (Button, Input, Select, Field, Modal, Toast) + `/dev/ui` gallery | frontend-engineer | — | ready | Button/Card/Toast exist |
+| M3.1 | UI primitives (Button, Input, Select, Field, Modal, Toast) + `/dev/ui` gallery | frontend-engineer | — | in progress | Button/Card/Toast exist |
 | M3.2 | ConfirmDialog | frontend-engineer | M3.1 | todo | |
 | M3.3 | ColorSwatches, ActivityBlock | frontend-engineer | M3.1, M2.1 | todo | |
 | M3.4 | Layout & breakpoints | frontend-engineer | M3.1 | todo | |
