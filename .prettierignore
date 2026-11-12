@@ -4,3 +4,4 @@ node_modules
 package-lock.json
 prototype
 *.md
+src/data/database.types.ts
