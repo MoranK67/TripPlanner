@@ -380,6 +380,7 @@
       </select>
       <span class="range">${shortDate(t.startDate)} ${slotLabel(t.startSlot)} עד ${shortDate(t.endDate)} ${slotLabel(t.endSlot)} · ${days === 1 ? 'יום אחד' : days + ' ימים'}</span>
       <button class="btn small" data-act="export">ייצוא</button>
+      <button class="btn small" data-act="backup" title="שמירת כל הטיולים לקובץ גיבוי (JSON)">גיבוי</button>
       <button class="btn small" data-act="edit-trip">עריכה</button>
       <button class="btn small ghost" data-act="del-trip">מחיקה</button>
       <button class="btn primary small" data-act="new-trip">+ טיול חדש</button>`;
@@ -864,6 +865,37 @@
     $('#exPdf').onclick = e => run(e.currentTarget, exportPDF);
   }
 
+  /* ================= Backup (JSON) ================= */
+  // Downloads every trip as trip-planner-backup-YYYY-MM-DD.json, for import into the new app
+  // (parseBackup in src/domain/backup.ts). Works offline. File shape:
+  // {
+  //   "format": "trip-planner-prototype-backup", "version": 1,
+  //   "exportedAt": "<ISO timestamp>",
+  //   "trips": [{
+  //     "id", "name", "startDate": "YYYY-MM-DD", "startSlot": 0..47,
+  //     "endDate": "YYYY-MM-DD", "endSlot": 1..48, "colorIdx": number,
+  //     "items": [{ "id", "name", "duration": minutes, "color": "#RRGGBB",
+  //                 "day": "YYYY-MM-DD" | null, "slot": 0..47 | null }]
+  //   }]
+  // }
+  // A slot is half an hour. Items with no "day" are in the bank, in array order.
+  // The trips are written exactly as stored here; nothing is changed.
+  function exportBackup() {
+    const data = {
+      format: 'trip-planner-prototype-backup',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      trips: state.trips
+    };
+    try {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, 'trip-planner-backup-' + todayStr() + '.json');
+      toast(state.trips.length === 1 ? 'קובץ הגיבוי ירד למחשב (טיול אחד)' : `קובץ הגיבוי ירד למחשב (${state.trips.length} טיולים)`);
+    } catch (e) {
+      toast('משהו השתבש ביצירת קובץ הגיבוי');
+    }
+  }
+
   function openTripModal(edit) {
     const t = edit ? cur() : null;
     const today = todayStr();
@@ -953,6 +985,7 @@
     else if (act === 'add-item') openItemModal(null);
     else if (act === 'import') openImportModal();
     else if (act === 'export') openExportModal();
+    else if (act === 'backup') exportBackup();
     else if (act === 'del-item') {
       const item = t.items.find(i => i.id === btn.closest('.block').dataset.id);
       if (!item) return;

@@ -36,6 +36,18 @@ export const MAX_ACTIVITY_MINUTES = MINUTES_PER_DAY;
 
 export const MAX_IMPORT_ROWS = 200;
 
+// --- Backup files (FR-8.1, FR-8.2) -------------------------------------------------------
+
+/**
+ * Most trips one backup file may import. Counts valid trips; meant to be mirrored by the
+ * backup-import RPC so one all-or-nothing import stays well inside the request timeout.
+ */
+export const MAX_BACKUP_TRIPS = 50;
+/** Most activities (all trips together) one backup file may import. Mirrored by the RPC. */
+export const MAX_BACKUP_ACTIVITIES = 2000;
+/** Larger backup text is refused before `JSON.parse` (characters, ~5 MB). */
+export const MAX_BACKUP_TEXT_LENGTH = 5_000_000;
+
 // --- Colors (FR-3.2, FR-9.3) -------------------------------------------------------------
 
 /**
