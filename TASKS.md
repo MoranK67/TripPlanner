@@ -15,7 +15,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M4 Trips & bank | M4.1–M4.4 done — awaiting owner demo | M4.5 E2E (qa) next |
 | M5 Timetable | in progress | M5.2 done; M5.3 in progress (DEC-029: device check moves to the real drag after M5.4) |
 | M6 Import/export/backup | done | M6.1–M6.6 done; owner demo pending |
-| M7 | todo | — |
+| M7 Phone & offline | in progress | M7.1 in progress |
 | M8 web release | todo | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
 | M11 Hardening & release | todo | M11.4 = web checklist (DEC-027) |
 | M8.1–M8.2 Windows app, M9 Android app | deferred | DEC-027: after the web release |
@@ -37,6 +37,9 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M6.6a | RPC `import_trips(jsonb)` + DB tests (480 assertions) + types | db-engineer | M6.5 | done | Reviewed APPROVE; applied to dev, NOT prod (prod only at M11.2) |
 | M6.6b | `backupRepo.importAll/exportAll` + mapping, `AppError.location` | core-engineer | M6.6a | done | |
 | M6.6c | Backup UI (export all, import with preview + Hebrew warnings, duplicate warning) | frontend-engineer | M6.6b, M6.3 | done | Composed in src/app/TripsRoute (no trips↔backup cycle). E2E for backup import still to add | |
+| UX-5 | HHMM typed time inputs for duration and trip times, rounded to half hours (DEC-035) | frontend-engineer | — | in progress | owner request after demo |
+| IDEA-1 | Quarter-hour steps (DB checks, grid, drag, export, import) | — | after M8 | deferred | owner: revisit after real use (DEC-035) |
+| M7.1 | Phone layout: single-day timetable with day switcher/swipe, bank as bottom sheet | scheduler-engineer | M5.4 | in progress | |
 | UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | todo | from DATA-1 review |
 | UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | todo | from DATA-1 report |
 | M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | todo | batch with next UI task |
@@ -70,11 +73,11 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M4.1–M4.4 | Trips list, trip dialog, edit/delete trip, bank panel | frontend-engineer | M1.7, M3.x | done | Follow-ups: per-trip mutation keys; verify the real reset email does not flash "invalid link" |
 | M4.5 | E2E: trip CRUD + bank CRUD | qa-engineer | M4.3, M4.4 | done | |
 
-| SEC-1 | Upgrade react-router-dom 6.30.6 → 7 (npm audit: 2 moderate advisories, fixed only in v7; open-redirect via backslash already blocked by redirectTarget, SSR advisory not applicable) | frontend-engineer | — | todo | Before the first public deploy (M8) |
+| SEC-1 | (in progress: Orchestrator installed 7.18.5, audit 0; frontend-engineer adapting code) Upgrade react-router-dom 6.30.6 → 7 (npm audit: 2 moderate advisories, fixed only in v7; open-redirect via backslash already blocked by redirectTarget, SSR advisory not applicable) | frontend-engineer | — | todo | Before the first public deploy (M8) |
 
 | ~~QA-1~~ | (done, see current wave) E2E fake-backend fidelity + guard hardening (M4.5 review should-fixes: fail on blocked hosts as auto fixture, `update_activity` checks fit only on duration change, unknown token returns 401 PGRST303; plus nits). Also: 2 E2E tests were flaky (passed on retry) in the 14.11 run, so find and stabilise them | qa-engineer | M4.5 | todo | |
 | UX-1 | Collapse stacked read retries (postgrest 3× + TanStack 2× ≈ 25 s offline before an error): keep one layer, fail fast when offline | core-engineer + frontend-engineer | — | todo | Then shrink `skipRetryBackoff` in E2E |
-| A11Y-1 | Axe check in E2E (NFR-7), needs `@axe-core/playwright` | qa-engineer | M4.5 | todo | |
+| A11Y-1 | Axe check in E2E (NFR-7), `@axe-core/playwright` 4.14.0 installed | qa-engineer | M4.5 | in progress | |
 | UX-2 | Focus target after deleting a timetable block (via `onDeleteStart`); label the timetable region by the sr-only h2 (`aria-labelledby`) to avoid a double announcement | scheduler-engineer + frontend-engineer | M5.2 | todo | |
 
 ## Done
