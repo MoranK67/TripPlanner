@@ -183,6 +183,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      import_trips: { Args: { trips: Json }; Returns: Json }
       place_activity: {
         Args: {
           activity_id: string

@@ -34,8 +34,8 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | DATA-1 | 15 s request timeout → AppError network/timeout; queries don't retry timeouts (DEC-032) | core-engineer | — | done | Reviewed APPROVE |
 | M6.3–M6.4 | Export dialog PNG + PDF (DEC-034) | frontend-engineer | M2.5, M6.2 | done | Checked in real Chromium by the agent; owner demo pending |
 | M6.5 | Prototype "גיבוי" button + domain `parseBackup`/`serializeBackup` (DEC-033) | core-engineer | — | done | Prototype change read by Orchestrator (read-only export) |
-| M6.6a | RPC `import_trips(jsonb)` + DB tests + regenerate types (spec in DEC-033 / M6.5 report) | db-engineer | M6.5 | in progress | |
-| M6.6b | `backupRepo.importAll/exportAll` + mapping | core-engineer | M6.6a | todo | |
+| M6.6a | RPC `import_trips(jsonb)` + DB tests (480 assertions) + types | db-engineer | M6.5 | done | Reviewed APPROVE; applied to dev, NOT prod (prod only at M11.2) |
+| M6.6b | `backupRepo.importAll/exportAll` + mapping | core-engineer | M6.6a | in progress | |
 | M6.6c | Backup UI (export all, import with preview + Hebrew warnings, duplicate warning) | frontend-engineer | M6.6b, M6.3 | todo | |
 | UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | todo | from DATA-1 review |
 | UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | todo | from DATA-1 report |
