@@ -13,7 +13,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M2 Domain core | done | Domain coverage 99% |
 | M3 Design system & shell | done | Owner approved the /dev/ui demo 2026-11-12 |
 | M4 Trips & bank | M4.1–M4.4 done — awaiting owner demo | M4.5 E2E (qa) next |
-| M5 Timetable | in progress | M5.1 spike started |
+| M5 Timetable | in progress | M5.2 done; M5.3 waits for the owner's phone check of /dev/dnd-spike (ADR-002) |
 | M6, M7 | todo | — |
 | M8 web release | todo | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
 | M11 Hardening & release | todo | M11.4 = web checklist (DEC-027) |
@@ -44,10 +44,16 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M3.4 | Layout & breakpoints | frontend-engineer | M3.1 | done | |
 
 | M5.1 | Spike: drag engine in RTL scrollable grid (ADR-002, proposed) | scheduler-engineer | M3.3 | done | ADR stays Proposed until a real browser/phone check at /dev/dnd-spike |
+| M5.2 | Timetable rendering + mount in TripPage | scheduler-engineer + frontend-engineer | M5.1, M4.2 | done | 90 days ≈ 0.1 s render (headless) |
 | M4.1–M4.4 | Trips list, trip dialog, edit/delete trip, bank panel | frontend-engineer | M1.7, M3.x | done | Follow-ups: per-trip mutation keys; verify the real reset email does not flash "invalid link" |
-| M4.5 | E2E: trip CRUD + bank CRUD | qa-engineer | M4.3, M4.4 | ready | |
+| M4.5 | E2E: trip CRUD + bank CRUD | qa-engineer | M4.3, M4.4 | done | |
 
 | SEC-1 | Upgrade react-router-dom 6.30.6 → 7 (npm audit: 2 moderate advisories, fixed only in v7; open-redirect via backslash already blocked by redirectTarget, SSR advisory not applicable) | frontend-engineer | — | todo | Before the first public deploy (M8) |
+
+| QA-1 | E2E fake-backend fidelity + guard hardening (M4.5 review should-fixes: fail on blocked hosts as auto fixture, `update_activity` checks fit only on duration change, unknown token returns 401 PGRST303; plus nits) | qa-engineer | M4.5 | todo | |
+| UX-1 | Collapse stacked read retries (postgrest 3× + TanStack 2× ≈ 25 s offline before an error): keep one layer, fail fast when offline | core-engineer + frontend-engineer | — | todo | Then shrink `skipRetryBackoff` in E2E |
+| A11Y-1 | Axe check in E2E (NFR-7), needs `@axe-core/playwright` | qa-engineer | M4.5 | todo | |
+| UX-2 | Focus target after deleting a timetable block (via `onDeleteStart`); label the timetable region by the sr-only h2 (`aria-labelledby`) to avoid a double announcement | scheduler-engineer + frontend-engineer | M5.2 | todo | |
 
 ## Done
 
