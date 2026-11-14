@@ -30,8 +30,10 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M6.2 | Platform adapter: web impl + desktop/android stubs + tests | platform-engineer | M0.3 | done | share sheet on mobile, download elsewhere; `useOnlineStatus` for M7.3 |
 | UX-1 | One retry layer, fail fast offline | core-engineer | — | done | DEC-030. QA: shrink `skipRetryBackoff` to ~5 × 1 s |
 | M5.4 | Optimistic place/unplace + rollback, serialised per trip (DEC-031); touchmove on drag root; bank.hint explains drag | scheduler-engineer | M5.3 | done | Reviewed APPROVE |
-| M5.4b | M5.4 review follow-ups: pending record module-level (WeakMap per QueryClient) + remount test; no focus refetch while placement writes pend; unplace no-op if already in bank; comment fix; dedupe offline toasts; tests place→unplace→place and A-out/B-in | scheduler-engineer | M5.4 | in progress | |
-| DATA-1 | Fetch timeout for Supabase requests (~15 s, `AbortSignal.timeout`) mapped to AppError `network` (not `aborted`) | core-engineer | — | in progress | A hung write would stall the serialised placement queue (DEC-031) |
+| M5.4b | M5.4 review follow-ups (module-level queue record, refetch overlay, toast dedupe, tests) | scheduler-engineer | M5.4 | done | Reviewed APPROVE |
+| DATA-1 | 15 s request timeout → AppError network/timeout; queries don't retry timeouts (DEC-032) | core-engineer | — | done | Reviewed APPROVE |
+| UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | todo | from DATA-1 review |
+| UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | todo | from DATA-1 report |
 | M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | todo | batch with next UI task |
 | QA-1 | E2E fake-backend fidelity + flaky tests | qa-engineer | M4.5 | done | host guard fixture, PGRST303/301, update_activity fit rule, 2 flaky network tests fixed (148/148 × 2). Note: run vitest from upper-case `C:\` cwd |
 
