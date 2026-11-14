@@ -13,14 +13,25 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M2 Domain core | done | Domain coverage 99% |
 | M3 Design system & shell | done | Owner approved the /dev/ui demo 2026-11-12 |
 | M4 Trips & bank | M4.1–M4.4 done — awaiting owner demo | M4.5 E2E (qa) next |
-| M5 Timetable | in progress | M5.2 done; M5.3 waits for the owner's phone check of /dev/dnd-spike (ADR-002) |
-| M6, M7 | todo | — |
+| M5 Timetable | in progress | M5.2 done; M5.3 in progress (DEC-029: device check moves to the real drag after M5.4) |
+| M6 Import/export/backup | in progress | M6.1, M6.2 in progress |
+| M7 | todo | — |
 | M8 web release | todo | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
 | M11 Hardening & release | todo | M11.4 = web checklist (DEC-027) |
 | M8.1–M8.2 Windows app, M9 Android app | deferred | DEC-027: after the web release |
 | M10 iOS native | deferred | iPhone covered by PWA (M8.3–M8.5) |
 
-## Current wave — M1 ‖ M2 ‖ M3
+## Current wave — M5.3 ‖ M6.1 ‖ M6.2 ‖ UX-1 ‖ QA-1 (parallel, disjoint paths)
+
+| ID | Task | Owner | Depends on | Status | Notes |
+|---|---|---|---|---|---|
+| M5.3 | Drag bank→grid, grid→grid, grid→bank, snap, valid/invalid preview, auto-scroll; delete spike | scheduler-engineer | M5.2 | in progress (uncommitted work in tree; needs code-reviewer) | May touch BankPanel.tsx / TripPage.tsx only for the drag contract wiring |
+| M6.1 | Import dialog with live preview → `import_activities` | frontend-engineer | M2.4, M4.4 | review (reported done; not committed — shares BankPanel.tsx/he.json with M5.3, commit after M5.3) | features/import + the bank's import button |
+| M6.2 | Platform adapter: web impl + desktop/android stubs + tests | platform-engineer | M0.3 | done | share sheet on mobile, download elsewhere; `useOnlineStatus` for M7.3 |
+| UX-1 | One retry layer, fail fast offline | core-engineer | — | done | DEC-030. QA: shrink `skipRetryBackoff` to ~5 × 1 s |
+| QA-1 | E2E fake-backend fidelity + flaky tests | qa-engineer | M4.5 | in progress (uncommitted work in tree) | tests/e2e only. Note: run vitest from PowerShell, not Git Bash (jest-dom matchers fail). TripDialog test flaky under load (lazy calendar, 1 s findByRole) |
+
+## Earlier waves — M1 ‖ M2 ‖ M3
 
 | ID | Task | Owner | Depends on | Status | Notes |
 |---|---|---|---|---|---|
