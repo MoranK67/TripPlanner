@@ -1,5 +1,5 @@
-// Pure drag geometry for the timetable (promoted from the M5.1 spike), kept free of DOM access so it
-// can be unit-tested in jsdom (which has no layout). Used by the drag engine (M5.3).
+// Pure drag geometry for the timetable, kept free of DOM access so it can be unit-tested in jsdom
+// (which has no layout). Used by the drag engine (TimetableDragRoot, ADR-002).
 //
 // Hit-testing is done with arithmetic on two measured rectangles instead of
 // `document.elementFromPoint` (prototype): it ignores the ghost and the sticky header/time column,
@@ -72,6 +72,28 @@ export function hitTestSlot(
   const maxSlot = Math.max(0, SLOTS_PER_DAY - Math.max(1, lengthSlots));
   const slot = Math.min(maxSlot, Math.max(0, rawSlot));
   return { dayIndex, slot };
+}
+
+/**
+ * The visible drop area of the timetable: the scroll container's client box (viewport coordinates,
+ * without borders and scrollbars) minus the sticky day header (top) and the sticky time column
+ * (inline-start: the right side in RTL). Used as `GridMetrics.viewport` and as the auto-scroll area.
+ */
+export function dropArea(
+  clientBox: Rect,
+  direction: Direction,
+  headerPx: number,
+  timeColumnPx: number,
+): Rect {
+  const top = clientBox.top + headerPx;
+  return direction === 'rtl'
+    ? { left: clientBox.left, top, right: clientBox.right - timeColumnPx, bottom: clientBox.bottom }
+    : {
+        left: clientBox.left + timeColumnPx,
+        top,
+        right: clientBox.right,
+        bottom: clientBox.bottom,
+      };
 }
 
 export interface AutoScrollOptions {

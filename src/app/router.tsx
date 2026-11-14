@@ -17,15 +17,6 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
           return { Component: UiGalleryPage };
         },
       },
-      {
-        path: 'dev/dnd-spike',
-        // M5.1 spike (throwaway) — remove together with src/features/schedule/spike/.
-        lazy: async () => {
-          // Deep import on purpose: a lazy chunk keeps the spike out of the production bundle.
-          const { DndSpikePage } = await import('@/features/schedule/spike/DndSpikePage');
-          return { Component: DndSpikePage };
-        },
-      },
     ]
   : [];
 

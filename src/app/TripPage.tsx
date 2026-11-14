@@ -4,7 +4,7 @@ import { Button, Card, LoadingState, SidebarLayout } from '@/components/ui';
 import { isAppError } from '@/data';
 import type { Activity, Trip } from '@/domain';
 import { BankPanel, useActivityDialogs } from '@/features/bank';
-import { Timetable } from '@/features/schedule';
+import { Timetable, TimetableDragRoot, usePlacementActions } from '@/features/schedule';
 import { TripHeaderControls, useTripQuery } from '@/features/trips';
 import { errorMessage } from '@/i18n/errors';
 
@@ -61,23 +61,32 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
   const { t } = useTranslation();
   // Placed blocks open the same edit / delete dialogs as the bank (FR-3.4, FR-3.5).
   const timetableDialogs = useActivityDialogs(trip);
+  const placement = usePlacementActions(trip.id);
   return (
     <>
       <h2 className="sr-only">{trip.name}</h2>
       <TripHeaderControls trip={trip} />
-      <SidebarLayout
-        sidebarLabel={t('bank.title')}
-        sidebar={<BankPanel trip={trip} activities={activities} />}
+      {/* Drag between bank and timetable (FR-5.1–5.4): both must render inside the drag root. */}
+      <TimetableDragRoot
+        trip={trip}
+        activities={activities}
+        onPlace={placement.place}
+        onUnplace={placement.unplace}
       >
-        {/* Outline: h1 app title > h2 trip / bank / timetable > h3 day headers (in Timetable). */}
-        <h2 className="sr-only">{t('planner.timetable')}</h2>
-        <Timetable
-          trip={trip}
-          activities={activities}
-          onOpenActivity={timetableDialogs.openEdit}
-          onDeleteActivity={timetableDialogs.openDelete}
-        />
-      </SidebarLayout>
+        <SidebarLayout
+          sidebarLabel={t('bank.title')}
+          sidebar={<BankPanel trip={trip} activities={activities} />}
+        >
+          {/* Outline: h1 app title > h2 trip / bank / timetable > h3 day headers (in Timetable). */}
+          <h2 className="sr-only">{t('planner.timetable')}</h2>
+          <Timetable
+            trip={trip}
+            activities={activities}
+            onOpenActivity={timetableDialogs.openEdit}
+            onDeleteActivity={timetableDialogs.openDelete}
+          />
+        </SidebarLayout>
+      </TimetableDragRoot>
       {timetableDialogs.dialogs}
     </>
   );

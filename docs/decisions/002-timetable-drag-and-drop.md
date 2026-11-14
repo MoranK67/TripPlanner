@@ -101,6 +101,7 @@ Why: the grid's hard parts are RTL auto-scroll, sticky exclusion, slot snapping 
 Bank contract, to be frozen with frontend-engineer before M5.3 starts:
 
 - `@/features/schedule` exports `dragSourceProps(activityId)` (`data-drag-id` + the block classes: `select-none`, `touch-manipulation`, no-callout, dimmed while dragging) and `useBankDropZone()` (a ref for the bank list).
+  - **As built (M5.3, 2026-11-14):** `useBankDropZone()` returns a **callback ref only**; the drag root sets the drop highlight directly on the element (`data-drop-over` + ring classes), so the bank never re-renders during a drag. The drop zone is the **whole bank panel**, not the list, so an empty bank or its header still accepts drops. Saving goes through `usePlacementActions(tripId)` in the schedule feature.
 - The planner page (schedule) renders the bank panel inside the drag root.
 
 Delete `spike/` in the same task.

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityBlock, Button } from '@/components/ui';
 import { isInBank, type Activity, type Trip } from '@/domain';
+import { ImportDialog } from '@/features/import';
+import { dragSourceProps, useBankDropZone } from '@/features/schedule';
 import { useActivityDialogs } from './useActivityDialogs';
 
 export interface BankPanelProps {
@@ -26,7 +28,10 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
   const { t } = useTranslation();
   const focusAfterDelete = useRef<FocusAfterDelete | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const blockRefs = useRef(new Map<string, HTMLDivElement>());
+  // Drag and drop (FR-5.1): blocks drag onto the timetable; placed blocks drop back here.
+  const setDropZone = useBankDropZone();
 
   const bank = useMemo(
     () => activities.filter(isInBank).sort((a, b) => a.bankPosition - b.bankPosition),
@@ -57,8 +62,11 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
   }, [bank]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-card)]">
-      <div className="flex items-center justify-between gap-2 border-b border-line px-4 pt-3.5 pb-2.5">
+    <div
+      ref={setDropZone}
+      className="flex min-h-0 flex-1 flex-col rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-card)]"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 pt-3.5 pb-2.5">
         <h2 ref={headingRef} tabIndex={-1} className="m-0 text-base font-semibold outline-none">
           {t('bank.title')}
           {bank.length > 0 && ' '}
@@ -68,9 +76,15 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
             </span>
           )}
         </h2>
-        <Button variant="primary" size="sm" onClick={openAdd}>
-          {t('bank.add')}
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* FR-6.1: paste a list. The accessible name starts with the visible word. */}
+          <Button size="sm" aria-label={t('import.openLabel')} onClick={() => setImportOpen(true)}>
+            {t('import.open')}
+          </Button>
+          <Button variant="primary" size="sm" onClick={openAdd}>
+            {t('bank.add')}
+          </Button>
+        </div>
       </div>
 
       {bank.length === 0 ? (
@@ -85,6 +99,7 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
           {bank.map((activity) => (
             <li key={activity.id} className="w-[calc(50%-4px)] shrink-0 tablet:w-auto">
               <ActivityBlock
+                {...dragSourceProps(activity.id)}
                 ref={(el) => {
                   if (el) blockRefs.current.set(activity.id, el);
                   else blockRefs.current.delete(activity.id);
@@ -105,6 +120,7 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
       </p>
 
       {dialogs}
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} trip={trip} />
     </div>
   );
 }

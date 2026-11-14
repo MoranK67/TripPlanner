@@ -1,5 +1,5 @@
-// SPIKE (M5.1) — throwaway. A React port of the prototype's pointer drag engine
-// (prototype/index.html, "Drag & drop (mouse + touch)") with the fixes the spike evaluates:
+// Pointer drag engine for the timetable (ADR-002): a React port of the prototype's engine
+// (prototype/index.html, "Drag & drop (mouse + touch)") with these fixes:
 //   - touch starts a drag only after a long press, so the bank list and the grid stay scrollable;
 //   - one requestAnimationFrame loop does all reads (hit test, auto-scroll) then all writes (ghost);
 //   - no React re-render per pointer move: the ghost is moved through a ref and the drop target is
@@ -10,7 +10,7 @@
 // No role/tabIndex is added to the draggable, so ActivityBlock's own buttons are never nested.
 
 import { useEffect, useMemo, useRef, useSyncExternalStore, type RefObject } from 'react';
-import type { Point } from '../geometry';
+import type { Point } from './geometry';
 
 export interface DragSource {
   id: string;
@@ -28,13 +28,6 @@ export interface DragState<T> {
   target: T | null;
 }
 
-export interface DragFrameStats {
-  frames: number;
-  /** Frames that took longer than 24 ms (i.e. visibly dropped below ~40 fps). */
-  longFrames: number;
-  maxFrameMs: number;
-}
-
 export interface PointerDragConfig<T> {
   /** Delegation root: drags start from `[data-drag-id]` elements inside it. */
   rootRef: RefObject<HTMLElement>;
@@ -47,7 +40,6 @@ export interface PointerDragConfig<T> {
   sameTarget: (a: T | null, b: T | null) => boolean;
   onDrop: (source: DragSource, target: T | null) => void;
   onDragStart?: () => void;
-  onDragEnd?: (stats: DragFrameStats) => void;
   /** Mouse/pen: pixels to move before a drag starts (prototype: 6). */
   moveThreshold?: number;
   /** Touch: hold time before a drag starts. Moving earlier lets the page scroll instead. */
@@ -64,8 +56,6 @@ interface Session {
   started: boolean;
   timer: number | undefined;
   raf: number | undefined;
-  lastFrame: number;
-  stats: DragFrameStats;
 }
 
 export interface DragStore<T> {
@@ -118,17 +108,10 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
       ghost.style.transform = `translate3d(${x - s.source.grabOffset.x}px, ${y - s.source.grabOffset.y}px, 0)`;
     };
 
-    const frame = (now: number) => {
+    const frame = () => {
       const s = session;
       if (!s?.started) return;
       const cfg = configRef.current;
-      const delta = now - s.lastFrame;
-      if (s.lastFrame > 0) {
-        s.stats.frames += 1;
-        if (delta > 24) s.stats.longFrames += 1;
-        s.stats.maxFrameMs = Math.max(s.stats.maxFrameMs, Math.round(delta));
-      }
-      s.lastFrame = now;
       // Reads first …
       const scroller = cfg.scrollerRef.current;
       const step = cfg.getAutoScroll(s.pointer);
@@ -172,7 +155,6 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
         releaseClickGuard = swallowNextClick();
         cfg.onDrop(s.source, target);
       }
-      cfg.onDragEnd?.(s.stats);
     };
 
     function onMove(e: PointerEvent) {
@@ -226,8 +208,6 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
         started: false,
         timer: undefined,
         raf: undefined,
-        lastFrame: 0,
-        stats: { frames: 0, longFrames: 0, maxFrameMs: 0 },
         source: {
           id: element.dataset.dragId ?? '',
           pointerType: e.pointerType,

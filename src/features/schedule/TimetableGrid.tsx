@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   type CSSProperties,
-  type ReactNode,
   type Ref,
   type RefObject,
 } from 'react';
@@ -43,12 +42,10 @@ export interface TimetableGridProps {
   scrollKey: string;
   onOpenActivity: (activity: Activity) => void;
   onDeleteActivity?: (activity: Activity) => void;
-  /** Hooks for a drag engine (M5.3): the scroll container and the day-columns layer. */
+  /** Hooks for the drag engine: the scroll container and the day-columns layer. */
   scrollerRef?: RefObject<HTMLDivElement>;
-  /** Object or callback ref; a callback lets a caller portal content into the layer. */
+  /** Object or callback ref; a callback lets the drag root portal its drop preview into the layer. */
   columnsRef?: Ref<HTMLDivElement>;
-  /** Drawn inside the day-columns layer, e.g. a drop preview. */
-  overlay?: ReactNode;
   /** Extra classes for placed blocks (drag affordances). Must be a stable string. */
   blockClassName?: string;
   className?: string;
@@ -80,8 +77,8 @@ const HOURS = Array.from({ length: 24 }, (_, h) => minuteLabel(h * 60));
  * day header row and a sticky time column inside a single scroll container. Placed activities are
  * absolutely positioned ActivityBlocks — the only focus targets in the grid.
  *
- * Internal to the schedule feature: `Timetable` is the public wrapper; the drag spike and the
- * drag engine use the extra hooks (`scrollerRef`, `columnsRef`, `overlay`, `blockClassName`).
+ * Internal to the schedule feature: `Timetable` is the public wrapper and passes the drag root's
+ * hooks (`scrollerRef`, `columnsRef`, `blockClassName`).
  */
 export const TimetableGrid = memo(function TimetableGrid({
   tripWindow,
@@ -91,7 +88,6 @@ export const TimetableGrid = memo(function TimetableGrid({
   onDeleteActivity,
   scrollerRef,
   columnsRef,
-  overlay,
   blockClassName,
   className,
 }: TimetableGridProps) {
@@ -207,7 +203,6 @@ export const TimetableGrid = memo(function TimetableGrid({
             className="pointer-events-none absolute inset-0 z-[1]"
             style={linesStyle}
           />
-          {overlay}
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { autoScrollStep, hitTestSlot, type GridMetrics } from './geometry';
+import { autoScrollStep, dropArea, hitTestSlot, type GridMetrics } from './geometry';
 
 // A scroller at x 0..800, y 0..600 with a 56 px sticky header and a 64 px time column.
 // 7 columns of 150 px; in RTL the first day sits next to the time column on the right.
@@ -79,5 +79,17 @@ describe('autoScrollStep', () => {
 
   it('keeps scrolling at full speed just outside the edge', () => {
     expect(autoScrollStep(area, { x: 400, y: 610 }, { maxSpeed: 18 }).dy).toBe(18);
+  });
+});
+
+describe('dropArea', () => {
+  const box = { left: 0, top: 0, right: 800, bottom: 600 };
+
+  it('removes the header and the time column on the right in RTL', () => {
+    expect(dropArea(box, 'rtl', 56, 64)).toEqual(rtl.viewport);
+  });
+
+  it('removes the header and the time column on the left in LTR', () => {
+    expect(dropArea(box, 'ltr', 56, 64)).toEqual(ltr.viewport);
   });
 });
