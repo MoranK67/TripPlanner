@@ -14,7 +14,10 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M3 Design system & shell | done | Owner approved the /dev/ui demo 2026-11-12 |
 | M4 Trips & bank | M4.1–M4.4 done — awaiting owner demo | M4.5 E2E (qa) next |
 | M5 Timetable | in progress | M5.1 spike started |
-| M6–M11 | todo | — |
+| M6, M7 | todo | — |
+| M8 web release | todo | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
+| M11 Hardening & release | todo | M11.4 = web checklist (DEC-027) |
+| M8.1–M8.2 Windows app, M9 Android app | deferred | DEC-027: after the web release |
 | M10 iOS native | deferred | iPhone covered by PWA (M8.3–M8.5) |
 
 ## Current wave — M1 ‖ M2 ‖ M3

@@ -813,6 +813,8 @@ Priority: P0 = MVP blocker, P1 = MVP should-have, P2 = can slip.
 
 > **M10 is deferred** by owner decision: iPhone support is not required for now. Nothing in M0–M9 may block a later iOS build (Capacitor keeps the same web code), but no iOS work is scheduled in the MVP.
 
+> **Web-only MVP (DEC-027, 2026-11-14):** by owner decision the first release is the **web app only** — the Cloudflare Pages site, installable as a PWA on phones (M8.3–M8.5). The Windows desktop app (M8.1, M8.2) and the Android app (M9.1, M9.2) are **deferred** until after the web release; M11.4 becomes a web checklist (desktop browser, Android Chrome, iPhone Safari/PWA). The platform adapter (M6.2) still gets only its web implementation now, with stubs, so the native shells stay possible later.
+
 #### M11 — Hardening & release
 
 | ID | Task | Expected outcome | Depends on | Pri | Cx | Modules |
@@ -820,7 +822,7 @@ Priority: P0 = MVP blocker, P1 = MVP should-have, P2 = can slip.
 | M11.1 | Accessibility pass (axe, contrast on all palette colors, focus order) | NFR-7 met | M7 | P1 | S | all UI |
 | M11.2 | Apply migrations to `prod`; import owner's prototype data | Real data in prod | M6.6 | P0 | S | supabase |
 | M11.3 | Keep-alive / backup safeguard for free tier (§11 R3) | No paused project, weekly JSON backup | M11.2 | P0 | S | .github |
-| M11.4 | Manual release checklist on Windows and Android | Signed-off MVP | all | P0 | S | — |
+| M11.4 | Manual release checklist on Windows and Android *(web-only MVP: desktop browser, Android Chrome, iPhone PWA — DEC-027)* | Signed-off MVP | all | P0 | S | — |
 | M11.5 | User guide (Hebrew, 1 page) + developer README | Docs | all | P1 | S | docs |
 
 ### 9.3 Definition of Done (every task)
