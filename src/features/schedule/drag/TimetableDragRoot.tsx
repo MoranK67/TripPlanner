@@ -37,7 +37,7 @@ import {
   type Direction,
   type Point,
 } from './geometry';
-import { useDragState, usePointerDrag, type DragStore } from './usePointerDrag';
+import { useDragSource, useDragState, usePointerDrag, type DragStore } from './usePointerDrag';
 
 /** Where a dragged block would land. */
 export type DropTarget =
@@ -266,11 +266,13 @@ function DragGhost({
   ghostRef: RefObject<HTMLDivElement>;
   byId: Map<string, Activity>;
 }) {
-  const { source } = useDragState(store);
+  const source = useDragSource(store);
   const activity = source && byId.get(source.id);
   if (!source || !activity) return null;
   const x = source.startPointer.x - source.grabOffset.x;
   const y = source.startPointer.y - source.grabOffset.y;
+  // Physical `fixed top-0 left-0` on purpose, also in RTL: the engine positions the ghost with a
+  // `translate3d` in viewport (clientX/clientY) coordinates, which are measured from the top-left.
   return createPortal(
     <div
       ref={ghostRef}

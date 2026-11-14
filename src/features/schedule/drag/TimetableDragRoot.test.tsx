@@ -115,7 +115,7 @@ function renderRoot({ onRender }: { onRender?: () => void } = {}) {
   const onUnplace = vi.fn();
   const onOpen = vi.fn();
   const timetable = <Timetable trip={trip} activities={activities} onOpenActivity={onOpen} />;
-  render(
+  const { unmount } = render(
     <ToastProvider>
       <TimetableDragRoot
         trip={trip}
@@ -141,7 +141,7 @@ function renderRoot({ onRender }: { onRender?: () => void } = {}) {
   scroller.style.direction = 'rtl';
   const scrollBy = vi.fn();
   scroller.scrollBy = scrollBy as unknown as typeof scroller.scrollBy;
-  return { onPlace, onUnplace, onOpen, scrollBy };
+  return { onPlace, onUnplace, onOpen, scrollBy, unmount };
 }
 
 function blockOf(id: string): HTMLElement {
@@ -340,6 +340,38 @@ describe('TimetableDragRoot', () => {
       fireEvent.pointerMove(document, { pointerId: 2, clientX: xForDay(2), clientY: yForSlot(26) });
       fireEvent.pointerUp(document, { pointerId: 2, clientX: xForDay(2), clientY: yForSlot(26) });
       expect(onPlace).toHaveBeenCalledWith('bank-1', '2026-12-03', 13 * 60);
+    });
+
+    it('cancels panning only during a drag, with a non-passive listener on the root', () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const added = vi.spyOn(EventTarget.prototype, 'addEventListener');
+      const removed = vi.spyOn(EventTarget.prototype, 'removeEventListener');
+      const { unmount } = renderRoot();
+      const root = screen.getByTestId('timetable-drag-root');
+      // React also listens for touchmove on its container; ours is the non-passive one.
+      const ours = (spy: typeof added) =>
+        spy.mock.calls.flatMap(([type, , options], i) =>
+          type === 'touchmove' && (options as AddEventListenerOptions)?.passive === false
+            ? [spy.mock.contexts[i]]
+            : [],
+        );
+      expect(ours(added)).toEqual([root]);
+
+      // Before the long press completes the browser may scroll.
+      touchDown();
+      expect(fireEvent.touchMove(blockOf('bank-1'))).toBe(true);
+      act(() => vi.advanceTimersByTime(300));
+      // During the drag a touch on the dragged block is cancelled …
+      expect(fireEvent.touchMove(blockOf('bank-1'))).toBe(false);
+      // … but touches outside the drag root never reach the listener.
+      expect(fireEvent.touchMove(document.body)).toBe(true);
+
+      unmount();
+      expect(
+        removed.mock.calls.flatMap(([type], i) =>
+          type === 'touchmove' ? [removed.mock.contexts[i]] : [],
+        ),
+      ).toContain(root);
     });
 
     it('leaves a quick swipe to the browser (scrolling), without dragging', () => {

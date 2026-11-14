@@ -18,7 +18,6 @@ export interface DragSource {
   /** Pointer position minus the block's top-left corner at grab time. */
   grabOffset: Point;
   width: number;
-  height: number;
   /** Pointer position when the drag started (for the ghost's first frame). */
   startPointer: Point;
 }
@@ -213,7 +212,6 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
           pointerType: e.pointerType,
           grabOffset: { x: pointer.x - rect.left, y: pointer.y - rect.top },
           width: rect.width,
-          height: rect.height,
           startPointer: pointer,
         },
       };
@@ -234,6 +232,8 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
 
     // Once a touch drag is active, cancel the browser's panning. This listener must be non-passive
     // and registered before the gesture; otherwise Chrome/Safari fire pointercancel and scroll.
+    // It is scoped to the root (touches that start on a draggable bubble through it), so scrolling
+    // elsewhere on the page never runs through a non-passive listener.
     const onTouchMove = (e: TouchEvent) => {
       if (session?.started && e.cancelable) e.preventDefault();
     };
@@ -243,13 +243,13 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
     };
 
     root.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    root.addEventListener('touchmove', onTouchMove, { passive: false });
     root.addEventListener('contextmenu', onContextMenu);
     return () => {
       finish(false);
       releaseClickGuard();
       root.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('touchmove', onTouchMove);
+      root.removeEventListener('touchmove', onTouchMove);
       root.removeEventListener('contextmenu', onContextMenu);
     };
     // The root element is fixed for the page's lifetime.
@@ -262,6 +262,15 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
 /** Subscribe a small component (preview, ghost, bank highlight) to the drag state. */
 export function useDragState<T>(store: DragStore<T>): DragState<T> {
   return useSyncExternalStore(store.subscribe, store.get, store.get);
+}
+
+/**
+ * Only the dragged source: re-renders when a drag starts or ends, not when the target changes.
+ * (The engine publishes the same `source` object for the whole drag.)
+ */
+export function useDragSource<T>(store: DragStore<T>): DragSource | null {
+  const getSource = () => store.get().source;
+  return useSyncExternalStore(store.subscribe, getSource, getSource);
 }
 
 /**

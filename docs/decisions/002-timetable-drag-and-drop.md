@@ -112,6 +112,8 @@ Delete `spike/` in the same task.
 - `onMutate` snapshots the cache and applies the optimistic placement; `onError` rolls back and toasts by `AppError` kind; `onSettled` invalidates.
 - Tests: success, server `conflict_overlap`, network error rollback.
 
+**As built (M5.4, 2026-11-14):** one `usePlacementActions` mutation (place + unplace) with a per-trip mutation `scope`, so writes are serialised in drop order while every drop shows at once. Rollback is per activity to its last server-confirmed value, not a whole-cache snapshot; refetch only after the last pending write. See DEC-031.
+
 **Later.**
 
 - M5.6: keyboard dialog.
