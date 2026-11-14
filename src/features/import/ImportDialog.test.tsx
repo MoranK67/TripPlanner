@@ -57,11 +57,7 @@ function setup(ui: 'dialog' | 'bank' = 'dialog', activities: Activity[] = []) {
   render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        {ui === 'dialog' ? (
-          <ImportDialog open onClose={onClose} trip={trip} />
-        ) : (
-          <CachedBank />
-        )}
+        {ui === 'dialog' ? <ImportDialog open onClose={onClose} trip={trip} /> : <CachedBank />}
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -108,9 +104,7 @@ describe('preview (FR-6.2–FR-6.4)', () => {
     expect(items[1]).toHaveTextContent('שייטשעה וחצי (עוגל)');
     expect(items[2]).toHaveTextContent('שורה עם בעיה:בלי זמןחסר ; או טאב בין השם לזמן');
     expect(items[3]).toHaveTextContent('ארוחת ערבשעה וחצי');
-    expect(
-      screen.getByText('זוהו 3 אטרקציות · שורה אחת עם בעיה לא תיכנס'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('זוהו 3 אטרקציות · שורה אחת עם בעיה לא תיכנס')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'הוספת 3 אטרקציות למאגר' })).toBeEnabled();
 
     // Preview colors follow the trip's color cursor (8, 9, then wrap to 0).
@@ -216,7 +210,13 @@ describe('import', () => {
   it('imports only the valid rows in one call, then toasts and closes', async () => {
     const created = [
       activity({ id: 'n1', name: 'קפה', color: PALETTE[8], bankPosition: 1 }),
-      activity({ id: 'n2', name: 'גלידה', durationMinutes: 30, color: PALETTE[9], bankPosition: 2 }),
+      activity({
+        id: 'n2',
+        name: 'גלידה',
+        durationMinutes: 30,
+        color: PALETTE[9],
+        bankPosition: 2,
+      }),
     ];
     repo.importMany.mockResolvedValue(created);
     const { queryClient, onClose } = setup();
