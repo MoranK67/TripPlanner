@@ -25,7 +25,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 
 | ID | Task | Owner | Depends on | Status | Notes |
 |---|---|---|---|---|---|
-| M5.3 | Drag bank→grid, grid→grid, grid→bank, snap, valid/invalid preview, auto-scroll; delete spike | scheduler-engineer | M5.2 | in progress (uncommitted work in tree; needs code-reviewer) | May touch BankPanel.tsx / TripPage.tsx only for the drag contract wiring |
+| M5.3 | Drag bank→grid, grid→grid, grid→bank, snap, valid/invalid preview, auto-scroll; delete spike | scheduler-engineer | M5.2 | review — agent reported DONE (927 tests green from `C:\`); NEXT: code-reviewer on M5.3+M6.1 diff, then commit both (shared BankPanel.tsx/he.json). Follow-ups: update ADR-002 bank contract (`useBankDropZone()` = callback ref only, drop zone = whole bank panel); bank.hint should explain drag/long-press; vitest must run from upper-case `C:\` cwd (lower-case `c:\` breaks jest-dom) | May touch BankPanel.tsx / TripPage.tsx only for the drag contract wiring |
 | M6.1 | Import dialog with live preview → `import_activities` | frontend-engineer | M2.4, M4.4 | review (reported done; not committed — shares BankPanel.tsx/he.json with M5.3, commit after M5.3) | features/import + the bank's import button |
 | M6.2 | Platform adapter: web impl + desktop/android stubs + tests | platform-engineer | M0.3 | done | share sheet on mobile, download elsewhere; `useOnlineStatus` for M7.3 |
 | UX-1 | One retry layer, fail fast offline | core-engineer | — | done | DEC-030. QA: shrink `skipRetryBackoff` to ~5 × 1 s |
