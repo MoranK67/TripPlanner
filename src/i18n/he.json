@@ -170,6 +170,27 @@
     "success_other": "נוספו {{count}} אטרקציות למאגר",
     "failed": "הייבוא לא הצליח, ושום אטרקציה לא נוספה. {{reason}}"
   },
+  "export": {
+    "open": "ייצוא",
+    "title": "ייצוא לוח הזמנים",
+    "rangeLegend": "אילו שעות להציג?",
+    "rangeFitted": "השעות הרלוונטיות",
+    "rangeFull": "כל היממה",
+    "pdfHint": "בקובץ PDF כל עמוד מציג עד {{max}} ימים.",
+    "png": "שמירה כתמונה",
+    "pdf": "שמירה כ־PDF",
+    "generating": "מכין את הקובץ…",
+    "ready": "הקובץ מוכן",
+    "readyHint": "הקובץ מוכן. לוחצים על הכפתור כדי לשמור או לשתף אותו.",
+    "saveReady": "שמירה או שיתוף",
+    "saved": "הקובץ נשמר",
+    "shared": "הקובץ שותף",
+    "failed": "לא הצלחתי ליצור את הקובץ. {{reason}}",
+    "fileFallback": "טיול",
+    "subtitle": "{{start}} עד {{end}}",
+    "pageOf": "עמוד {{page}} מתוך {{total}}",
+    "dayCaption": "{{date}} · יום {{n}}"
+  },
   "planner": {
     "notFound": "הטיול לא נמצא. ייתכן שהוא נמחק.",
     "timetable": "לוח הזמנים"

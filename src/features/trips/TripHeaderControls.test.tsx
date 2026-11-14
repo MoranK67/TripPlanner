@@ -96,4 +96,19 @@ describe('TripHeaderControls', () => {
     await waitFor(() => expect(screen.getByText(/אין חיבור לשרת/)).toBeInTheDocument());
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
+
+  it('shows the export action passed by the page before the edit button', () => {
+    renderRoute(
+      <TripHeaderControls trip={trip} exportAction={<button type="button">ייצוא</button>} />,
+      {
+        path: '/trips/trip-1',
+        pattern: '/trips/:tripId',
+      },
+    );
+    const buttons = header()
+      .getAllByRole('button')
+      .map((b) => b.textContent);
+    expect(buttons.indexOf('ייצוא')).toBeGreaterThanOrEqual(0);
+    expect(buttons.indexOf('ייצוא')).toBeLessThan(buttons.indexOf('עריכה'));
+  });
 });

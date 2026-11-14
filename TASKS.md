@@ -32,7 +32,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M5.4 | Optimistic place/unplace + rollback, serialised per trip (DEC-031); touchmove on drag root; bank.hint explains drag | scheduler-engineer | M5.3 | done | Reviewed APPROVE |
 | M5.4b | M5.4 review follow-ups (module-level queue record, refetch overlay, toast dedupe, tests) | scheduler-engineer | M5.4 | done | Reviewed APPROVE |
 | DATA-1 | 15 s request timeout → AppError network/timeout; queries don't retry timeouts (DEC-032) | core-engineer | — | done | Reviewed APPROVE |
-| M6.3–M6.4 | Export dialog: PNG (canvas port, bundled Rubik) + PDF (jsPDF 4.2.1, A4, ≤ 7 days/page), lazy-loaded, via platform.saveFile | frontend-engineer | M2.5, M6.2 | in progress | FR-7.3 hour-range option answers the owner's open question |
+| M6.3–M6.4 | Export dialog PNG + PDF (DEC-034) | frontend-engineer | M2.5, M6.2 | done | Checked in real Chromium by the agent; owner demo pending |
 | M6.5 | Prototype "גיבוי" button + domain `parseBackup`/`serializeBackup` (DEC-033) | core-engineer | — | done | Prototype change read by Orchestrator (read-only export) |
 | M6.6a | RPC `import_trips(jsonb)` + DB tests + regenerate types (spec in DEC-033 / M6.5 report) | db-engineer | M6.5 | in progress | |
 | M6.6b | `backupRepo.importAll/exportAll` + mapping | core-engineer | M6.6a | todo | |

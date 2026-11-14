@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Button, ConfirmDialog, HeaderActions, useToast } from '@/components/ui';
@@ -11,9 +11,16 @@ import { tripDaysLabel, tripRangeLabel } from './tripLabels';
 /**
  * The trip page's header bar (prototype `.trip-bar`): switch trip (FR-2.1), the trip's range and
  * length, edit (FR-2.6), delete with confirmation (FR-2.7) and new trip. Rendered into the app
- * header through <HeaderActions>.
+ * header through <HeaderActions>. `exportAction` (the export button, FR-7) is passed in by the
+ * trip page, so the trips feature does not depend on the export feature.
  */
-export function TripHeaderControls({ trip }: { trip: Trip }) {
+export function TripHeaderControls({
+  trip,
+  exportAction,
+}: {
+  trip: Trip;
+  exportAction?: ReactNode;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const toast = useToast();
@@ -62,6 +69,7 @@ export function TripHeaderControls({ trip }: { trip: Trip }) {
       <span className="order-last w-full text-[13px] text-ink-soft tablet:order-none tablet:w-auto tablet:px-1">
         {tripRangeLabel(trip.window, t, 'short')} · {tripDaysLabel(trip.window, t)}
       </span>
+      {exportAction}
       <Button size="sm" onClick={() => setDialog('edit')}>
         {t('trips.edit')}
       </Button>

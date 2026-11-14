@@ -4,6 +4,7 @@ import { Button, Card, LoadingState, SidebarLayout } from '@/components/ui';
 import { isAppError } from '@/data';
 import type { Activity, Trip } from '@/domain';
 import { BankPanel, useActivityDialogs } from '@/features/bank';
+import { ExportButton } from '@/features/export';
 import { Timetable, TimetableDragRoot, usePlacementActions } from '@/features/schedule';
 import { TripHeaderControls, useTripQuery } from '@/features/trips';
 import { errorMessage } from '@/i18n/errors';
@@ -65,7 +66,10 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
   return (
     <>
       <h2 className="sr-only">{trip.name}</h2>
-      <TripHeaderControls trip={trip} />
+      <TripHeaderControls
+        trip={trip}
+        exportAction={<ExportButton trip={trip} activities={activities} />}
+      />
       {/* Drag between bank and timetable (FR-5.1–5.4): both must render inside the drag root. */}
       <TimetableDragRoot
         trip={trip}
