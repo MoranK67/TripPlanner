@@ -535,7 +535,7 @@ RLS enabled and forced on all tables; anon role has no table grants. Because aut
 
 | Environment | Purpose |
 |---|---|
-| `dev` Supabase project | Development and DB tests. E2E runs against an in-memory fake backend (DEC-027); an optional real-backend smoke run may use a dedicated test account. |
+| `dev` Supabase project | Development and DB tests. E2E runs against an in-memory fake backend (DEC-028); an optional real-backend smoke run may use a dedicated test account. |
 | `dev` — **created 2026-11-12** | Project name `trip-planner-dev`, region Central EU (Frankfurt), ref `hnabofhgpefcjjzlxwbm`, URL `https://hnabofhgpefcjjzlxwbm.supabase.co`. Public sign-up is **disabled** (DEC-007). |
 | `prod` Supabase project (create in M11.2; free tier allows 2 projects) | Owner's real data. Migrations applied via CLI from `main` only. Daily automatic backups (free tier: verify retention; see §11). |
 
