@@ -118,4 +118,40 @@ describe('ActivityBlock', () => {
     expect(el).toHaveAttribute('data-activity-id', 'a1');
     expect(el).toHaveAttribute('title', 'א');
   });
+
+  it('is relative by default, but lets a caller position it (class or inline style)', () => {
+    const { container, rerender } = render(
+      <ActivityBlock name="א" durationMinutes={60} color="#FFD6E0" />,
+    );
+    expect(block(container)).toHaveClass('relative');
+
+    rerender(
+      <ActivityBlock
+        name="א"
+        durationMinutes={60}
+        color="#FFD6E0"
+        className="absolute inset-x-1"
+      />,
+    );
+    expect(block(container)).toHaveClass('absolute');
+    expect(block(container)).not.toHaveClass('relative');
+
+    rerender(
+      <ActivityBlock
+        name="א"
+        durationMinutes={60}
+        color="#FFD6E0"
+        className="inset-x-1"
+        style={{ position: 'absolute', top: 10 }}
+      />,
+    );
+    expect(block(container)).not.toHaveClass('relative');
+    expect(block(container).style.position).toBe('absolute');
+
+    // A variant-only position keeps the base fallback (the variant wins where it applies).
+    rerender(
+      <ActivityBlock name="א" durationMinutes={60} color="#FFD6E0" className="tablet:absolute" />,
+    );
+    expect(block(container)).toHaveClass('relative');
+  });
 });

@@ -7,3 +7,8 @@ export {
   useDeleteActivity,
   useUpdateActivity,
 } from './hooks';
+export {
+  useActivityDialogs,
+  type ActivityDialogsController,
+  type ActivityDialogsOptions,
+} from './useActivityDialogs';

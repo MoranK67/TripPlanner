@@ -86,9 +86,9 @@ Why: the grid's hard parts are RTL auto-scroll, sticky exclusion, slot snapping 
 - `TimetableGrid` (memo) and `DayColumn` (memo).
 - Slot lines as background gradients on one columns layer (no slot cells).
 - Disabled-slot overlays from `dayBounds` (first/last day only).
-- Sticky header with `formatWeekday`/`formatShortDate` + `schedule.dayN`, and a sticky time column.
+- Sticky header with `formatWeekday`/`formatShortDate` + `schedule.timetable.dayN`, and a sticky time column.
 - Scroll to the trip start on open (FR-4.4).
-- Layout constants (`HEADER_PX`, `TIME_COL_PX`, `COL_MIN_PX`) in `features/schedule/layout.ts`; geometry reuses `SLOT_HEIGHT_PX`.
+- Layout constants (`HEADER_PX`, `TIME_COL_PX`, `COL_MIN_PX`) in `features/schedule/timetableLayout.ts`; geometry reuses `SLOT_HEIGHT_PX`.
 - No virtualisation at first; M5.8 decides if 90-day profiling requires it.
 
 **M5.3 — drag (FR-5.1–5.4).** Move `geometry.ts` (+ tests) and `usePointerDrag.ts` to `features/schedule/drag/`. Keep from the spike:

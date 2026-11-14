@@ -10,7 +10,7 @@
 // No role/tabIndex is added to the draggable, so ActivityBlock's own buttons are never nested.
 
 import { useEffect, useMemo, useRef, useSyncExternalStore, type RefObject } from 'react';
-import type { Point } from './geometry';
+import type { Point } from '../geometry';
 
 export interface DragSource {
   id: string;

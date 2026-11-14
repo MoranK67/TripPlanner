@@ -2,13 +2,15 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { Button, Card, LoadingState, SidebarLayout } from '@/components/ui';
 import { isAppError } from '@/data';
-import { BankPanel } from '@/features/bank';
+import type { Activity, Trip } from '@/domain';
+import { BankPanel, useActivityDialogs } from '@/features/bank';
+import { Timetable } from '@/features/schedule';
 import { TripHeaderControls, useTripQuery } from '@/features/trips';
 import { errorMessage } from '@/i18n/errors';
 
 /**
  * The planner page for one trip: header controls (trips feature), the activity bank in the side
- * panel (bank feature) and the timetable in the main area (schedule feature, M5). It lives in
+ * panel (bank feature) and the timetable in the main area (schedule feature). It lives in
  * src/app because it composes several features, which must not import each other's pages.
  */
 export function TripPage() {
@@ -51,7 +53,14 @@ export function TripPage() {
     );
   }
 
-  const { trip, activities } = query.data;
+  return <TripPlanner trip={query.data.trip} activities={query.data.activities} />;
+}
+
+/** The loaded trip: header controls, bank and timetable sharing one set of activity dialogs. */
+function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] }) {
+  const { t } = useTranslation();
+  // Placed blocks open the same edit / delete dialogs as the bank (FR-3.4, FR-3.5).
+  const timetableDialogs = useActivityDialogs(trip);
   return (
     <>
       <h2 className="sr-only">{trip.name}</h2>
@@ -60,14 +69,16 @@ export function TripPage() {
         sidebarLabel={t('bank.title')}
         sidebar={<BankPanel trip={trip} activities={activities} />}
       >
-        {/* M5 (scheduler-engineer) replaces this placeholder with the timetable. */}
-        <section
-          aria-label={t('planner.timetable')}
-          className="grid min-h-0 flex-1 place-items-center rounded-[var(--radius-card)] border border-line bg-panel p-6 text-center shadow-[var(--shadow-card)]"
-        >
-          <p className="m-0 max-w-sm leading-relaxed text-ink-soft">{t('planner.placeholder')}</p>
-        </section>
+        {/* Outline: h1 app title > h2 trip / bank / timetable > h3 day headers (in Timetable). */}
+        <h2 className="sr-only">{t('planner.timetable')}</h2>
+        <Timetable
+          trip={trip}
+          activities={activities}
+          onOpenActivity={timetableDialogs.openEdit}
+          onDeleteActivity={timetableDialogs.openDelete}
+        />
       </SidebarLayout>
+      {timetableDialogs.dialogs}
     </>
   );
 }

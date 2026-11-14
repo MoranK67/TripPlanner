@@ -29,6 +29,14 @@ export interface ActivityBlockProps extends Omit<
 
 const FALLBACK_COLOR = PALETTE[PALETTE.length - 1];
 
+// Unprefixed only: a variant such as `tablet:absolute` already sorts after a base `relative`.
+const POSITION_CLASS = /(?:^|\s)(?:absolute|fixed|sticky|relative)(?:\s|$)/;
+
+/** True if the caller positions the block itself (a position class or `style.position`). */
+function hasOwnPosition(className: string | undefined, style: CSSProperties | undefined): boolean {
+  return Boolean(style?.position) || (className !== undefined && POSITION_CLASS.test(className));
+}
+
 /**
  * A colored activity block, used in the bank and in the timetable (prototype `.block`).
  * Height is proportional to the duration; a one-slot block switches to a single-line "short"
@@ -93,7 +101,11 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
       title={name}
       data-short={short || undefined}
       className={cx(
-        'group relative shrink-0 overflow-hidden rounded-[var(--radius-block)] border',
+        // The × is positioned against the block, so it needs a containing block — but a caller's
+        // own positioning (e.g. `absolute` in the timetable) must win, and Tailwind's CSS order
+        // would let `relative` override it. So `relative` is only the fallback.
+        !hasOwnPosition(className, style) && 'relative',
+        'group shrink-0 overflow-hidden rounded-[var(--radius-block)] border',
         'border-[color-mix(in_srgb,var(--block-color),var(--color-block-edge)_16%)] bg-(--block-color)',
         'shadow-[var(--shadow-block)] transition-shadow hover:shadow-[var(--shadow-block-hover)]',
         className,

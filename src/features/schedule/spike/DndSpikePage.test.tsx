@@ -22,8 +22,8 @@ function rect(r: { left: number; top: number; right: number; bottom: number }): 
 beforeEach(() => {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const el = this as HTMLElement;
-    if (el.dataset.testid === 'spike-columns') return rect(COLUMNS);
-    if (el.dataset.testid === 'spike-scroller')
+    if (el.dataset.testid === 'timetable-columns') return rect(COLUMNS);
+    if (el.dataset.testid === 'timetable-scroller')
       return rect({ left: 0, top: 0, right: 800, bottom: 600 });
     if (el.dataset.testid === 'spike-bank') return rect(BANK);
     if (el.dataset.dragId) return rect({ left: 900, top: 100, right: 1080, bottom: 155 });
@@ -34,16 +34,17 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 function renderPlanner() {
-  render(
+  const utils = render(
     <ToastProvider>
       <SpikePlanner dayCount={7} />
     </ToastProvider>,
   );
-  const scroller = screen.getByTestId('spike-scroller');
+  const scroller = screen.getByTestId('timetable-scroller');
   Object.defineProperty(scroller, 'clientWidth', { value: 800 });
   Object.defineProperty(scroller, 'clientHeight', { value: 600 });
   // jsdom does not inherit `direction` from <html dir="rtl">; a browser computes it.
   scroller.style.direction = 'rtl';
+  return utils;
 }
 
 /** Mouse drag from a block to a point (grab point is 10 px below the block top). */
@@ -97,6 +98,50 @@ describe('drag spike', () => {
     drag(bankBlock('שוק האיכרים')!, { x: 736 - 225, y: 226 }); // day 2 10:00 overlaps 09:00–10:30
     expect(screen.getByText('אין מקום פנוי שם, האטרקציה נשארה במקומה')).toBeInTheDocument();
     expect(screen.getByTestId('spike-stats')).toHaveTextContent('הלוח רונדר 0 פעמים');
+  });
+
+  describe('grid render counter (ADR-002 evidence)', () => {
+    /** Start a mouse drag over day 2 at 10:00 (overlaps 09:00–10:30, so the drop is rejected). */
+    function startDrag() {
+      fireEvent.pointerDown(bankBlock('שוק האיכרים')!, {
+        pointerId: 1,
+        pointerType: 'mouse',
+        button: 0,
+        clientX: 950,
+        clientY: 110,
+      });
+      fireEvent.pointerMove(document, { pointerId: 1, clientX: 900, clientY: 120 });
+      fireEvent.pointerMove(document, { pointerId: 1, clientX: 736 - 225, clientY: 226 });
+    }
+    function endDrag() {
+      fireEvent.pointerUp(document, { pointerId: 1, clientX: 736 - 225, clientY: 226 });
+    }
+
+    it('stays at 0 when the planner re-renders mid-drag but the grid props are unchanged', () => {
+      const { rerender } = renderPlanner();
+      startDrag();
+      // Forces SpikePlanner (the grid's parent) to render again during the drag.
+      rerender(
+        <ToastProvider>
+          <SpikePlanner dayCount={7} />
+        </ToastProvider>,
+      );
+      endDrag();
+      expect(screen.getByTestId('spike-stats')).toHaveTextContent('הלוח רונדר 0 פעמים');
+    });
+
+    it('counts a real grid re-render during a drag', () => {
+      const { rerender } = renderPlanner();
+      startDrag();
+      // Changes the grid's props (trip length) mid-drag, so TimetableGrid must render.
+      rerender(
+        <ToastProvider>
+          <SpikePlanner dayCount={8} />
+        </ToastProvider>,
+      );
+      endDrag();
+      expect(screen.getByTestId('spike-stats')).toHaveTextContent(/הלוח רונדר [1-9]\d* פעמים/);
+    });
   });
 
   it('returns a placed block to the bank', () => {

@@ -1,18 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityBlock, Button, ConfirmDialog, useToast } from '@/components/ui';
+import { ActivityBlock, Button } from '@/components/ui';
 import { isInBank, type Activity, type Trip } from '@/domain';
-import { errorMessage, isAbortedError } from '@/i18n/errors';
-import { ActivityDialog } from './ActivityDialog';
-import { useDeleteActivity } from './hooks';
+import { useActivityDialogs } from './useActivityDialogs';
 
 export interface BankPanelProps {
   trip: Trip;
   /** All of the trip's activities; the panel shows the unplaced ones in bank order. */
   activities: readonly Activity[];
 }
-
-type DialogKind = 'add' | 'edit' | 'delete';
 
 /** After a delete: which block gets focus once the deleted one has left the list. */
 interface FocusAfterDelete {
@@ -28,11 +24,6 @@ interface FocusAfterDelete {
  */
 export function BankPanel({ trip, activities }: BankPanelProps) {
   const { t } = useTranslation();
-  const toast = useToast();
-  const deleteActivity = useDeleteActivity(trip.id);
-  // `open` and the item are separate, so a closing dialog keeps showing the item it was opened for.
-  const [open, setOpen] = useState<DialogKind | null>(null);
-  const [item, setItem] = useState<Activity | null>(null);
   const focusAfterDelete = useRef<FocusAfterDelete | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const blockRefs = useRef(new Map<string, HTMLDivElement>());
@@ -41,6 +32,17 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
     () => activities.filter(isInBank).sort((a, b) => a.bankPosition - b.bankPosition),
     [activities],
   );
+
+  const { openAdd, openEdit, openDelete, dialogs } = useActivityDialogs(trip, {
+    onDeleteStart: (activity) => {
+      const index = bank.findIndex((a) => a.id === activity.id);
+      const neighbor = bank[index + 1] ?? bank[index - 1] ?? null;
+      focusAfterDelete.current = { deletedId: activity.id, targetId: neighbor?.id ?? null };
+    },
+    onDeleteError: () => {
+      focusAfterDelete.current = null;
+    },
+  });
 
   // Move focus off the deleted block (keyboard users would otherwise land on <body>).
   useEffect(() => {
@@ -54,30 +56,6 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
     (target ?? headingRef.current)?.focus();
   }, [bank]);
 
-  function openDialog(kind: DialogKind, activity: Activity | null) {
-    setItem(activity);
-    setOpen(kind);
-  }
-
-  function confirmDelete(activity: Activity) {
-    const index = bank.findIndex((a) => a.id === activity.id);
-    const neighbor = bank[index + 1] ?? bank[index - 1] ?? null;
-    setOpen(null);
-    focusAfterDelete.current = { deletedId: activity.id, targetId: neighbor?.id ?? null };
-    deleteActivity.mutate(activity.id, {
-      onError: (error) => {
-        focusAfterDelete.current = null;
-        if (!isAbortedError(error)) {
-          toast.show(t('bank.deleteFailed', { reason: errorMessage(error, t) }), {
-            tone: 'error',
-          });
-        }
-      },
-    });
-  }
-
-  const closeDialog = () => setOpen(null);
-
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between gap-2 border-b border-line px-4 pt-3.5 pb-2.5">
@@ -90,7 +68,7 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
             </span>
           )}
         </h2>
-        <Button variant="primary" size="sm" onClick={() => openDialog('add', null)}>
+        <Button variant="primary" size="sm" onClick={openAdd}>
           {t('bank.add')}
         </Button>
       </div>
@@ -114,8 +92,8 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
                 name={activity.name}
                 durationMinutes={activity.durationMinutes}
                 color={activity.color}
-                onOpen={() => openDialog('edit', activity)}
-                onDelete={() => openDialog('delete', activity)}
+                onOpen={() => openEdit(activity)}
+                onDelete={() => openDelete(activity)}
               />
             </li>
           ))}
@@ -126,22 +104,7 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
         {t('bank.hint')}
       </p>
 
-      <ActivityDialog
-        open={open === 'add' || open === 'edit'}
-        onClose={closeDialog}
-        tripId={trip.id}
-        colorCursor={trip.colorCursor}
-        activity={open === 'add' ? undefined : (item ?? undefined)}
-      />
-      <ConfirmDialog
-        open={open === 'delete'}
-        title={t('bank.deleteConfirm.title')}
-        message={item ? t('bank.deleteConfirm.message', { name: item.name }) : ''}
-        onConfirm={() => {
-          if (item) confirmDelete(item);
-        }}
-        onCancel={closeDialog}
-      />
+      {dialogs}
     </div>
   );
 }

@@ -1,5 +1,5 @@
-// SPIKE (M5.1) — throwaway. Pure drag geometry for the timetable, kept free of DOM access so it
-// can be unit-tested in jsdom (which has no layout). Candidate for promotion in M5.3.
+// Pure drag geometry for the timetable (promoted from the M5.1 spike), kept free of DOM access so it
+// can be unit-tested in jsdom (which has no layout). Used by the drag engine (M5.3).
 //
 // Hit-testing is done with arithmetic on two measured rectangles instead of
 // `document.elementFromPoint` (prototype): it ignores the ghost and the sticky header/time column,
