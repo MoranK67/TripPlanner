@@ -1,6 +1,6 @@
 // FR-1.1, FR-1.2, FR-1.4 and §9.4 "Session expired": sign-in, route guard, sign-out.
 
-import { auth, rest } from './fake-backend/server';
+import { auth } from './fake-backend/server';
 import { expect, header, test } from './support/fixtures';
 import { t } from './support/i18n';
 import { login } from './support/pages';
@@ -78,18 +78,13 @@ test.describe('route guard', () => {
     await page.goto('/trips');
     await expect(page.getByRole('link', { name: new RegExp(TRIPS.rome.name) })).toBeVisible();
 
-    // The server stops accepting the token (PostgREST answers 401 PGRST303 "JWT expired").
+    // The server stops accepting the token: the fake PostgREST answers 401 PGRST303
+    // "JWT expired" and the refresh token is gone too.
     backend.revokeAllSessions();
-    backend.fail(rest('GET', 'trips'), {
-      kind: 'http',
-      status: 401,
-      body: { code: 'PGRST303', message: 'JWT expired', details: null, hint: null },
-    });
     await page.getByRole('link', { name: new RegExp(TRIPS.rome.name) }).click();
 
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('alert')).toHaveText(t('errors.kinds.auth_expired'));
-    backend.clearFaults();
     await login(page, user.email, TEST_PASSWORD);
     await expect(page).toHaveURL(new RegExp(`/trips/${trip.id}$`));
   });

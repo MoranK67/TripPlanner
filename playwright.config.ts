@@ -1,9 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
+import { FAKE_PUBLISHABLE_KEY, FAKE_SUPABASE_URL } from './tests/e2e/fake-backend/server';
 
 // E2E suite (M4.5). The app is built and served by `vite preview` with a FAKE Supabase URL; every
 // request to it is answered in-process by tests/e2e/fake-backend, so no real project or account
 // is used. Values set here override .env.local (Vite never overwrites variables already in the
-// environment), and the fixtures abort any request to another host.
+// environment), and an automatic fixture aborts any request to another host and fails the test.
 //
 // A production build (not the dev server) on purpose: the dev server re-optimizes dependencies
 // the first time a lazy chunk (e.g. the calendar) loads and then reloads the page mid-test.
@@ -55,8 +56,8 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 180_000,
     env: {
-      VITE_SUPABASE_URL: 'http://supabase.test',
-      VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_e2e_fake_key_not_a_secret',
+      VITE_SUPABASE_URL: FAKE_SUPABASE_URL,
+      VITE_SUPABASE_PUBLISHABLE_KEY: FAKE_PUBLISHABLE_KEY,
     },
   },
 });

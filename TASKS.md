@@ -29,7 +29,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M6.1 | Import dialog with live preview → `import_activities` | frontend-engineer | M2.4, M4.4 | review (reported done; not committed — shares BankPanel.tsx/he.json with M5.3, commit after M5.3) | features/import + the bank's import button |
 | M6.2 | Platform adapter: web impl + desktop/android stubs + tests | platform-engineer | M0.3 | done | share sheet on mobile, download elsewhere; `useOnlineStatus` for M7.3 |
 | UX-1 | One retry layer, fail fast offline | core-engineer | — | done | DEC-030. QA: shrink `skipRetryBackoff` to ~5 × 1 s |
-| QA-1 | E2E fake-backend fidelity + flaky tests | qa-engineer | M4.5 | in progress (uncommitted work in tree) | tests/e2e only. Note: run vitest from PowerShell, not Git Bash (jest-dom matchers fail). TripDialog test flaky under load (lazy calendar, 1 s findByRole) |
+| QA-1 | E2E fake-backend fidelity + flaky tests | qa-engineer | M4.5 | done | host guard fixture, PGRST303/301, update_activity fit rule, 2 flaky network tests fixed (148/148 × 2). Note: run vitest from upper-case `C:\` cwd |
 
 ## Earlier waves — M1 ‖ M2 ‖ M3
 
@@ -61,7 +61,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 
 | SEC-1 | Upgrade react-router-dom 6.30.6 → 7 (npm audit: 2 moderate advisories, fixed only in v7; open-redirect via backslash already blocked by redirectTarget, SSR advisory not applicable) | frontend-engineer | — | todo | Before the first public deploy (M8) |
 
-| QA-1 | E2E fake-backend fidelity + guard hardening (M4.5 review should-fixes: fail on blocked hosts as auto fixture, `update_activity` checks fit only on duration change, unknown token returns 401 PGRST303; plus nits). Also: 2 E2E tests were flaky (passed on retry) in the 14.11 run, so find and stabilise them | qa-engineer | M4.5 | todo | |
+| ~~QA-1~~ | (done, see current wave) E2E fake-backend fidelity + guard hardening (M4.5 review should-fixes: fail on blocked hosts as auto fixture, `update_activity` checks fit only on duration change, unknown token returns 401 PGRST303; plus nits). Also: 2 E2E tests were flaky (passed on retry) in the 14.11 run, so find and stabilise them | qa-engineer | M4.5 | todo | |
 | UX-1 | Collapse stacked read retries (postgrest 3× + TanStack 2× ≈ 25 s offline before an error): keep one layer, fail fast when offline | core-engineer + frontend-engineer | — | todo | Then shrink `skipRetryBackoff` in E2E |
 | A11Y-1 | Axe check in E2E (NFR-7), needs `@axe-core/playwright` | qa-engineer | M4.5 | todo | |
 | UX-2 | Focus target after deleting a timetable block (via `onDeleteStart`); label the timetable region by the sr-only h2 (`aria-labelledby`) to avoid a double announcement | scheduler-engineer + frontend-engineer | M5.2 | todo | |

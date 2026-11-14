@@ -1,7 +1,7 @@
 // Network failures (PROJECT_PLAN §4.6, §9.4 "network drops"): every failure shows a Hebrew
 // message, nothing is half-saved, and trying again works once the connection is back.
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { rest } from './fake-backend/server';
 import { expect, header, test, toast } from './support/fixtures';
 import { t } from './support/i18n';
@@ -15,13 +15,21 @@ test.beforeEach(async ({ signIn }) => {
 });
 
 /**
- * Reads are retried (postgrest-js: 3× with 1/2/4 s backoff; TanStack Query: 2× more), so a dead
- * connection takes ~25 s of wall time to surface. The fake clock skips those waits.
+ * Reads are retried once more than they fail (DEC-030: TanStack Query retries twice with 1 s and
+ * 2 s backoff; postgrest-js retries are off; nothing is retried when the browser is offline), so
+ * a dead connection takes ~3 s of wall time to surface. The fake clock skips those waits.
+ *
+ * Each retry needs a real round trip to the (aborting) route before its next backoff timer
+ * exists, so fast-forwarding the clock in a tight loop could burn through the fake time before
+ * the retries happened (the old fixed loop was flaky under load). `toPass` waits real time
+ * between steps (about 5 × 1 s of fake time is enough) and stops as soon as the UI shows the
+ * error.
  */
-async function skipRetryBackoff(page: Page, until: () => Promise<boolean>) {
-  for (let i = 0; i < 40 && !(await until()); i += 1) {
-    await page.clock.runFor(2_000);
-  }
+async function skipRetryBackoff(page: Page, shown: Locator) {
+  await expect(async () => {
+    await page.clock.runFor(1_000);
+    await expect(shown).toBeVisible({ timeout: 250 });
+  }).toPass({ timeout: 10_000 });
 }
 
 test('trips list: load failure shows a Hebrew error; retry works when back online', async ({
@@ -34,7 +42,7 @@ test('trips list: load failure shows a Hebrew error; retry works when back onlin
   await page.goto('/trips');
 
   const alert = page.getByRole('alert');
-  await skipRetryBackoff(page, () => alert.isVisible());
+  await skipRetryBackoff(page, alert);
   await expect(alert).toHaveText(t('trips.loadError', { reason: NETWORK }));
 
   backend.clearFaults();
@@ -48,7 +56,7 @@ test('trip page: load failure offers retry (not "not found")', async ({ page, ba
   await page.goto(`/trips/${trip.id}`);
 
   const alert = page.getByRole('alert');
-  await skipRetryBackoff(page, () => alert.isVisible());
+  await skipRetryBackoff(page, alert);
   await expect(alert).toHaveText(NETWORK);
   await expect(page.getByRole('heading', { name: t('errors.title') })).toBeVisible();
 

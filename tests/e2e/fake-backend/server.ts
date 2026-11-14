@@ -5,8 +5,10 @@
 import type { BrowserContext, Request, Route } from '@playwright/test';
 import { DbFailure, FakeDb, isUuid, type FakeUser, type PgError } from './db';
 
-/** Must match `VITE_SUPABASE_URL` in playwright.config.ts. */
+/** Used as `VITE_SUPABASE_URL` by playwright.config.ts. */
 export const FAKE_SUPABASE_URL = 'http://supabase.test';
+/** Used as `VITE_SUPABASE_PUBLISHABLE_KEY` by playwright.config.ts (not a secret). */
+export const FAKE_PUBLISHABLE_KEY = 'sb_publishable_e2e_fake_key_not_a_secret';
 /** supabase-js storage key: `sb-<first label of the host>-auth-token`. */
 export const AUTH_STORAGE_KEY = 'sb-supabase-auth-token';
 
@@ -26,6 +28,8 @@ export interface LoggedRequest {
   path: string;
   search: URLSearchParams;
   body: unknown;
+  /** Wall-clock time (ms) the fake received it; for the failure log. */
+  at: number;
 }
 
 /** What to do with a matching request instead of serving it. */
@@ -162,6 +166,7 @@ export class FakeSupabase {
       path: url.pathname,
       search: url.searchParams,
       body: parseBody(request),
+      at: Date.now(),
     };
     this.requests.push(logged);
 
@@ -193,10 +198,37 @@ export class FakeSupabase {
     }
   }
 
+  /** The user of a known session token, else null (anonymous, unknown or invalid). */
   private userIdFrom(request: Request): string | null {
-    const header = request.headers()['authorization'] ?? '';
-    const token = header.replace(/^Bearer\s+/i, '');
-    return this.db.accessTokens.get(token) ?? null;
+    return this.db.accessTokens.get(bearerToken(request)) ?? null;
+  }
+
+  /**
+   * PostgREST's view of the caller. No session (supabase-js then sends the publishable key, which
+   * the API gateway turns into the anon role) → anonymous. A token that is not a live session →
+   * 401 like PostgREST: PGRST303 "JWT expired" for a JWT-shaped token (our revoked sessions stand
+   * for expired ones), PGRST301 for something that is not a JWT at all.
+   */
+  private restCaller(request: Request): string | null {
+    const token = bearerToken(request);
+    if (token === '' || token === FAKE_PUBLISHABLE_KEY) return null;
+    const userId = this.db.accessTokens.get(token);
+    if (userId !== undefined) return userId;
+    const parts = token.split('.').length;
+    if (parts !== 3) {
+      throw new DbFailure(401, {
+        code: 'PGRST301',
+        message: `Expected 3 parts in JWT; got ${parts}`,
+        details: null,
+        hint: null,
+      });
+    }
+    throw new DbFailure(401, {
+      code: 'PGRST303',
+      message: 'JWT expired',
+      details: null,
+      hint: null,
+    });
   }
 
   // --- GoTrue ---------------------------------------------------------------------------------
@@ -239,8 +271,13 @@ export class FakeSupabase {
     }
 
     if (route === 'logout') {
-      const header = request.headers()['authorization'] ?? '';
-      this.db.accessTokens.delete(header.replace(/^Bearer\s+/i, ''));
+      // supabase-js signs out with scope=global: every refresh token of the user is revoked.
+      // Already issued access tokens stay valid JWTs until they expire, as with real GoTrue, so
+      // a query still in flight during sign-out does not turn into a 401.
+      const userId = this.userIdFrom(request);
+      for (const [token, owner] of this.db.refreshTokens) {
+        if (owner === userId) this.db.refreshTokens.delete(token);
+      }
       return { status: 204, headers: CORS_HEADERS, body: '' };
     }
 
@@ -253,7 +290,7 @@ export class FakeSupabase {
 
   private handleRest(req: LoggedRequest, request: Request) {
     const resource = req.path.slice('/rest/v1/'.length);
-    const userId = this.userIdFrom(request);
+    const userId = this.restCaller(request);
     const wantsObject = (request.headers()['accept'] ?? '').includes(
       'application/vnd.pgrst.object+json',
     );
@@ -376,6 +413,10 @@ function permissionDenied(what: string): DbFailure {
     details: null,
     hint: null,
   });
+}
+
+function bearerToken(request: Request): string {
+  return (request.headers()['authorization'] ?? '').replace(/^Bearer\s+/i, '').trim();
 }
 
 function parseBody(request: Request): unknown {

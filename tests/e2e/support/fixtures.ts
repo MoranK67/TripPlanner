@@ -1,8 +1,9 @@
 // Shared Playwright fixtures for the E2E suite.
 //
 // Every test gets its own fake Supabase backend (`backend`) with one test user (`user`), a fixed
-// clock (so the trip calendar always opens on the same month) and a guard that aborts any request
-// leaving the machine — the suite can never reach a real Supabase project by accident.
+// clock (so the trip calendar always opens on the same month) and an automatic guard
+// (`hostGuard`) that aborts any request leaving the machine and fails the test if one was made —
+// the suite can never reach a real Supabase project by accident.
 //
 // Extension point for a later "real backend smoke" project: add a project in
 // playwright.config.ts that sets E2E_BACKEND=real plus E2E_EMAIL / E2E_PASSWORD for a dedicated
@@ -19,22 +20,49 @@ export interface E2EFixtures {
   user: FakeUser;
   /** Stores a valid session before the app loads, like a returning signed-in user (FR-1.2). */
   signIn: () => Promise<void>;
+  /**
+   * Automatic: aborts every request to a host other than the preview server and the fake
+   * backend, and fails the test afterwards if there was one (a silent abort could hide a real
+   * call to a live service, or a broken feature that happens to swallow the error).
+   */
+  hostGuard: void;
 }
 
 const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', new URL(FAKE_SUPABASE_URL).hostname]);
 
 export const test = base.extend<E2EFixtures>({
-  backend: async ({ context, page }, provide) => {
-    // Safety net: only the dev server and the fake backend may be contacted.
-    await context.route(
-      (url) => !ALLOWED_HOSTS.has(url.hostname),
-      (route) => route.abort('blockedbyclient'),
-    );
+  hostGuard: [
+    async ({ context }, provide) => {
+      const blocked: string[] = [];
+      await context.route(
+        (url) => !ALLOWED_HOSTS.has(url.hostname),
+        async (route) => {
+          blocked.push(`${route.request().method()} ${route.request().url()}`);
+          await route.abort('blockedbyclient');
+        },
+      );
+      await provide();
+      expect(blocked, 'requests to hosts outside the E2E allow-list').toEqual([]);
+    },
+    { auto: true },
+  ],
+
+  backend: async ({ context, page }, provide, testInfo) => {
     const backend = new FakeSupabase();
     await backend.install(context);
     // A fixed "today" (time keeps running) so default ranges and the calendar are stable.
     await page.clock.install({ time: TODAY });
     await provide(backend);
+    if (testInfo.status !== testInfo.expectedStatus) {
+      // What the app asked the backend for, in order: usually the fastest way to see why.
+      const start = backend.requests[0]?.at ?? 0;
+      const log = backend.requests
+        .map(
+          (r) => `+${r.at - start}ms ${r.method} ${r.path}${r.search.size ? `?${r.search}` : ''}`,
+        )
+        .join('\n');
+      await testInfo.attach('fake-backend-requests', { body: log, contentType: 'text/plain' });
+    }
   },
 
   user: async ({ backend }, provide) => {

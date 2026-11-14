@@ -443,7 +443,7 @@ export class FakeDb {
   /**
    * Edits name / duration / colour. A placed activity whose new duration no longer fits (or now
    * overlaps a neighbour) moves to the bank: `returned_to_bank: true`.
-   * `forceReturnedToBank` lets a test simulate that answer for a bank activity (no timetable yet).
+   * `forceReturnedToBank` lets a test force that answer once, e.g. for a bank activity.
    */
   forceReturnedToBank = false;
 
@@ -464,25 +464,31 @@ export class FakeDb {
     }
     const activity = this.ownActivity(userId, args.activity_id);
     const trip = this.ownTrip(userId, activity.trip_id);
-    if (typeof name === 'string') activity.name = name;
-    if (typeof duration === 'number') activity.duration_minutes = duration;
-    if (typeof color === 'string') activity.color = color;
-    activity.updated_at = nowIso();
+    const newDuration = typeof duration === 'number' ? duration : activity.duration_minutes;
 
+    // Like the DB: the fit is checked only when the duration actually changes. A rename or
+    // recolour never moves a placed activity, even if it sits outside the window today.
     let returned = false;
-    if (activity.scheduled_date !== null && activity.start_minute !== null) {
+    if (
+      activity.scheduled_date !== null &&
+      activity.start_minute !== null &&
+      newDuration !== activity.duration_minutes
+    ) {
       const date = activity.scheduled_date;
       const start = activity.start_minute;
       const fits =
-        fitsTripWindow(trip, date, start, activity.duration_minutes) &&
+        fitsTripWindow(trip, date, start, newDuration) &&
         !this.activities.some(
           (o) =>
-            o.id !== activity.id &&
-            o.trip_id === trip.id &&
-            overlaps(o, date, start, activity.duration_minutes),
+            o.id !== activity.id && o.trip_id === trip.id && overlaps(o, date, start, newDuration),
         );
       if (!fits) returned = true;
     }
+
+    if (typeof name === 'string') activity.name = name;
+    activity.duration_minutes = newDuration;
+    if (typeof color === 'string') activity.color = color;
+    activity.updated_at = nowIso();
     if (this.forceReturnedToBank) {
       this.forceReturnedToBank = false;
       returned = true;
