@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button, Card, HeaderActions, LoadingState } from '@/components/ui';
@@ -8,8 +8,16 @@ import { useTripsQuery } from './hooks';
 import { TripDialog } from './TripDialog';
 import { tripDaysLabel, tripRangeLabel } from './tripLabels';
 
+export interface TripsPageProps {
+  /**
+   * Extra header controls after "+ טיול חדש" (the backup buttons, FR-8). Passed in by the app
+   * route, so the trips feature does not depend on the backup feature.
+   */
+  headerActions?: ReactNode;
+}
+
 /** Trips list (FR-2.1, FR-2.8): one card per trip, sorted by start; empty state for none. */
-export function TripsPage() {
+export function TripsPage({ headerActions }: TripsPageProps = {}) {
   const { t } = useTranslation();
   const trips = useTripsQuery();
   const [creating, setCreating] = useState(false);
@@ -49,6 +57,7 @@ export function TripsPage() {
         <Button variant="primary" size="sm" onClick={openCreate}>
           {t('trips.new')}
         </Button>
+        {headerActions}
       </HeaderActions>
       <h2 className="mt-1 mb-4 text-xl font-bold tablet:text-[22px]">{t('trips.title')}</h2>
       {body}

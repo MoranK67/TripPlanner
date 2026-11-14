@@ -14,7 +14,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M3 Design system & shell | done | Owner approved the /dev/ui demo 2026-11-12 |
 | M4 Trips & bank | M4.1–M4.4 done — awaiting owner demo | M4.5 E2E (qa) next |
 | M5 Timetable | in progress | M5.2 done; M5.3 in progress (DEC-029: device check moves to the real drag after M5.4) |
-| M6 Import/export/backup | in progress | M6.1, M6.2 in progress |
+| M6 Import/export/backup | done | M6.1–M6.6 done; owner demo pending |
 | M7 | todo | — |
 | M8 web release | todo | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
 | M11 Hardening & release | todo | M11.4 = web checklist (DEC-027) |
@@ -36,7 +36,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M6.5 | Prototype "גיבוי" button + domain `parseBackup`/`serializeBackup` (DEC-033) | core-engineer | — | done | Prototype change read by Orchestrator (read-only export) |
 | M6.6a | RPC `import_trips(jsonb)` + DB tests (480 assertions) + types | db-engineer | M6.5 | done | Reviewed APPROVE; applied to dev, NOT prod (prod only at M11.2) |
 | M6.6b | `backupRepo.importAll/exportAll` + mapping, `AppError.location` | core-engineer | M6.6a | done | |
-| M6.6c | Backup UI (export all, import with preview + Hebrew warnings, duplicate warning) | frontend-engineer | M6.6b, M6.3 | in progress | |
+| M6.6c | Backup UI (export all, import with preview + Hebrew warnings, duplicate warning) | frontend-engineer | M6.6b, M6.3 | done | Composed in src/app/TripsRoute (no trips↔backup cycle). E2E for backup import still to add | |
 | UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | todo | from DATA-1 review |
 | UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | todo | from DATA-1 report |
 | M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | todo | batch with next UI task |

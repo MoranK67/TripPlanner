@@ -60,6 +60,16 @@ describe('TripsPage (FR-2.1, FR-2.8)', () => {
     expect(screen.getByRole('dialog', { name: 'טיול חדש' })).toBeInTheDocument();
   });
 
+  it('renders extra header actions after "+ טיול חדש"', async () => {
+    repo.list.mockResolvedValue([makeSummary()]);
+    renderRoute(<TripsPage headerActions={<button type="button">פעולה נוספת</button>} />, {
+      path: '/trips',
+    });
+    const header = screen.getByTestId('header');
+    const buttons = await within(header).findAllByRole('button');
+    expect(buttons.map((b) => b.textContent)).toEqual(['+ טיול חדש', 'פעולה נוספת']);
+  });
+
   it('shows a Hebrew error with a retry button', async () => {
     repo.list.mockRejectedValueOnce(new AppError('network', { retryable: true }));
     repo.list.mockResolvedValueOnce([]);

@@ -11,4 +11,4 @@ export {
 export { TripDialog, type TripDialogProps } from './TripDialog';
 export { TripHeaderControls } from './TripHeaderControls';
 export { tripDaysLabel, tripRangeLabel } from './tripLabels';
-export { TripsPage } from './TripsPage';
+export { TripsPage, type TripsPageProps } from './TripsPage';

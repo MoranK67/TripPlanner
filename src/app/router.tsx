@@ -38,8 +38,8 @@ export const routes: RouteObject[] = [
           {
             path: 'trips',
             lazy: async () => {
-              const { TripsPage } = await import('@/features/trips');
-              return { Component: TripsPage };
+              const { TripsRoute } = await import('./TripsRoute');
+              return { Component: TripsRoute };
             },
           },
           {
