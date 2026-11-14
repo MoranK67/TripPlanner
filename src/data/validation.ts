@@ -2,8 +2,12 @@
 // the DB). They use the domain rules, so a bad input fails fast with the same `reason` codes the
 // DB reports in TP_VALIDATION details ('name', 'duration_minutes', 'color', TripWindowError,
 // 'item:<n>:<field>', 'too_many_items', 'scheduled_date', 'start_minute').
+// Backup import (assertBackupTrips) uses the import_trips contract instead: the bare reason plus
+// an AppError `location` (see backupRepo.ts).
 
 import {
+  MAX_BACKUP_ACTIVITIES,
+  MAX_BACKUP_TRIPS,
   MAX_IMPORT_ROWS,
   isHexColor,
   isIsoDate,
@@ -14,13 +18,14 @@ import {
   validateTripWindow,
   type ActivityInput,
   type ActivityPatch,
+  type BackupTrip,
   type Placement,
   type TripInput,
 } from '@/domain';
-import { AppError } from './errors';
+import { AppError, type AppErrorLocation } from './errors';
 
-function fail(reason: string): never {
-  throw new AppError('validation', { reason });
+function fail(reason: string, location: AppErrorLocation | null = null): never {
+  throw new AppError('validation', { reason, location });
 }
 
 export function assertTripInput(input: TripInput): void {
@@ -60,4 +65,40 @@ export function assertImportItems(items: readonly ActivityInput[]): void {
 export function assertPlacementTarget(target: Placement): void {
   if (!isIsoDate(target.date)) fail('scheduled_date');
   if (!isValidStartMinute(target.startMinute)) fail('start_minute');
+}
+
+/**
+ * Pre-check of a backup import (FR-8.1/FR-8.2, DEC-033), in the same order and with the same
+ * reasons as RPC `import_trips` (supabase/migrations/20261114120000_m6_import_trips.sql), so a
+ * bad input fails the same way with or without the round trip:
+ *   'trips' (empty), 'too_many_trips', 'too_many_activities' — no location;
+ *   per trip: 'name', TripWindowError, 'color_cursor' — location { tripIndex, null };
+ *   per activity: 'name', 'duration_minutes', 'color', 'scheduled_date', 'start_minute' —
+ *   location { tripIndex, activityIndex }.
+ * Placements are only checked for well-formedness; window and overlap are the RPC's job
+ * (`parseBackup` has already sent bad placements to the bank).
+ */
+export function assertBackupTrips(trips: readonly BackupTrip[]): void {
+  if (trips.length === 0) fail('trips');
+  if (trips.length > MAX_BACKUP_TRIPS) fail('too_many_trips');
+  const activityCount = trips.reduce((sum, trip) => sum + trip.activities.length, 0);
+  if (activityCount > MAX_BACKUP_ACTIVITIES) fail('too_many_activities');
+
+  trips.forEach((trip, tripIndex) => {
+    const tripAt = { tripIndex, activityIndex: null };
+    if (!isValidTripName(trip.name)) fail('name', tripAt);
+    const windowError = validateTripWindow(trip.window);
+    if (windowError !== null) fail(windowError, tripAt);
+    if (!Number.isInteger(trip.colorCursor) || trip.colorCursor < 0) fail('color_cursor', tripAt);
+
+    trip.activities.forEach((activity, activityIndex) => {
+      const at = { tripIndex, activityIndex };
+      const error = activityFieldError(activity);
+      if (error !== null) fail(error, at);
+      if (activity.placement !== null) {
+        if (!isIsoDate(activity.placement.date)) fail('scheduled_date', at);
+        if (!isValidStartMinute(activity.placement.startMinute)) fail('start_minute', at);
+      }
+    });
+  });
 }

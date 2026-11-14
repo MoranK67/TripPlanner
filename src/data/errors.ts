@@ -42,6 +42,15 @@ const KIND_MESSAGES: Record<AppErrorKind, string> = {
   unknown: 'An unexpected error occurred.',
 };
 
+/**
+ * Where in a multi-item request the error happened (`backupRepo.importAll`): 0-based indexes into
+ * the array that was passed in. `activityIndex` is `null` for a trip-level problem.
+ */
+export interface AppErrorLocation {
+  tripIndex: number;
+  activityIndex: number | null;
+}
+
 export interface AppErrorOptions {
   /**
    * Machine-readable detail, e.g. the TP `details` value (`'outside_trip_window'`,
@@ -56,6 +65,8 @@ export interface AppErrorOptions {
   status?: number | null;
   /** The original error, for logs only. */
   cause?: unknown;
+  /** Which trip / activity of a batch request failed, when known. */
+  location?: AppErrorLocation | null;
 }
 
 export class AppError extends Error {
@@ -65,6 +76,7 @@ export class AppError extends Error {
   readonly retryable: boolean;
   readonly code: string | null;
   readonly status: number | null;
+  readonly location: AppErrorLocation | null;
 
   constructor(kind: AppErrorKind, options: AppErrorOptions = {}) {
     super(KIND_MESSAGES[kind], { cause: options.cause });
@@ -73,6 +85,7 @@ export class AppError extends Error {
     this.retryable = options.retryable ?? false;
     this.code = options.code ?? null;
     this.status = options.status ?? null;
+    this.location = options.location ?? null;
   }
 }
 

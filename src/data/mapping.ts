@@ -10,11 +10,13 @@ import {
   type Activity,
   type ActivityInput,
   type ActivityPatch,
+  type BackupTrip,
   type Placement,
   type Trip,
   type TripInput,
   type TripSummary,
   type TripWindow,
+  type TripWithActivities,
 } from '@/domain';
 import type { Database, Json } from './database.types';
 import { AppError } from './errors';
@@ -40,6 +42,37 @@ export interface ImportItemJson {
   name: string;
   duration_minutes: number;
 }
+
+/** One activity of an `import_trips` trip (snake_case, as the RPC expects). */
+export interface ImportTripActivityJson {
+  [key: string]: Json;
+  name: string;
+  duration_minutes: number;
+  color: string;
+  scheduled_date: string | null;
+  start_minute: number | null;
+}
+
+/** One trip of the `import_trips` payload (see the header of the M6 import migration). */
+export interface ImportTripJson {
+  [key: string]: Json;
+  name: string;
+  start_date: string;
+  start_minute: number;
+  end_date: string;
+  end_minute: number;
+  color_cursor: number;
+  activities: ImportTripActivityJson[];
+}
+
+/** `import_trips` result, summed: how many trips and activities were created. */
+export interface ImportTripsCounts {
+  trips: number;
+  activities: number;
+}
+
+/** A `trips` row with its embedded activities (`select('*, activities(*)')`). */
+export type TripWithActivitiesRow = TripRow & { activities: ActivityRow[] };
 
 function invalidResponse(cause: unknown): AppError {
   return new AppError('unknown', { reason: 'invalid_response', cause });
@@ -95,6 +128,11 @@ export function activityFromRow(row: ActivityRow): Activity {
   };
 }
 
+export function tripWithActivitiesFromRow(row: TripWithActivitiesRow): TripWithActivities {
+  const { activities, ...tripRow } = row;
+  return { trip: tripFromRow(tripRow), activities: activities.map(activityFromRow) };
+}
+
 // --- Writes ---------------------------------------------------------------------------------
 
 /** `owner_id` defaults to `auth.uid()` in the DB; `color_cursor` starts at 0. */
@@ -148,6 +186,28 @@ export function importItemsFromInputs(items: readonly ActivityInput[]): ImportIt
     if (item.color !== undefined) json.color = normalizeHexColor(item.color);
     return json;
   });
+}
+
+/**
+ * RPC `import_trips` payload: the backup trips in order, camelCase → snake_case. A bank activity
+ * sends `scheduled_date`/`start_minute` as null; colours are sent upper-case (DEC-009).
+ */
+export function importTripsFromBackup(trips: readonly BackupTrip[]): ImportTripJson[] {
+  return trips.map((trip) => ({
+    name: trip.name,
+    start_date: trip.window.startDate,
+    start_minute: trip.window.startMinute,
+    end_date: trip.window.endDate,
+    end_minute: trip.window.endMinute,
+    color_cursor: trip.colorCursor,
+    activities: trip.activities.map((activity) => ({
+      name: activity.name,
+      duration_minutes: activity.durationMinutes,
+      color: normalizeHexColor(activity.color),
+      scheduled_date: activity.placement?.date ?? null,
+      start_minute: activity.placement?.startMinute ?? null,
+    })),
+  }));
 }
 
 // --- update_trip_window result (jsonb) ------------------------------------------------------
@@ -212,4 +272,20 @@ export function tripWindowUpdateFromJson(json: Json | null): { trip: Trip; moved
     throw invalidResponse(json);
   }
   return { trip: tripFromRow(json.trip), movedCount: json.moved_count };
+}
+
+/**
+ * `import_trips` returns jsonb `{ trips: [{ trip: <trips row>, activity_count: <int> }] }`
+ * (DEC-033). Only the counts are needed: the caller refetches the trips list.
+ */
+export function importTripsCountsFromJson(json: Json | null): ImportTripsCounts {
+  if (!isRecord(json) || !Array.isArray(json.trips)) throw invalidResponse(json);
+  let activities = 0;
+  for (const entry of json.trips) {
+    if (!isRecord(entry) || !isTripRowJson(entry.trip) || !isInteger(entry.activity_count)) {
+      throw invalidResponse(json);
+    }
+    activities += entry.activity_count;
+  }
+  return { trips: json.trips.length, activities };
 }

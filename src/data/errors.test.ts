@@ -24,6 +24,7 @@ describe('AppError', () => {
       code: 'TP_VALIDATION',
       status: 400,
       cause,
+      location: { tripIndex: 1, activityIndex: null },
     });
     expect(error).toBeInstanceOf(Error);
     expect(error.name).toBe('AppError');
@@ -33,6 +34,7 @@ describe('AppError', () => {
     expect(error.code).toBe('TP_VALIDATION');
     expect(error.status).toBe(400);
     expect(error.cause).toBe(cause);
+    expect(error.location).toEqual({ tripIndex: 1, activityIndex: null });
     expect(error.message).not.toContain('raw db text');
   });
 
@@ -42,6 +44,7 @@ describe('AppError', () => {
     expect(error.retryable).toBe(false);
     expect(error.code).toBeNull();
     expect(error.status).toBeNull();
+    expect(error.location).toBeNull();
   });
 
   it('has a distinct message for every kind', () => {

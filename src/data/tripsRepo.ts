@@ -4,10 +4,10 @@ import type { Trip, TripInput, TripSummary, TripWithActivities } from '@/domain'
 import { runDb, runDbRequired, safeClientGetter } from './execute';
 import {
   TRIP_SUMMARY_COLUMNS,
-  activityFromRow,
   tripFromRow,
   tripInsertFromInput,
   tripSummaryFromRow,
+  tripWithActivitiesFromRow,
   tripWindowUpdateFromJson,
   updateTripWindowArgs,
 } from './mapping';
@@ -65,8 +65,7 @@ export function createTripsRepo(getClient: () => TypedSupabaseClient): TripsRepo
             .maybeSingle(),
         'trip',
       );
-      const { activities, ...tripRow } = row;
-      return { trip: tripFromRow(tripRow), activities: activities.map(activityFromRow) };
+      return tripWithActivitiesFromRow(row);
     },
 
     async create(input) {

@@ -4,11 +4,14 @@ import {
   activityInsertFromInput,
   activityUpdateFromJson,
   importItemsFromInputs,
+  importTripsCountsFromJson,
+  importTripsFromBackup,
   placementFromRow,
   tripFromRow,
   tripInsertFromInput,
   tripSummaryFromRow,
   tripWindowFromRow,
+  tripWithActivitiesFromRow,
   tripWindowUpdateFromJson,
   updateActivityArgs,
   updateTripWindowArgs,
@@ -239,6 +242,81 @@ describe('activityUpdateFromJson', () => {
       expect(error).toBeInstanceOf(AppError);
       expect((error as AppError).kind).toBe('unknown');
       expect((error as AppError).reason).toBe('invalid_response');
+    }
+  });
+});
+
+describe('backup mapping', () => {
+  it('tripWithActivitiesFromRow maps the trip and its embedded activities', () => {
+    expect(
+      tripWithActivitiesFromRow({ ...tripRow(), activities: [activityRow({ color: '#abcdef' })] }),
+    ).toEqual({
+      trip: { id: 'trip-1', name: 'רומא', window, colorCursor: 2 },
+      activities: [expect.objectContaining({ id: 'act-1', color: '#ABCDEF', placement: null })],
+    });
+  });
+
+  it('importTripsFromBackup maps camelCase to the import_trips snake_case payload', () => {
+    expect(
+      importTripsFromBackup([
+        {
+          name: 'רומא',
+          window,
+          colorCursor: 9,
+          activities: [
+            {
+              name: 'A',
+              durationMinutes: 30,
+              color: '#abcdef',
+              placement: { date: '2026-05-01', startMinute: 0 },
+            },
+            { name: 'B', durationMinutes: 1440, color: '#FFD6E0', placement: null },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        name: 'רומא',
+        start_date: '2026-05-01',
+        start_minute: 600,
+        end_date: '2026-05-03',
+        end_minute: 1080,
+        color_cursor: 9,
+        activities: [
+          {
+            name: 'A',
+            duration_minutes: 30,
+            color: '#ABCDEF',
+            scheduled_date: '2026-05-01',
+            start_minute: 0,
+          },
+          {
+            name: 'B',
+            duration_minutes: 1440,
+            color: '#FFD6E0',
+            scheduled_date: null,
+            start_minute: null,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('importTripsCountsFromJson sums the activity counts', () => {
+    expect(
+      importTripsCountsFromJson({
+        trips: [
+          { trip: tripRow(), activity_count: 3 },
+          { trip: tripRow({ id: 'trip-2' }), activity_count: 0 },
+        ],
+      }),
+    ).toEqual({ trips: 2, activities: 3 });
+    expect(importTripsCountsFromJson({ trips: [] })).toEqual({ trips: 0, activities: 0 });
+  });
+
+  it('importTripsCountsFromJson rejects an unexpected shape', () => {
+    for (const json of [null, [], { trips: {} }, { trips: [{ trip: tripRow() }] }]) {
+      expect(() => importTripsCountsFromJson(json)).toThrow(AppError);
     }
   });
 });
