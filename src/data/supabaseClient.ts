@@ -14,6 +14,18 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
+ * Client options. `db.retry: false` turns off postgrest-js's built-in retries (3x with
+ * 1/2/4 s backoff for GET/HEAD on network errors, 503 and 520). Read retries live in exactly one
+ * layer, TanStack Query (`shouldRetryQuery` in src/app/queryClient.ts), driven by
+ * `AppError.retryable`; stacking both made a dead connection take ~25 s to surface (UX-1).
+ * Writes were never retried by postgrest-js (POST/PATCH/DELETE are not idempotent).
+ */
+export const SUPABASE_CLIENT_OPTIONS = {
+  auth: { persistSession: true, autoRefreshToken: true },
+  db: { retry: false },
+} as const;
+
+/**
  * The single Supabase client. Internal to src/data — never export it from the
  * data layer's public index (PROJECT_PLAN §4.3).
  */
@@ -23,9 +35,7 @@ export function getSupabase(): TypedSupabaseClient {
       'Supabase is not configured: set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local (see .env.example).',
     );
   }
-  client ??= createClient<Database>(url, publishableKey, {
-    auth: { persistSession: true, autoRefreshToken: true },
-  });
+  client ??= createClient<Database>(url, publishableKey, SUPABASE_CLIENT_OPTIONS);
   return client;
 }
 
