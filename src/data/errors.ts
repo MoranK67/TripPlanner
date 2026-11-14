@@ -124,6 +124,22 @@ function isAbortMessage(message: string): boolean {
 }
 
 /**
+ * The request deadline passed (`RequestTimeoutError` from timeoutFetch.ts, or a DOM
+ * `TimeoutError` from `AbortSignal.timeout`). postgrest-js reports it as `TimeoutError: …`.
+ */
+function isTimeoutMessage(message: string): boolean {
+  return /^timeouterror\b/i.test(message);
+}
+
+/**
+ * A timeout is a network failure the user must hear about, and trying again may succeed — unlike
+ * an intentional cancel, which is silent.
+ */
+function timeoutError(options: AppErrorOptions): AppError {
+  return new AppError('network', { ...options, reason: 'timeout', retryable: true });
+}
+
+/**
  * An intentional cancel (AbortController, e.g. TanStack Query cancelling a stale query): kind
  * `network` with reason `aborted` and not retryable, so hooks can recognize and ignore it.
  */
@@ -206,6 +222,7 @@ export function fromDbError(error: DbErrorLike, status?: number | null): AppErro
   }
 
   // 4. No code: transport-level failures (postgrest-js reports a failed fetch with status 0).
+  if (isTimeoutMessage(message)) return timeoutError(base);
   if (isAbortMessage(message)) return abortError(base);
   if (status === 0 || isNetworkMessage(message)) {
     return new AppError('network', { ...base, retryable: true });
@@ -265,6 +282,8 @@ export function fromAuthError(error: AuthError): AppError {
   const base = { code, status, cause: error, reason: code };
 
   if (error.name === 'AuthRetryableFetchError' || status === 0) {
+    // auth-js keeps only the message of the failed fetch; timeoutFetch's says "timed out".
+    if (/\btimed out\b/i.test(error.message)) return timeoutError(base);
     return new AppError('network', { ...base, retryable: true });
   }
   if (code !== null) {
@@ -305,13 +324,10 @@ export function toAppError(error: unknown, status?: number | null): AppError {
   if (isAuthError(error)) return fromAuthError(error);
   // Before the DB check: a DOMException has `message` and a numeric `code`, and is not an
   // Error subclass in every runtime.
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { name?: unknown }).name === 'AbortError'
-  ) {
-    return abortError({ cause: error, status: status ?? null });
-  }
+  const name =
+    typeof error === 'object' && error !== null ? (error as { name?: unknown }).name : null;
+  if (name === 'TimeoutError') return timeoutError({ cause: error, status: status ?? null });
+  if (name === 'AbortError') return abortError({ cause: error, status: status ?? null });
   if (isDbErrorLike(error)) return fromDbError(error, status);
   if (error instanceof Error && isNetworkMessage(error.message)) {
     return new AppError('network', { retryable: true, cause: error, status: status ?? null });

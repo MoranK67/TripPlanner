@@ -229,7 +229,7 @@ describe('fromDbError — transport failures without a code', () => {
     expect(error.code).toBeNull();
   });
 
-  it.each(['FetchError: fetch failed', 'TypeError: Load failed', 'TimeoutError: timed out'])(
+  it.each(['FetchError: fetch failed', 'TypeError: Load failed'])(
     'network message "%s" without status → network, retryable',
     (message) => {
       const error = fromDbError({ message, code: '' });
@@ -238,6 +238,19 @@ describe('fromDbError — transport failures without a code', () => {
       expect(error.reason).toBeNull();
     },
   );
+
+  it.each([
+    ['TimeoutError: The request timed out after 15000 ms.', 0],
+    ['TimeoutError: signal timed out', undefined],
+  ])('timeout "%s" → network / timeout, retryable (not aborted)', (message, status) => {
+    const error = fromDbError(
+      { message, code: '', hint: 'Request was aborted (timeout or manual cancellation)' },
+      status,
+    );
+    expect(error.kind).toBe('network');
+    expect(error.reason).toBe('timeout');
+    expect(error.retryable).toBe(true);
+  });
 
   it('postgrest-js aborted request → network / aborted, not retryable', () => {
     const error = fromDbError(
@@ -320,6 +333,16 @@ describe('fromAuthError', () => {
   it('AuthRetryableFetchError → network, retryable', () => {
     const error = fromAuthError(new AuthRetryableFetchError('Failed to fetch', 0));
     expect(error.kind).toBe('network');
+    expect(error.retryable).toBe(true);
+    expect(error.reason).toBeNull();
+  });
+
+  it('AuthRetryableFetchError from a timed-out request → network / timeout, retryable', () => {
+    const error = fromAuthError(
+      new AuthRetryableFetchError('The request timed out after 15000 ms.', 0),
+    );
+    expect(error.kind).toBe('network');
+    expect(error.reason).toBe('timeout');
     expect(error.retryable).toBe(true);
   });
 

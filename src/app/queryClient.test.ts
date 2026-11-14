@@ -32,6 +32,17 @@ describe('shouldRetryQuery', () => {
     expect(shouldRetryQuery(0, new AppError('auth_expired'))).toBe(false);
   });
 
+  it('never retries a timeout (it already waited the full deadline), even though it is retryable', () => {
+    setOnline(true);
+    const timeout = new AppError('network', { reason: 'timeout', retryable: true });
+    expect(shouldRetryQuery(0, timeout)).toBe(false);
+    // Fast-failing network errors and 5xx keep the retry policy.
+    expect(shouldRetryQuery(0, new AppError('network', { retryable: true }))).toBe(true);
+    expect(shouldRetryQuery(0, new AppError('unknown', { status: 503, retryable: true }))).toBe(
+      true,
+    );
+  });
+
   it('retries a retryable SQLSTATE online, but not a non-retryable one', () => {
     setOnline(true);
     const deadlock = new AppError('unknown', { code: '40P01', retryable: true });

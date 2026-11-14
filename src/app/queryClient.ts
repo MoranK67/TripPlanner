@@ -22,12 +22,16 @@ function isOffline(): boolean {
 }
 
 /**
- * Retry only transient failures; validation / not-found / auth errors will not fix themselves.
+ * Retry only fast-failing transient failures; validation / not-found / auth errors will not fix
+ * themselves, and timeouts already took the full deadline.
  * Offline, nothing is retried: the error surfaces at once (FR-8.3: the UI says so).
  */
 export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
   if (isOffline()) return false;
   if (isAbortedError(error)) return false;
+  // A timeout already waited the full request deadline (REQUEST_TIMEOUT_MS, src/data): retrying
+  // would make a hung server take ~48 s to surface instead of ~15 s (DATA-1).
+  if (isAppError(error) && error.reason === 'timeout') return false;
   if (isAppError(error)) return error.retryable && failureCount < MAX_QUERY_RETRIES;
   return failureCount < 1;
 }
