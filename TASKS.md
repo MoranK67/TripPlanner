@@ -44,6 +44,8 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M4.1–M4.4 | Trips list, trip dialog, edit/delete trip, bank panel | frontend-engineer | M1.7, M3.x | done | Follow-ups: per-trip mutation keys; verify the real reset email does not flash "invalid link" |
 | M4.5 | E2E: trip CRUD + bank CRUD | qa-engineer | M4.3, M4.4 | ready | |
 
+| SEC-1 | Upgrade react-router-dom 6.30.6 → 7 (npm audit: 2 moderate advisories, fixed only in v7; open-redirect via backslash already blocked by redirectTarget, SSR advisory not applicable) | frontend-engineer | — | todo | Before the first public deploy (M8) |
+
 ## Done
 
 | ID | Task | Commit |
