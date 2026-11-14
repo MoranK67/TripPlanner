@@ -17,6 +17,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // jsdom component tests can exceed the 5 s default on slow CI runners or a busy machine.
+    testTimeout: 15_000,
     css: false,
     include: ['src/**/*.test.{ts,tsx}'],
   },
