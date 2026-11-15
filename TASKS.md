@@ -15,7 +15,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M4 Trips & bank | M4.1–M4.4 done — awaiting owner demo | M4.5 E2E (qa) next |
 | M5 Timetable | in progress | M5.2 done; M5.3 in progress (DEC-029: device check moves to the real drag after M5.4) |
 | M6 Import/export/backup | done | M6.1–M6.6 done; owner demo pending |
-| M7 Phone & offline | in progress | M7.1 in progress |
+| M7 Phone & offline | in progress | M7.1 done; M7.2 approved, M7.3 fixes, M7.4 E2E in progress (uncommitted, see rows) |
 | M8 web release | todo | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
 | M11 Hardening & release | todo | M11.4 = web checklist (DEC-027) |
 | M8.1–M8.2 Windows app, M9 Android app | deferred | DEC-027: after the web release |
@@ -40,6 +40,11 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | UX-5 | HHMM typed time inputs for duration and trip times, rounded to half hours (DEC-035) | frontend-engineer | — | done | `TimeInput` primitive; displays HH:MM after blur |
 | IDEA-1 | Quarter-hour steps (DB checks, grid, drag, export, import) | — | after M8 | deferred | owner: revisit after real use (DEC-035) |
 | M7.1 | Phone layout: single-day timetable with day switcher/swipe, bank as bottom sheet | scheduler-engineer | M5.4 | done | Reviewed APPROVE. Limitation: on phone a placed block can't be touch-dragged to another day → M7.2 tap-to-place covers it. Follow-up: compact BankPanel inside the sheet (frontend) |
+| M7.2 | Tap-to-place (tap block → valid slots highlighted → tap slot), incl. cross-day move on phone, return to bank, keyboard; placement disabled offline | scheduler-engineer | M7.1 | review | FR-5.5, DEC-036. Reviewed APPROVE; all 6 follow-ups fixed (2026-11-15). NOT committed: depends on `useCanEdit` (M7.3) and shares he.json; commit together with M7.3 + A11Y-1 once QA E2E is green |
+| M7.3 | Offline read cache: persisted query cache (per user, cleared on sign-out), offline banner, editing disabled offline | frontend-engineer | M5.4 | changes requested | DEC-037. Review: generation token in queryPersistence start/stop (StrictMode double subscribe), onlineManager unit test, + nits (restore-before-fetch test, BankPanel × disabled not hidden, ConfirmDialog aria-describedby, test timeouts under load). Sent back 2026-11-15. FR-8.3. Orchestrator installed @tanstack/react-query-persist-client + query-sync-storage-persister |
+| M7.3b | Offline reload after token expiry shows login: AuthProvider must tell "stored session, refresh failed offline" from "no session" | core-engineer + frontend-engineer | M7.3 | todo | DEC-037 |
+| M7.4 | E2E: tap-to-place (phone + keyboard), offline cache, bank.spec phone edit via placing bar "עריכה", a11y spec | qa-engineer | M7.2, M7.3 | in progress | Started 2026-11-15 |
+| TEST-1 | Unit tests time out under machine load (TripHeaderControls lazy-calendar beforeAll, TripsRoute findBy, TripsPage hook) | frontend-engineer / Orchestrator (vitest config) | — | todo | from M7.3 review |
 | UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | todo | from DATA-1 review |
 | UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | todo | from DATA-1 report |
 | M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | todo | batch with next UI task |
@@ -77,7 +82,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 
 | ~~QA-1~~ | (done, see current wave) E2E fake-backend fidelity + guard hardening (M4.5 review should-fixes: fail on blocked hosts as auto fixture, `update_activity` checks fit only on duration change, unknown token returns 401 PGRST303; plus nits). Also: 2 E2E tests were flaky (passed on retry) in the 14.11 run, so find and stabilise them | qa-engineer | M4.5 | todo | |
 | UX-1 | Collapse stacked read retries (postgrest 3× + TanStack 2× ≈ 25 s offline before an error): keep one layer, fail fast when offline | core-engineer + frontend-engineer | — | todo | Then shrink `skipRetryBackoff` in E2E |
-| A11Y-1 | Axe check in E2E (NFR-7): tests/e2e/a11y.spec.ts + support/axe.ts written, NOT committed (would turn CI red) | qa-engineer | M4.5 | review | First finding: `label-content-name-mismatch` on activity-block buttons (aria-labelledby name+meta vs visible text) → fix in ActivityBlock (frontend), then run the spec, commit both. Phone trip-page step must open the bank sheet (M7.1) |
+| A11Y-1 | Axe check in E2E (NFR-7): tests/e2e/a11y.spec.ts + support/axe.ts written, NOT committed (would turn CI red) | qa-engineer + frontend-engineer | M4.5 | review | ActivityBlock name fix reviewed APPROVE. QA: openBank on phone before the bank check | First finding: `label-content-name-mismatch` on activity-block buttons (aria-labelledby name+meta vs visible text) → fix in ActivityBlock (frontend), then run the spec, commit both. Phone trip-page step must open the bank sheet (M7.1) |
 | QA-2/QA-3 | CI fixes: lazy-calendar wait; E2E for HHMM fields + phone bank sheet | frontend / qa | — | done | Lesson: run test:e2e before UI commits |
 | UX-2 | Focus target after deleting a timetable block (via `onDeleteStart`); label the timetable region by the sr-only h2 (`aria-labelledby`) to avoid a double announcement | scheduler-engineer + frontend-engineer | M5.2 | todo | |
 
