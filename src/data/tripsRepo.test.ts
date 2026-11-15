@@ -76,6 +76,31 @@ describe('tripsRepo.list', () => {
     expect(error.code).toBe('42501');
   });
 
+  it('42501 with no live session but a stored, unrefreshed one → retryable network', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://abcdefghij.supabase.co');
+    localStorage.setItem(
+      'sb-abcdefghij-auth-token',
+      JSON.stringify({
+        access_token: 'a',
+        refresh_token: 'r',
+        expires_at: 1,
+        user: { id: 'user-1' },
+      }),
+    );
+    try {
+      mock.setSession(null);
+      mock.fail({ message: 'permission denied for table trips', code: '42501' }, 401);
+      const error = await rejection(repo.list());
+      expect(error.kind).toBe('network');
+      expect(error.reason).toBe('session_not_refreshed');
+      expect(error.retryable).toBe(true);
+      expect(error.code).toBe('42501');
+    } finally {
+      localStorage.clear();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('42501 with a session → not_found', async () => {
     mock.fail({ message: 'permission denied for table trips', code: '42501' }, 403);
     expect((await rejection(repo.list())).kind).toBe('not_found');

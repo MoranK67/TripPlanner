@@ -15,6 +15,8 @@ const REASON_MESSAGES: Readonly<Partial<Record<string, string>>> = {
   weak_password: 'errors.reasons.weak_password',
   same_password: 'errors.reasons.same_password',
   email_address_invalid: 'errors.reasons.email_address_invalid',
+  // M7.3b: a stored session could not be renewed yet (offline / right after reconnecting).
+  session_not_refreshed: 'errors.reasons.session_not_refreshed',
 };
 
 /**

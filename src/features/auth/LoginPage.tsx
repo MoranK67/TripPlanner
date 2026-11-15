@@ -16,18 +16,19 @@ import { redirectTarget } from './redirectTarget';
  */
 export function LoginPage() {
   const { t } = useTranslation();
-  const { status, recovery } = useAuth();
+  const { status, recovery, expired } = useAuth();
   const location = useLocation();
 
   if (!isSupabaseConfigured()) return <NotConfiguredNotice />;
   if (status === 'loading') return <LoadingState />;
-  if (status === 'signed_in') {
+  // A stored session that is not renewed yet (offline) still opens the app, read-only (M7.3b).
+  if (status === 'signed_in' || status === 'stored_offline') {
     return <Navigate to={recovery ? '/reset-password' : redirectTarget(location.state)} replace />;
   }
 
   return (
     <AuthCard title={t('auth.login.title')} intro={t('auth.login.intro')}>
-      <LoginForm expired={isExpiredState(location.state)} />
+      <LoginForm expired={expired || isExpiredState(location.state)} />
     </AuthCard>
   );
 }

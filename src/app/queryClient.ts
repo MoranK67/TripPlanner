@@ -67,6 +67,9 @@ export function createQueryClient() {
         // offline read fails fast with a `network` error (no retry offline, see above).
         networkMode: 'offlineFirst',
         refetchOnWindowFocus: true, // keeps devices in sync (PROJECT_PLAN §4.7)
+        // Back online: reload what is on screen even if it is not stale yet, since edits made on
+        // other devices while this one was offline would otherwise wait for staleTime (M7.3b).
+        refetchOnReconnect: 'always',
       },
       // Never retried automatically. 'offlineFirst' so an offline write fails at once with a
       // `network` error instead of pausing with the dialog stuck in "saving" (NFR-1, FR-8.3).

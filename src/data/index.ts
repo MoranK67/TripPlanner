@@ -17,6 +17,8 @@ export {
   type AuthRepo,
   type AuthSession,
   type AuthUser,
+  type SessionResumeResult,
+  type StoredAuthUser,
 } from './authRepo';
 export { tripsRepo, type TripWindowUpdate, type TripsRepo } from './tripsRepo';
 export { activitiesRepo, type ActivitiesRepo, type ActivityUpdateResult } from './activitiesRepo';

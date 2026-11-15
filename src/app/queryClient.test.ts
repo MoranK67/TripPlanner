@@ -163,3 +163,10 @@ describe('createQueryClient error logging', () => {
     consoleError.mockRestore();
   });
 });
+
+describe('createQueryClient reconnect', () => {
+  it('refetches on reconnect even data that is not stale yet (M7.3b)', () => {
+    const client = createQueryClient();
+    expect(client.getDefaultOptions().queries?.refetchOnReconnect).toBe('always');
+  });
+});

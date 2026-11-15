@@ -2,7 +2,6 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, ConfirmDialog, useToast } from '@/components/ui';
-import { authRepo } from '@/data';
 import { errorMessage } from '@/i18n/errors';
 import { useAuth } from './authContext';
 
@@ -13,24 +12,25 @@ import { useAuth } from './authContext';
  */
 export function SignOutButton() {
   const { t } = useTranslation();
-  const { status, session } = useAuth();
+  const { status, session, storedUser, signOut: signOutOfDevice } = useAuth();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
 
   const signOut = useMutation({
-    mutationFn: () => authRepo.signOut(),
+    mutationFn: () => signOutOfDevice(),
     onSettled: () => setConfirming(false),
     onError: (error) => toast.show(errorMessage(error, t), { tone: 'error' }),
   });
 
-  if (status !== 'signed_in') return null;
+  // Also while a stored session waits to be renewed (M7.3b): signing out works offline.
+  if (status !== 'signed_in' && status !== 'stored_offline') return null;
 
   return (
     <>
       <Button
         variant="ghost"
         size="sm"
-        title={session?.user.email ?? undefined}
+        title={session?.user.email ?? storedUser?.email ?? undefined}
         onClick={() => setConfirming(true)}
       >
         {t('auth.signOut.button')}

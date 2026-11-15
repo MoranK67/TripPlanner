@@ -1,8 +1,15 @@
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom';
-import { ToastProvider } from '@/components/ui';
-import { AppError, type AuthChangeListener, type AuthEvent, type AuthSession } from '@/data';
+import { ToastProvider, useCanEdit } from '@/components/ui';
+import {
+  AppError,
+  type AuthChangeListener,
+  type AuthEvent,
+  type AuthSession,
+  type SessionResumeResult,
+  type StoredAuthUser,
+} from '@/data';
 import { AuthProvider } from './AuthProvider';
 import { ForgotPasswordPage } from './ForgotPasswordPage';
 import { LoginPage } from './LoginPage';
@@ -17,6 +24,8 @@ const fake = vi.hoisted(() => ({
   signOut: vi.fn(),
   requestPasswordReset: vi.fn(),
   updatePassword: vi.fn(),
+  storedUser: null as StoredAuthUser | null,
+  resumeSession: vi.fn<() => Promise<SessionResumeResult>>(),
 }));
 
 vi.mock('@/data', async (importOriginal) => {
@@ -30,6 +39,8 @@ vi.mock('@/data', async (importOriginal) => {
       requestPasswordReset: fake.requestPasswordReset,
       updatePassword: fake.updatePassword,
       getSession: vi.fn(async () => null),
+      getStoredUser: () => fake.storedUser,
+      resumeSession: () => fake.resumeSession(),
       onAuthChange: (listener: AuthChangeListener) => {
         fake.listeners.push(listener as (event: string, session: unknown) => void);
         return () => {
@@ -68,6 +79,8 @@ function renderApp(path: string) {
               { path: '/trips', element: <h2>רשימת טיולים</h2> },
               { path: '/trips/:id', element: <h2>דף טיול</h2> },
               { path: '/expiring', element: <ExpiringPage /> },
+              { path: '/editing', element: <EditingPage /> },
+              { path: '/not-renewed', element: <NotRenewedPage /> },
             ],
           },
         ],
@@ -97,6 +110,30 @@ function ExpiringPage() {
   return <h2>דף שפג תוקפו</h2>;
 }
 
+/** Shows whether writing is allowed (M7.3b: never on a stored, unrenewed session). */
+function EditingPage() {
+  const { canEdit, reason } = useCanEdit();
+  return (
+    <>
+      <h2>עריכה</h2>
+      <button type="button" disabled={!canEdit} title={reason}>
+        שמירה
+      </button>
+      {reason && <p>{reason}</p>}
+    </>
+  );
+}
+
+/** A request that ran before the stored session was renewed (anon → `session_not_refreshed`). */
+function NotRenewedPage() {
+  useQuery({
+    queryKey: ['not-renewed'],
+    queryFn: () =>
+      Promise.reject(new AppError('network', { reason: 'session_not_refreshed', retryable: true })),
+  });
+  return <h2>מחכה לחידוש</h2>;
+}
+
 const OTHER: AuthSession = { user: { id: 'u2', email: 'other@example.com' }, expiresAt: null };
 
 function type(label: string, value: string) {
@@ -110,6 +147,18 @@ beforeEach(() => {
   fake.signOut.mockReset();
   fake.requestPasswordReset.mockReset();
   fake.updatePassword.mockReset();
+  fake.storedUser = null;
+  fake.resumeSession.mockReset();
+  fake.resumeSession.mockResolvedValue({
+    status: 'unreachable',
+    user: { id: 'u1', email: 'owner@example.com' },
+    error: new AppError('network', { reason: 'refresh_failed', retryable: true }),
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('route guard', () => {
@@ -327,5 +376,239 @@ describe('ResetPasswordPage without a reset link', () => {
     emit('initial_session', SESSION);
     expect(screen.getByText(/לא תקין או שפג תוקפו/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/סיסמה חדשה/)).not.toBeInTheDocument();
+  });
+});
+
+describe('stored session that could not be renewed (M7.3b)', () => {
+  const STORED: StoredAuthUser = { id: 'u1', email: 'owner@example.com' };
+  const UNREACHABLE: SessionResumeResult = {
+    status: 'unreachable',
+    user: STORED,
+    error: new AppError('network', { reason: 'refresh_failed', retryable: true }),
+  };
+  const EDIT_LOCK =
+    'החיבור לחשבון עדיין מתחדש, אז אי אפשר לשמור שינויים כרגע. בינתיים אפשר רק לצפות.';
+
+  function setOnline(online: boolean) {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(online);
+    act(() => {
+      window.dispatchEvent(new Event(online ? 'online' : 'offline'));
+    });
+  }
+
+  /** Lets a pending resumeSession() promise settle. */
+  async function flush() {
+    await act(async () => {});
+  }
+
+  it('opens guarded pages read-only from a stored session, keeping the cache', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    fake.storedUser = STORED;
+    const { queryClient } = renderApp('/editing');
+    queryClient.setQueryData(['trips', 'list'], [{ id: 't1' }]);
+    emit('initial_session', null);
+    await flush();
+
+    expect(screen.getByRole('heading', { name: 'עריכה' })).toBeInTheDocument();
+    expect(queryClient.getQueryData(['trips', 'list'])).toEqual([{ id: 't1' }]);
+    // Offline: nothing is tried until the connection is back.
+    expect(fake.resumeSession).not.toHaveBeenCalled();
+    // The device can still be signed out.
+    expect(screen.getByRole('button', { name: 'יציאה' })).toBeInTheDocument();
+  });
+
+  it('never allows writes on the unverified stored session, even online', async () => {
+    fake.storedUser = STORED;
+    renderApp('/editing');
+    emit('initial_session', null);
+    await flush();
+    expect(screen.getByRole('button', { name: 'שמירה' })).toBeDisabled();
+    expect(screen.getByText(EDIT_LOCK)).toBeInTheDocument();
+  });
+
+  it('without a stored session it is a normal sign-out (login page, cache cleared)', () => {
+    const { queryClient } = renderApp('/trips');
+    queryClient.setQueryData(['trips', 'list'], [{ id: 't1' }]);
+    emit('initial_session', null);
+    expect(screen.getByRole('heading', { name: 'התחברות' })).toBeInTheDocument();
+    expect(queryClient.getQueryData(['trips', 'list'])).toBeUndefined();
+  });
+
+  it('renews on reconnect: same user → signed in, cache kept, trips reloaded', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    fake.storedUser = STORED;
+    const { queryClient } = renderApp('/editing');
+    queryClient.setQueryData(['trips', 'list'], [{ id: 't1' }]);
+    emit('initial_session', null);
+    await flush();
+    expect(screen.getByRole('button', { name: 'שמירה' })).toBeDisabled();
+
+    fake.resumeSession.mockResolvedValue({ status: 'signed_in', session: SESSION });
+    setOnline(true);
+    await flush();
+
+    expect(fake.resumeSession).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'שמירה' })).toBeEnabled();
+    expect(queryClient.getQueryData(['trips', 'list'])).toEqual([{ id: 't1' }]);
+    expect(queryClient.getQueryState(['trips', 'list'])?.isInvalidated).toBe(true);
+  });
+
+  it('a token_refreshed event from supabase-js also ends the read-only phase', async () => {
+    fake.storedUser = STORED;
+    const { queryClient } = renderApp('/editing');
+    queryClient.setQueryData(['trips', 'list'], [{ id: 't1' }]);
+    emit('initial_session', null);
+    await flush();
+    emit('token_refreshed', SESSION);
+    expect(screen.getByRole('button', { name: 'שמירה' })).toBeEnabled();
+    expect(queryClient.getQueryData(['trips', 'list'])).toEqual([{ id: 't1' }]);
+  });
+
+  it('a different user after the read-only phase clears the cache', async () => {
+    fake.storedUser = STORED;
+    const { queryClient } = renderApp('/editing');
+    queryClient.setQueryData(['trips', 'list'], [{ id: 't1' }]);
+    emit('initial_session', null);
+    await flush();
+    emit('signed_in', OTHER);
+    expect(queryClient.getQueryData(['trips', 'list'])).toBeUndefined();
+  });
+
+  it('a refused renewal signs out, clears the cache and explains it on the login page', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    fake.storedUser = STORED;
+    const { queryClient } = renderApp('/editing');
+    queryClient.setQueryData(['trips', 'list'], [{ id: 't1' }]);
+    emit('initial_session', null);
+    await flush();
+
+    // supabase-js deletes the stored session and emits signed_out while getSession() runs.
+    fake.resumeSession.mockImplementation(async () => {
+      fake.storedUser = null;
+      emit('signed_out', null);
+      return { status: 'signed_out' };
+    });
+    setOnline(true);
+    expect(await screen.findByRole('heading', { name: 'התחברות' })).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('ההתחברות פגה');
+    expect(queryClient.getQueryData(['trips', 'list'])).toBeUndefined();
+  });
+
+  it('a refused renewal without a signed_out event also signs out', async () => {
+    fake.storedUser = STORED;
+    fake.resumeSession.mockResolvedValue({ status: 'signed_out' });
+    renderApp('/editing');
+    emit('initial_session', null);
+    expect(await screen.findByRole('heading', { name: 'התחברות' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('ההתחברות פגה');
+  });
+
+  it('stays read-only while the server is unreachable and retries every 30 s', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fake.storedUser = STORED;
+    fake.resumeSession.mockResolvedValue(UNREACHABLE);
+    renderApp('/editing');
+    emit('initial_session', null);
+    await flush();
+    expect(fake.resumeSession).toHaveBeenCalledTimes(1); // online at entry: tried at once
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fake.resumeSession).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('heading', { name: 'עריכה' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'שמירה' })).toBeDisabled();
+  });
+
+  it('a request that ran before the renewal (session_not_refreshed) does not sign out', async () => {
+    fake.storedUser = STORED;
+    renderApp('/not-renewed');
+    emit('initial_session', null);
+    expect(await screen.findByRole('heading', { name: 'מחכה לחידוש' })).toBeInTheDocument();
+    await flush();
+    expect(fake.signOut).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'התחברות' })).not.toBeInTheDocument();
+  });
+
+  it('signing out from the read-only phase works and is not reported as expired', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    fake.storedUser = STORED;
+    fake.signOut.mockImplementation(async () => {
+      fake.storedUser = null;
+      emit('signed_out', null);
+    });
+    renderApp('/editing');
+    emit('initial_session', null);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'יציאה' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'יציאה מהחשבון' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'יציאה' }));
+    expect(await screen.findByRole('heading', { name: 'התחברות' })).toBeInTheDocument();
+    expect(fake.signOut).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it("supabase-js's own refresh tick seeing the token refused (signed_out event) also explains it", async () => {
+    fake.storedUser = STORED;
+    fake.resumeSession.mockResolvedValue(UNREACHABLE);
+    const { queryClient } = renderApp('/editing');
+    queryClient.setQueryData(['trips', 'list'], [{ id: 't1' }]);
+    emit('initial_session', null);
+    await flush();
+    expect(screen.getByRole('heading', { name: 'עריכה' })).toBeInTheDocument();
+
+    fake.storedUser = null;
+    emit('signed_out', null);
+    expect(await screen.findByRole('heading', { name: 'התחברות' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('ההתחברות פגה');
+    expect(queryClient.getQueryData(['trips', 'list'])).toBeUndefined();
+  });
+
+  it('a renewal that ends after the user signed out is not reported as expired', async () => {
+    fake.storedUser = STORED;
+    let finish: (result: SessionResumeResult) => void = () => {};
+    fake.resumeSession.mockImplementation(
+      () => new Promise<SessionResumeResult>((resolve) => (finish = resolve)),
+    );
+    fake.signOut.mockImplementation(async () => {
+      fake.storedUser = null;
+      emit('signed_out', null);
+    });
+    renderApp('/editing');
+    emit('initial_session', null);
+    await flush();
+    expect(fake.resumeSession).toHaveBeenCalledTimes(1); // still pending
+
+    fireEvent.click(screen.getByRole('button', { name: 'יציאה' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'יציאה מהחשבון' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'יציאה' }));
+    expect(await screen.findByRole('heading', { name: 'התחברות' })).toBeInTheDocument();
+
+    await act(async () => finish({ status: 'signed_out' }));
+    expect(screen.getByRole('heading', { name: 'התחברות' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('a renewal refused after another sign-in meanwhile keeps that sign-in', async () => {
+    fake.storedUser = STORED;
+    let finish: (result: SessionResumeResult) => void = () => {};
+    fake.resumeSession.mockImplementation(
+      () => new Promise<SessionResumeResult>((resolve) => (finish = resolve)),
+    );
+    renderApp('/editing');
+    emit('initial_session', null);
+    await flush();
+    emit('signed_in', SESSION);
+    await act(async () => finish({ status: 'signed_out' }));
+    expect(screen.getByRole('button', { name: 'שמירה' })).toBeEnabled();
+    expect(screen.queryByRole('heading', { name: 'התחברות' })).not.toBeInTheDocument();
+  });
+
+  it('the login page sends a stored session back into the app', async () => {
+    fake.storedUser = STORED;
+    renderApp('/login');
+    emit('initial_session', null);
+    await flush();
+    expect(screen.getByRole('heading', { name: 'רשימת טיולים' })).toBeInTheDocument();
   });
 });

@@ -1,8 +1,14 @@
 import { act, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { Button, HeaderActions } from '@/components/ui';
+import type { SessionResumeResult } from '@/data';
 import { AppLayout, MAIN_CONTENT_ID } from './AppLayout';
 import { Providers } from './Providers';
+
+const layoutAuth = vi.hoisted(() => ({
+  session: { user: { id: 'u1', email: 'a@b.c' }, expiresAt: null } as unknown,
+  storedUser: null as { id: string; email: string | null } | null,
+}));
 
 vi.mock('@/data', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/data')>();
@@ -12,12 +18,21 @@ vi.mock('@/data', async (importOriginal) => {
     checkServerConnection: vi.fn(async () => false),
     authRepo: {
       onAuthChange: (listener: (event: string, session: unknown) => void) => {
-        queueMicrotask(() =>
-          listener('initial_session', { user: { id: 'u1', email: 'a@b.c' }, expiresAt: null }),
-        );
+        queueMicrotask(() => listener('initial_session', layoutAuth.session));
         return () => {};
       },
       signOut: vi.fn(async () => {}),
+      getStoredUser: () => layoutAuth.storedUser,
+      // Renewal never gets through in these tests (auth server unreachable).
+      resumeSession: vi.fn(async (): Promise<SessionResumeResult> =>
+        layoutAuth.storedUser
+          ? {
+              status: 'unreachable',
+              user: layoutAuth.storedUser,
+              error: new actual.AppError('network', { retryable: true }),
+            }
+          : { status: 'signed_out' },
+      ),
     },
   };
 });
@@ -117,6 +132,32 @@ describe('AppLayout offline banner (M7.3, FR-8.3)', () => {
       window.dispatchEvent(new Event('online'));
     });
     expect(screen.queryByText(OFFLINE_TEXT)).not.toBeInTheDocument();
+  });
+
+  it('while a stored session is being renewed: says "reconnecting" online, offline text offline', async () => {
+    layoutAuth.session = null;
+    layoutAuth.storedUser = { id: 'u1', email: 'a@b.c' };
+    try {
+      const RECONNECTING =
+        'מחדש את החיבור לחשבון… בינתיים אפשר לצפות בטיולים שנשמרו, ועריכה תחזור כשהחיבור יתחדש.';
+      renderLayout(<p>תוכן</p>);
+      const banner = await screen.findByText(RECONNECTING);
+      expect(banner.closest('[role="status"]')).not.toBeNull();
+      // Signing out stays possible.
+      expect(
+        within(screen.getByRole('banner')).getByRole('button', { name: 'יציאה' }),
+      ).toBeInTheDocument();
+
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+      act(() => {
+        window.dispatchEvent(new Event('offline'));
+      });
+      expect(screen.getByText(OFFLINE_TEXT)).toBeInTheDocument();
+      expect(screen.queryByText(RECONNECTING)).not.toBeInTheDocument();
+    } finally {
+      layoutAuth.session = { user: { id: 'u1', email: 'a@b.c' }, expiresAt: null };
+      layoutAuth.storedUser = null;
+    }
   });
 
   it('announces the banner when the connection drops', () => {

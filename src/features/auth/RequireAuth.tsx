@@ -5,7 +5,9 @@ import { useAuth } from './authContext';
 /**
  * Route guard for everything that needs a signed-in user. Waits for `initial_session` (status
  * `loading`) so a stored session is never mistaken for "signed out". A user who came in through a
- * password-reset link is sent to the set-new-password page first.
+ * password-reset link is sent to the set-new-password page first. `stored_offline` (a stored
+ * session that could not be renewed yet, M7.3b) is let through: pages show the saved cache
+ * read-only, because `useCanEdit()` is off in that state.
  */
 export function RequireAuth() {
   const { status, recovery, expired } = useAuth();

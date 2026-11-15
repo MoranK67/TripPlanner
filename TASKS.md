@@ -15,7 +15,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M4 Trips & bank | M4.1–M4.4 done — awaiting owner demo | M4.5 E2E (qa) next |
 | M5 Timetable | in progress | M5.2 done; M5.3 in progress (DEC-029: device check moves to the real drag after M5.4) |
 | M6 Import/export/backup | done | M6.1–M6.6 done; owner demo pending |
-| M7 Phone & offline | done — awaiting owner demo | M7.1–M7.4 + A11Y-1 done; M7.3b (offline after token expiry) next |
+| M7 Phone & offline | done — awaiting owner demo | M7.1–M7.4, M7.3b, A11Y-1, SCHED-OFF-1 done |
 | M8 web release | todo | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
 | M11 Hardening & release | todo | M11.4 = web checklist (DEC-027) |
 | M8.1–M8.2 Windows app, M9 Android app | deferred | DEC-027: after the web release |
@@ -42,7 +42,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M7.1 | Phone layout: single-day timetable with day switcher/swipe, bank as bottom sheet | scheduler-engineer | M5.4 | done | Reviewed APPROVE. Limitation: on phone a placed block can't be touch-dragged to another day → M7.2 tap-to-place covers it. Follow-up: compact BankPanel inside the sheet (frontend) |
 | M7.2 | Tap-to-place (tap block → valid slots highlighted → tap slot), incl. cross-day move on phone, return to bank, keyboard; placement disabled offline | scheduler-engineer | M7.1 | done | FR-5.5, DEC-036. Reviewed APPROVE; all 6 follow-ups fixed (2026-11-15). NOT committed: depends on `useCanEdit` (M7.3) and shares he.json; commit together with M7.3 + A11Y-1 once QA E2E is green |
 | M7.3 | Offline read cache: persisted query cache (per user, cleared on sign-out), offline banner, editing disabled offline | frontend-engineer | M5.4 | done | DEC-037. All 7 review items fixed 2026-11-15 (generation token, onlineManager tests, bank × aria-disabled via new ActivityBlock `deleteDisabledReason`); 66 files / 1359 tests, build OK. Commit with M7.2 + A11Y-1 after QA E2E (M7.4) is green. Follow-up for scheduler: pass `deleteDisabledReason={useCanEdit().reason}` in TimetableGrid/PhonePlanner |
-| M7.3b | Offline reload after token expiry shows login: AuthProvider must tell "stored session, refresh failed offline" from "no session" | core-engineer + frontend-engineer | M7.3 | todo | DEC-037 |
+| M7.3b | Offline reload after token expiry: `stored_offline` read-only state, resume on reconnect | core-engineer + frontend-engineer | M7.3 | done | DEC-038. Reviewed APPROVE; should-fixes applied. Nit left: tripsRepo test for refresh refused during hasSession → auth_expired; skip anon refetches while stored_offline |
 | M7.4 | E2E: tap-to-place (phone + keyboard), offline cache, bank.spec phone edit via placing bar "עריכה", a11y spec | qa-engineer | M7.2, M7.3 | done | Started 2026-11-15 |
 | TEST-1 | Unit tests time out under machine load (TripHeaderControls lazy-calendar beforeAll, TripsRoute findBy, TripsPage hook) | frontend-engineer / Orchestrator (vitest config) | — | todo | from M7.3 review |
 | UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | todo | from DATA-1 review |

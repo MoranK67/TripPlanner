@@ -10,7 +10,11 @@ import {
 } from './queryPersistence';
 
 type Listener = (event: string, session: unknown) => void;
-const auth = vi.hoisted(() => ({ listener: null as Listener | null }));
+const auth = vi.hoisted(() => ({
+  listener: null as Listener | null,
+  storedUser: null as { id: string; email: string | null } | null,
+  resume: null as null | (() => Promise<unknown>),
+}));
 
 vi.mock('@/data', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/data')>();
@@ -24,6 +28,14 @@ vi.mock('@/data', async (importOriginal) => {
         };
       },
       signOut: vi.fn(async () => {}),
+      getStoredUser: () => auth.storedUser,
+      resumeSession: () =>
+        auth.resume?.() ??
+        Promise.resolve({
+          status: 'unreachable',
+          user: auth.storedUser,
+          error: new actual.AppError('network', { retryable: true }),
+        }),
     },
   };
 });
@@ -88,6 +100,11 @@ function renderApp(storage: CacheStorage, page: React.ReactNode = <TripNames />)
 }
 
 const names = () => screen.getByTestId('names').textContent;
+
+afterEach(() => {
+  auth.storedUser = null;
+  auth.resume = null;
+});
 
 describe('QueryCachePersistence (M7.3)', () => {
   it("restores the signed-in user's saved trips (e.g. an offline start)", async () => {
@@ -178,6 +195,16 @@ describe('QueryCachePersistence (M7.3)', () => {
     expect(storage.getItem(QUERY_CACHE_STORAGE_KEY)).toContain('רומא');
   });
 
+  it('deletes the saved cache when the start-up ends in a signed_out event (refused token)', async () => {
+    const storage = memoryStorage();
+    seed(storage, 'u1', ['רומא']);
+    renderApp(storage);
+    // supabase-js tried to refresh the stored session at start-up and the server refused it.
+    emit('signed_out', null);
+    await act(async () => {});
+    expect(storage.getItem(QUERY_CACHE_STORAGE_KEY)).toBeNull();
+  });
+
   it('saves new data for the signed-in user', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -199,5 +226,52 @@ describe('QueryCachePersistence (M7.3)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('QueryCachePersistence with a stored, unrenewed session (M7.3b)', () => {
+  it("restores the stored user's saved trips read-only (offline start, expired token)", async () => {
+    const storage = memoryStorage();
+    seed(storage, 'u1', ['רומא']);
+    auth.storedUser = { id: 'u1', email: null };
+    renderApp(storage);
+    emit('initial_session', null);
+    expect(await screen.findByText('רומא')).toBeInTheDocument();
+  });
+
+  it("never restores another user's cache for the stored user", async () => {
+    const storage = memoryStorage();
+    seed(storage, 'u1', ['של משתמש אחר']);
+    auth.storedUser = { id: 'u2', email: null };
+    renderApp(storage);
+    emit('initial_session', null);
+    await act(async () => {});
+    expect(names()).toBe('none');
+    expect(storage.getItem(QUERY_CACHE_STORAGE_KEY)).toBeNull();
+  });
+
+  it('keeps the cache when the session is renewed for the same user', async () => {
+    const storage = memoryStorage();
+    seed(storage, 'u1', ['רומא']);
+    auth.storedUser = { id: 'u1', email: null };
+    renderApp(storage);
+    emit('initial_session', null);
+    await screen.findByText('רומא');
+    emit('token_refreshed', 'u1');
+    await act(async () => {});
+    expect(names()).toBe('רומא');
+    expect(storage.getItem(QUERY_CACHE_STORAGE_KEY)).toContain('רומא');
+  });
+
+  it('deletes the saved cache when the renewal is refused', async () => {
+    const storage = memoryStorage();
+    seed(storage, 'u1', ['רומא']);
+    auth.storedUser = { id: 'u1', email: null };
+    const queryClient = renderApp(storage);
+    emit('initial_session', null);
+    await screen.findByText('רומא');
+    emit('signed_out', null);
+    expect(storage.getItem(QUERY_CACHE_STORAGE_KEY)).toBeNull();
+    expect(queryClient.getQueryData(['trips', 'list'])).toBeUndefined();
   });
 });

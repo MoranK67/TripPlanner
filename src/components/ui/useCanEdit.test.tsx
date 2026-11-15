@@ -1,4 +1,6 @@
 import { act, render, renderHook, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { EditLockProvider } from './EditLockProvider';
 import { OfflineNote } from './OfflineNote';
 import { useCanEdit } from './useCanEdit';
 
@@ -37,5 +39,35 @@ describe('OfflineNote', () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     render(<OfflineNote />);
     expect(screen.getByText(REASON)).toBeInTheDocument();
+  });
+});
+
+describe('EditLockProvider (M7.3b)', () => {
+  const LOCK = 'החיבור לחשבון עדיין מתחדש';
+  const locked = ({ children }: { children: ReactNode }) => (
+    <EditLockProvider reason={LOCK}>{children}</EditLockProvider>
+  );
+
+  it('turns editing off online, with the lock reason', () => {
+    const { result } = renderHook(() => useCanEdit(), { wrapper: locked });
+    expect(result.current).toEqual({ canEdit: false, reason: LOCK });
+  });
+
+  it('offline, the offline reason wins', () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const { result } = renderHook(() => useCanEdit(), { wrapper: locked });
+    expect(result.current).toEqual({ canEdit: false, reason: REASON });
+  });
+
+  it('no lock (undefined) leaves editing on', () => {
+    const { result } = renderHook(() => useCanEdit(), {
+      wrapper: ({ children }) => <EditLockProvider reason={undefined}>{children}</EditLockProvider>,
+    });
+    expect(result.current.canEdit).toBe(true);
+  });
+
+  it('OfflineNote shows the lock reason in dialogs', () => {
+    render(<OfflineNote />, { wrapper: locked });
+    expect(screen.getByText(LOCK)).toBeInTheDocument();
   });
 });

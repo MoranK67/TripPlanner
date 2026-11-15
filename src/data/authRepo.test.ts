@@ -225,6 +225,140 @@ describe('authRepo.updatePassword', () => {
   });
 });
 
+describe('authRepo.getStoredUser', () => {
+  it('returns the unverified stored user from the injected reader', () => {
+    const stored = { id: 'user-1', email: 'owner@example.com' };
+    expect(
+      createAuthRepo(
+        () => mock.client,
+        () => stored,
+      ).getStoredUser(),
+    ).toEqual(stored);
+    expect(
+      createAuthRepo(
+        () => mock.client,
+        () => null,
+      ).getStoredUser(),
+    ).toBeNull();
+  });
+
+  it('a throwing reader → null', () => {
+    const reader = () => {
+      throw new Error('broken');
+    };
+    expect(createAuthRepo(() => mock.client, reader).getStoredUser()).toBeNull();
+  });
+
+  it('works without a Supabase configuration (does not touch the client)', () => {
+    const getClient = vi.fn(() => {
+      throw new Error('Supabase is not configured');
+    });
+    expect(createAuthRepo(getClient, () => null).getStoredUser()).toBeNull();
+    expect(getClient).not.toHaveBeenCalled();
+  });
+});
+
+describe('authRepo.resumeSession', () => {
+  const storedUser = { id: 'user-1', email: 'owner@example.com' };
+  let stored: { id: string; email: string | null } | null;
+  let resumable: AuthRepo;
+
+  beforeEach(() => {
+    stored = storedUser;
+    resumable = createAuthRepo(
+      () => mock.client,
+      () => stored,
+    );
+  });
+
+  it('a valid (or refreshed) session → signed_in', async () => {
+    mock.setSession(supabaseSession);
+    expect(await resumable.resumeSession()).toEqual({
+      status: 'signed_in',
+      session: { user: { id: 'user-1', email: 'owner@example.com' }, expiresAt: 1_800_000_000_000 },
+    });
+  });
+
+  it('refresh failed offline, session still stored → unreachable with a network error', async () => {
+    mock.auth.getSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: new AuthRetryableFetchError('Failed to fetch', 0),
+    } as never);
+    const result = await resumable.resumeSession();
+    expect(result.status).toBe('unreachable');
+    if (result.status !== 'unreachable') return;
+    expect(result.user).toEqual(storedUser);
+    expect(result.error.kind).toBe('network');
+    expect(result.error.retryable).toBe(true);
+  });
+
+  it('refresh timed out → unreachable / network / timeout', async () => {
+    mock.auth.getSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: new AuthRetryableFetchError('The request timed out after 15000 ms.', 0),
+    } as never);
+    const result = await resumable.resumeSession();
+    expect(result.status === 'unreachable' && result.error.reason).toBe('timeout');
+  });
+
+  it('auth server 5xx → unreachable with a retryable error', async () => {
+    mock.auth.getSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: new AuthRetryableFetchError('Bad Gateway', 502),
+    } as never);
+    const result = await resumable.resumeSession();
+    expect(result.status).toBe('unreachable');
+    expect(result.status === 'unreachable' && result.error.retryable).toBe(true);
+  });
+
+  it('getSession throwing while a session is stored → unreachable', async () => {
+    mock.auth.getSession.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const result = await resumable.resumeSession();
+    expect(result.status === 'unreachable' && result.error.kind).toBe('network');
+  });
+
+  it('no session and no error but something stored → unreachable (refresh_failed)', async () => {
+    mock.setSession(null);
+    const result = await resumable.resumeSession();
+    expect(result.status === 'unreachable' && result.error.reason).toBe('refresh_failed');
+  });
+
+  it('refresh token rejected → signed_out (even if storage was not cleared yet)', async () => {
+    mock.auth.getSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: new AuthApiError('Invalid Refresh Token', 400, 'refresh_token_not_found'),
+    } as never);
+    expect(await resumable.resumeSession()).toEqual({ status: 'signed_out' });
+  });
+
+  it('nothing stored → signed_out, whatever the error', async () => {
+    stored = null;
+    mock.auth.getSession.mockResolvedValueOnce({
+      data: { session: null },
+      error: new AuthRetryableFetchError('Failed to fetch', 0),
+    } as never);
+    expect(await resumable.resumeSession()).toEqual({ status: 'signed_out' });
+    mock.setSession(null);
+    expect(await resumable.resumeSession()).toEqual({ status: 'signed_out' });
+  });
+
+  it('a throwing stored-user reader → signed_out', async () => {
+    mock.setSession(null);
+    const repoWithBrokenReader = createAuthRepo(
+      () => mock.client,
+      () => {
+        throw new Error('broken');
+      },
+    );
+    expect(await repoWithBrokenReader.resumeSession()).toEqual({ status: 'signed_out' });
+  });
+
+  it('never exposes tokens', async () => {
+    mock.setSession(supabaseSession);
+    expect(JSON.stringify(await resumable.resumeSession())).not.toMatch(/secret-token|refresh"/);
+  });
+});
+
 describe('authRepo without a Supabase configuration', () => {
   const notConfigured = createAuthRepo(() => {
     throw new Error('Supabase is not configured');
@@ -240,6 +374,10 @@ describe('authRepo without a Supabase configuration', () => {
     const error = await rejection(call());
     expect(error.kind).toBe('unknown');
     expect(error.reason).toBe('not_configured');
+  });
+
+  it('resumeSession resolves signed_out', async () => {
+    expect(await notConfigured.resumeSession()).toEqual({ status: 'signed_out' });
   });
 
   it('onAuthChange does not throw and reports initial_session without a session', async () => {

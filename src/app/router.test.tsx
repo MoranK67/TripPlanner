@@ -24,6 +24,8 @@ vi.mock('@/data', async (importOriginal) => {
         return () => {};
       },
       signOut: vi.fn(async () => {}),
+      getStoredUser: () => null,
+      resumeSession: vi.fn(async () => ({ status: 'signed_out' })),
     },
     tripsRepo: { list: vi.fn(async () => []) },
   };

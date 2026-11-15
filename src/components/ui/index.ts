@@ -31,4 +31,5 @@ export { ToastProvider } from './ToastProvider';
 export { useToast, type ToastApi, type ToastOptions, type ToastTone } from './toastContext';
 export { cx } from './cx';
 export { BREAKPOINTS, useBreakpoint, type Breakpoint } from './useBreakpoint';
+export { EditLockProvider } from './EditLockProvider';
 export { useCanEdit, type CanEdit } from './useCanEdit';

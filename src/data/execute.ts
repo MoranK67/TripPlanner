@@ -1,6 +1,7 @@
 // Runs one PostgREST request and turns its `{ data, error }` result into data or an AppError.
 
 import { AppError, toAppError, type DbErrorLike } from './errors';
+import { readStoredAuthUser } from './storedSession';
 import type { TypedSupabaseClient } from './supabaseClient';
 
 /** What every postgrest-js builder resolves to (structurally). */
@@ -51,6 +52,11 @@ async function attempt<R extends DbResult<unknown>>(
  *
  * A 42501 (no privilege) normally means "not yours" → `not_found`; but if there is no session
  * at all, the request ran as `anon` (which has no grants), so it is reported as `auth_expired`.
+ * Exception (M7.3b): if supabase-js still stores a session it merely could not refresh (offline
+ * or auth server unreachable, e.g. right after reconnecting), the request ran as `anon` only
+ * because the refresh is pending. That is a retryable `network` error with reason
+ * `session_not_refreshed`, not `auth_expired` — the UI signs out on `auth_expired`, which would
+ * delete a still-valid refresh token.
  */
 export async function runDb<R extends DbResult<unknown>>(
   client: TypedSupabaseClient,
@@ -69,6 +75,15 @@ export async function runDb<R extends DbResult<unknown>>(
   } catch (error) {
     const appError = toAppError(error);
     if (appError.code === '42501' && !(await hasSession(client))) {
+      if (readStoredAuthUser() !== null) {
+        throw new AppError('network', {
+          reason: 'session_not_refreshed',
+          retryable: true,
+          code: appError.code,
+          status: appError.status,
+          cause: appError.cause,
+        });
+      }
       throw new AppError('auth_expired', {
         code: appError.code,
         status: appError.status,

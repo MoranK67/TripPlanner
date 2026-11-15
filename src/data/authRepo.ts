@@ -4,7 +4,10 @@
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { AppError, toAppError } from './errors';
 import { safeClientGetter } from './execute';
+import { readStoredAuthUser, type StoredAuthUser } from './storedSession';
 import { getSupabase, type TypedSupabaseClient } from './supabaseClient';
+
+export type { StoredAuthUser } from './storedSession';
 
 export interface AuthUser {
   id: string;
@@ -26,6 +29,21 @@ export type AuthEvent =
   | 'password_recovery';
 
 export type AuthChangeListener = (event: AuthEvent, session: AuthSession | null) => void;
+
+/**
+ * Outcome of `resumeSession()`:
+ * - `signed_in`: a valid (possibly just refreshed) session.
+ * - `signed_out`: nothing stored, or the server rejected the refresh token (supabase-js has then
+ *   deleted the stored session and emitted `signed_out`).
+ * - `unreachable`: a session is stored for `user` but could not be refreshed because the network
+ *   or the auth server failed (`error`: `network` incl. reason `timeout`, or a retryable
+ *   `unknown` for a 5xx). supabase-js keeps the stored session and retries on its own. `user` is
+ *   unverified: read-only offline display only (see storedSession.ts).
+ */
+export type SessionResumeResult =
+  | { status: 'signed_in'; session: AuthSession }
+  | { status: 'signed_out' }
+  | { status: 'unreachable'; user: StoredAuthUser; error: AppError };
 
 export interface AuthRepo {
   /**
@@ -55,6 +73,27 @@ export interface AuthRepo {
   requestPasswordReset(email: string, redirectTo?: string): Promise<void>;
   /** Sets a new password for the signed-in user (after following the reset link). */
   updatePassword(newPassword: string): Promise<void>;
+  /**
+   * The user of the session supabase-js keeps in local storage, read synchronously WITHOUT
+   * validating or refreshing it (no tokens are returned). Null when nothing usable is stored or
+   * the client is not configured. Safe to call inside an `onAuthChange` listener.
+   *
+   * Use it only to keep showing that user's persisted query cache read-only when `initial_session`
+   * arrives without a session (expired access token + offline). Never treat it as signed in and
+   * never use it for writes.
+   */
+  getStoredUser(): StoredAuthUser | null;
+  /**
+   * Asks supabase-js for the session again (refreshing the access token if it expired) and
+   * classifies the outcome. Never rejects. On success supabase-js also emits `token_refreshed`
+   * to `onAuthChange` listeners; on a rejected refresh token it emits `signed_out`.
+   * Do not call it from inside an `onAuthChange` listener (it waits for the auth lock).
+   *
+   * Note: after a failed refresh supabase-js answers repeated attempts with the same refresh
+   * token from a cache for 60 s without a request, so a call right after reconnecting may still
+   * report `unreachable`; its own auto-refresh tick (every 30 s while the tab is visible) retries.
+   */
+  resumeSession(): Promise<SessionResumeResult>;
 }
 
 export function sessionFromSupabase(session: Session | null): AuthSession | null {
@@ -90,7 +129,10 @@ async function call<T extends { error: unknown }>(request: () => Promise<T>): Pr
   return result;
 }
 
-export function createAuthRepo(getSupabaseClient: () => TypedSupabaseClient): AuthRepo {
+export function createAuthRepo(
+  getSupabaseClient: () => TypedSupabaseClient,
+  readStoredUser: () => StoredAuthUser | null = () => readStoredAuthUser(),
+): AuthRepo {
   const getClient = safeClientGetter(getSupabaseClient);
   return {
     async signIn(email, password) {
@@ -150,6 +192,48 @@ export function createAuthRepo(getSupabaseClient: () => TypedSupabaseClient): Au
 
     async updatePassword(newPassword) {
       await call(() => getClient().auth.updateUser({ password: newPassword }));
+    },
+
+    getStoredUser() {
+      try {
+        return readStoredUser();
+      } catch {
+        return null;
+      }
+    },
+
+    async resumeSession() {
+      let client: TypedSupabaseClient;
+      try {
+        client = getClient();
+      } catch {
+        return { status: 'signed_out' };
+      }
+      let error: AppError | null = null;
+      try {
+        const result = await client.auth.getSession();
+        const session = sessionFromSupabase(result.data.session);
+        if (session) return { status: 'signed_in', session };
+        if (result.error) error = toAppError(result.error);
+      } catch (thrown) {
+        error = toAppError(thrown);
+      }
+      // A rejected refresh token (or no session at all) is final.
+      if (error?.kind === 'auth_expired') return { status: 'signed_out' };
+      // Storage is the source of truth for "is there still something to resume": supabase-js
+      // removes the stored session itself when the server rejects the refresh token.
+      let user: StoredAuthUser | null;
+      try {
+        user = readStoredUser();
+      } catch {
+        user = null;
+      }
+      if (!user) return { status: 'signed_out' };
+      return {
+        status: 'unreachable',
+        user,
+        error: error ?? new AppError('network', { reason: 'refresh_failed', retryable: true }),
+      };
     },
   };
 }
