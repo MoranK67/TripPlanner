@@ -12,7 +12,7 @@ import {
   type RefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityBlock, cx, SLOT_HEIGHT_PX } from '@/components/ui';
+import { ActivityBlock, cx, SLOT_HEIGHT_PX, useCanEdit } from '@/components/ui';
 import {
   dayBounds,
   formatShortDate,
@@ -142,6 +142,8 @@ export const TimetableGrid = memo(function TimetableGrid({
   const open = useCallback((a: Activity) => openRef.current(a), []);
   const remove = useCallback((a: Activity) => deleteRef.current?.(a), []);
   const canDelete = onDeleteActivity !== undefined;
+  // Offline the × stays (no layout shift, no focus loss) but is disabled, as in the bank (M7.3).
+  const { reason: readOnlyReason } = useCanEdit();
 
   // FR-4.4: open at the trip start, at the first day (scrollLeft 0 is the inline start in RTL too).
   // Only when the trip changes, so editing activities never moves the view.
@@ -238,6 +240,7 @@ export const TimetableGrid = memo(function TimetableGrid({
                 activities={byDay.get(date) ?? NO_ACTIVITIES}
                 onOpen={open}
                 onDelete={canDelete ? remove : undefined}
+                deleteDisabledReason={readOnlyReason}
                 blockClassName={blockClassName}
               />
             );
@@ -278,6 +281,8 @@ interface DayColumnProps {
   activities: Activity[];
   onOpen: (activity: Activity) => void;
   onDelete: ((activity: Activity) => void) | undefined;
+  /** `useCanEdit().reason`: set while offline, so the × is shown but disabled. */
+  deleteDisabledReason: string | undefined;
   blockClassName: string | undefined;
 }
 
@@ -290,6 +295,7 @@ function sameColumn(prev: DayColumnProps, next: DayColumnProps): boolean {
     prev.endMinute === next.endMinute &&
     prev.onOpen === next.onOpen &&
     prev.onDelete === next.onDelete &&
+    prev.deleteDisabledReason === next.deleteDisabledReason &&
     prev.blockClassName === next.blockClassName &&
     prev.activities.length === next.activities.length &&
     prev.activities.every((a, i) => a === next.activities[i])
@@ -304,6 +310,7 @@ const DayColumn = memo(function DayColumn({
   activities,
   onOpen,
   onDelete,
+  deleteDisabledReason,
   blockClassName,
 }: DayColumnProps) {
   const spans = disabledSpans({ startMinute, endMinute });
@@ -339,6 +346,7 @@ const DayColumn = memo(function DayColumn({
             meta={timeRangeLabel(start, a.durationMinutes)}
             onOpen={() => onOpen(a)}
             onDelete={onDelete && (() => onDelete(a))}
+            deleteDisabledReason={onDelete && deleteDisabledReason}
           />
         );
       })}

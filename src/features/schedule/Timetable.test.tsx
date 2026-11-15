@@ -1,6 +1,36 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { addDays, PALETTE, type Activity, type Placement, type Trip } from '@/domain';
 import { Timetable } from './Timetable';
+
+// Connectivity the test can switch while the timetable is mounted (M7.3).
+const net = vi.hoisted(() => {
+  let online = true;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => online,
+    set: (next: boolean) => {
+      online = next;
+      listeners.forEach((l) => l());
+    },
+    subscribe: (l: () => void) => {
+      listeners.add(l);
+      return () => {
+        listeners.delete(l);
+      };
+    },
+  };
+});
+vi.mock('@/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/platform')>();
+  const { useSyncExternalStore } = await import('react');
+  return {
+    ...actual,
+    useOnlineStatus: () => useSyncExternalStore(net.subscribe, net.get, net.get),
+  };
+});
+
+const OFFLINE_REASON =
+  'אין חיבור לאינטרנט, אז אי אפשר לשמור שינויים כרגע. העריכה תחזור כשהחיבור יחזור.';
 
 function makeTrip(overrides: Partial<Trip['window']> = {}, id = 'trip-1'): Trip {
   return {
@@ -207,5 +237,85 @@ describe('Timetable', () => {
       `[M5.2] 90-day timetable (180 blocks) first render in jsdom: ${elapsed.toFixed(0)} ms, ` +
         `${scroller.querySelectorAll('*').length} elements`,
     );
+  });
+
+  describe('delete × and connectivity (SCHED-OFF-1)', () => {
+    afterEach(() => {
+      act(() => net.set(true));
+    });
+
+    function renderWithDelete(singleDay?: boolean) {
+      const museum = makeActivity('מוזיאון', 90, { date: '2026-12-01', startMinute: 15 * 60 });
+      const onDelete = vi.fn();
+      render(
+        <div dir="rtl">
+          <Timetable
+            trip={makeTrip()}
+            activities={[museum]}
+            onOpenActivity={vi.fn()}
+            onDeleteActivity={onDelete}
+            singleDay={singleDay}
+          />
+        </div>,
+      );
+      return {
+        museum,
+        onDelete,
+        remove: () => screen.getByRole('button', { name: 'מחיקת מוזיאון' }),
+      };
+    }
+
+    it('online: the × is enabled and asks the caller to delete', () => {
+      const { museum, onDelete, remove } = renderWithDelete();
+      expect(remove()).not.toHaveAttribute('aria-disabled');
+      expect(remove()).not.toHaveAttribute('title');
+      fireEvent.click(remove());
+      expect(onDelete).toHaveBeenCalledExactlyOnceWith(museum);
+    });
+
+    it('offline: the × stays focusable but is aria-disabled with the reason, and opens no confirm', () => {
+      net.set(false);
+      const { onDelete, remove } = renderWithDelete();
+      expect(remove()).toHaveAttribute('aria-disabled', 'true');
+      expect(remove()).toHaveAttribute('title', OFFLINE_REASON);
+      expect(remove()).toHaveAccessibleDescription(OFFLINE_REASON);
+      remove().focus();
+      expect(remove()).toHaveFocus();
+      fireEvent.click(remove());
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('follows the connection while mounted, keeping focus on the ×', () => {
+      const { museum, onDelete, remove } = renderWithDelete();
+      remove().focus();
+      act(() => net.set(false));
+      expect(remove()).toHaveAttribute('aria-disabled', 'true');
+      expect(remove()).toHaveFocus();
+      fireEvent.click(remove());
+      expect(onDelete).not.toHaveBeenCalled();
+
+      act(() => net.set(true));
+      expect(remove()).not.toHaveAttribute('aria-disabled');
+      expect(remove()).toHaveFocus();
+      fireEvent.click(remove());
+      expect(onDelete).toHaveBeenCalledExactlyOnceWith(museum);
+    });
+
+    it('disables the × in the phone single-day view too', () => {
+      net.set(false);
+      const { onDelete, remove } = renderWithDelete(true);
+      expect(remove()).toHaveAttribute('aria-disabled', 'true');
+      expect(remove()).toHaveAccessibleDescription(OFFLINE_REASON);
+      fireEvent.click(remove());
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('shows no × at all without a delete handler, online or offline', () => {
+      net.set(false);
+      renderTimetable(makeTrip(), [
+        makeActivity('מוזיאון', 90, { date: '2026-12-01', startMinute: 15 * 60 }),
+      ]);
+      expect(screen.queryByRole('button', { name: 'מחיקת מוזיאון' })).not.toBeInTheDocument();
+    });
   });
 });
