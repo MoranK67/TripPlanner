@@ -101,7 +101,7 @@ describe('TripPage', () => {
       fireEvent.click(within(timetable).getByRole('button', { name: 'מוזיאון 11:00–12:30' }));
       const dialog = screen.getByRole('dialog', { name: 'עריכת אטרקציה' });
       expect(within(dialog).getByLabelText('שם האטרקציה')).toHaveValue('מוזיאון');
-      expect(within(dialog).getByLabelText('כמה זמן זה לוקח?')).toHaveValue('90');
+      expect(within(dialog).getByLabelText('כמה זמן זה לוקח?')).toHaveValue('01:30');
     });
 
     it('asks before deleting from the × (FR-3.4)', async () => {

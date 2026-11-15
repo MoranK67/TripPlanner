@@ -9,7 +9,7 @@ import {
   Input,
   LoadingState,
   Modal,
-  Select,
+  TimeInput,
   useToast,
 } from '@/components/ui';
 import { isAppError } from '@/data';
@@ -17,7 +17,9 @@ import {
   formatLongDate,
   isValidTripName,
   localIsoDate,
-  minuteLabel,
+  MAX_END_MINUTE,
+  MAX_START_MINUTE,
+  MIN_END_MINUTE,
   TRIP_NAME_MAX,
   tripDayCount,
   type Minute,
@@ -29,9 +31,7 @@ import {
   DEFAULT_END_MINUTE,
   DEFAULT_START_MINUTE,
   defaultRange,
-  endMinuteOptions,
   isTripWindowError,
-  startMinuteOptions,
   tripWindowFormError,
   windowFromForm,
   type DayRange,
@@ -52,7 +52,7 @@ export interface TripDialogProps {
 
 /**
  * Create / edit a trip (FR-2.2–FR-2.6): name, one range calendar for the days and start / end
- * time selects on the 30-minute grid. Rules come from `validateTripWindow`; messages are inline.
+ * typed start / end times rounded to the 30-minute grid (UX-5). Rules come from `validateTripWindow`; messages are inline.
  * Mounted fresh each time it opens, so it always starts from the trip's current values.
  */
 export function TripDialog({ open, onClose, trip }: TripDialogProps) {
@@ -104,10 +104,13 @@ function TripForm({
       ? { from: trip.window.startDate, to: trip.window.endDate }
       : defaultRange(localIsoDate(new Date())),
   );
-  const [startMinute, setStartMinute] = useState<Minute>(
+  // `null` while the typed time is not valid (UX-5); saving is blocked then.
+  const [startMinute, setStartMinute] = useState<Minute | null>(
     trip?.window.startMinute ?? DEFAULT_START_MINUTE,
   );
-  const [endMinute, setEndMinute] = useState<Minute>(trip?.window.endMinute ?? DEFAULT_END_MINUTE);
+  const [endMinute, setEndMinute] = useState<Minute | null>(
+    trip?.window.endMinute ?? DEFAULT_END_MINUTE,
+  );
   const [submitted, setSubmitted] = useState(false);
 
   const baseId = useId();
@@ -116,13 +119,17 @@ function TripForm({
   const calendarErrorId = `${baseId}-calendar-error`;
   const nameRef = useRef<HTMLInputElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
-  const startRef = useRef<HTMLSelectElement>(null);
-  const endRef = useRef<HTMLSelectElement>(null);
+  const startRef = useRef<HTMLInputElement>(null);
+  const endRef = useRef<HTMLInputElement>(null);
 
   // FR-2.2: an empty name becomes the default name.
   const finalName = name.trim() === '' ? t('trips.dialog.defaultName') : name.trim();
   const nameInvalid = !isValidTripName(finalName);
-  const windowError = tripWindowFormError(range, startMinute, endMinute);
+  // Cross-field rules apply once both typed times are valid (the fields show their own errors).
+  const windowError =
+    startMinute === null || endMinute === null
+      ? null
+      : tripWindowFormError(range, startMinute, endMinute);
 
   // A server-side validation reason is shown at the same place as the client check.
   const serverReason =
@@ -149,6 +156,14 @@ function TripForm({
     mutation.reset();
     if (nameInvalid) {
       nameRef.current?.focus();
+      return;
+    }
+    if (startMinute === null) {
+      startRef.current?.focus();
+      return;
+    }
+    if (endMinute === null) {
+      endRef.current?.focus();
       return;
     }
     const target = windowErrorTarget(windowError);
@@ -189,9 +204,9 @@ function TripForm({
           days: t('trips.days', {
             count: tripDayCount({
               startDate: range.from,
-              startMinute,
+              startMinute: startMinute ?? 0,
               endDate: range.to,
-              endMinute,
+              endMinute: endMinute ?? MAX_END_MINUTE,
             }),
           }),
         })
@@ -247,38 +262,28 @@ function TripForm({
       </div>
 
       <div className="flex gap-2.5 [&>*]:min-w-0 [&>*]:flex-1">
-        <Field
+        <TimeInput
+          ref={startRef}
           label={t('trips.dialog.startTime')}
+          hint={t('trips.dialog.startTimeHint')}
+          value={startMinute}
+          min={0}
+          max={MAX_START_MINUTE}
+          onChange={setStartMinute}
+          showErrors={submitted}
           error={errorTarget === 'start' ? windowMessage : undefined}
-        >
-          <Select
-            ref={startRef}
-            value={startMinute}
-            onChange={(e) => setStartMinute(Number(e.target.value))}
-          >
-            {startMinuteOptions().map((m) => (
-              <option key={m} value={m}>
-                {minuteLabel(m)}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field
+        />
+        <TimeInput
+          ref={endRef}
           label={t('trips.dialog.endTime')}
+          hint={t('trips.dialog.endTimeHint')}
+          value={endMinute}
+          min={MIN_END_MINUTE}
+          max={MAX_END_MINUTE}
+          onChange={setEndMinute}
+          showErrors={submitted}
           error={errorTarget === 'end' ? windowMessage : undefined}
-        >
-          <Select
-            ref={endRef}
-            value={endMinute}
-            onChange={(e) => setEndMinute(Number(e.target.value))}
-          >
-            {endMinuteOptions().map((m) => (
-              <option key={m} value={m}>
-                {minuteLabel(m)}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        />
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">

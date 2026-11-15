@@ -1,6 +1,15 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Field, Input, Modal, Select, Textarea, useToast } from '@/components/ui';
+import {
+  Button,
+  Field,
+  Input,
+  Modal,
+  Select,
+  Textarea,
+  TimeInput,
+  useToast,
+} from '@/components/ui';
 import { ActivityBlockDemo } from './ActivityBlockDemo';
 import { ConfirmDialogDemo } from './ConfirmDialogDemo';
 import { LayoutDemo } from './LayoutDemo';
@@ -16,6 +25,8 @@ export function UiGalleryPage() {
   const toast = useToast();
   const [modal, setModal] = useState<'none' | 'md' | 'wide'>('none');
   const [tripName, setTripName] = useState('');
+  const [time, setTime] = useState<number | null>(570);
+  const [duration, setDuration] = useState<number | null>(90);
   const nameRef = useRef<HTMLInputElement>(null);
   const close = () => setModal('none');
 
@@ -77,6 +88,22 @@ export function UiGalleryPage() {
           <Field label={t('devUi.disabledLabel')}>
             <Input disabled defaultValue={t('devUi.disabled')} />
           </Field>
+          <TimeInput
+            label={t('devUi.timeLabel')}
+            hint={t('devUi.timeHint')}
+            value={time}
+            min={0}
+            max={1410}
+            onChange={setTime}
+          />
+          <TimeInput
+            label={t('devUi.durationLabel')}
+            hint={t('devUi.durationHint')}
+            value={duration}
+            min={30}
+            max={1440}
+            onChange={setDuration}
+          />
         </div>
         <Field label={t('devUi.notesLabel')}>
           <Textarea placeholder={t('devUi.notesPlaceholder')} />

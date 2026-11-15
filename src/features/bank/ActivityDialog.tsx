@@ -8,19 +8,17 @@ import {
   FormError,
   Input,
   Modal,
-  Select,
+  TimeInput,
   useToast,
 } from '@/components/ui';
 import { isAppError } from '@/data';
 import {
   ACTIVITY_NAME_MAX,
-  formatDurationHe,
   isValidActivityName,
   MAX_ACTIVITY_MINUTES,
   MIN_ACTIVITY_MINUTES,
   normalizeHexColor,
   paletteColorAt,
-  SLOT_MINUTES,
   type Activity,
   type ActivityPatch,
 } from '@/domain';
@@ -29,13 +27,6 @@ import { activityMutationKeys, useCreateActivity, useUpdateActivity } from './ho
 
 /** Default duration of a new activity (prototype: one hour). */
 export const DEFAULT_DURATION_MINUTES = 60;
-
-/** Duration options: 30 min – 24 h on the 30-minute grid (FR-3.1). */
-function durationOptions(): number[] {
-  const result: number[] = [];
-  for (let m = MIN_ACTIVITY_MINUTES; m <= MAX_ACTIVITY_MINUTES; m += SLOT_MINUTES) result.push(m);
-  return result;
-}
 
 export interface ActivityDialogProps {
   open: boolean;
@@ -104,12 +95,22 @@ function ActivityForm({
 
   const defaultColor = paletteColorAt(colorCursor);
   const [name, setName] = useState(activity?.name ?? '');
-  const [duration, setDuration] = useState(activity?.durationMinutes ?? DEFAULT_DURATION_MINUTES);
+  // `null` while the typed duration is not valid (UX-5); saving is blocked then.
+  const [duration, setDuration] = useState<number | null>(
+    activity?.durationMinutes ?? DEFAULT_DURATION_MINUTES,
+  );
   const [color, setColor] = useState<string>(
     activity ? normalizeHexColor(activity.color) : defaultColor,
   );
   const [submitted, setSubmitted] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
+  const durationRef = useRef<HTMLInputElement>(null);
+  const durationMessages = {
+    empty: t('bank.dialog.errors.durationEmpty'),
+    format: t('bank.dialog.errors.durationFormat'),
+    below_min: t('bank.dialog.errors.durationMin'),
+    above_max: t('bank.dialog.errors.durationMax'),
+  };
 
   const trimmed = name.trim();
   const nameError =
@@ -138,6 +139,10 @@ function ActivityForm({
     mutation.reset();
     if (nameError) {
       nameRef.current?.focus();
+      return;
+    }
+    if (duration === null) {
+      durationRef.current?.focus();
       return;
     }
     if (activity) {
@@ -175,15 +180,17 @@ function ActivityForm({
           onChange={(e) => setName(e.target.value)}
         />
       </Field>
-      <Field label={t('bank.dialog.duration')}>
-        <Select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
-          {durationOptions().map((m) => (
-            <option key={m} value={m}>
-              {formatDurationHe(m)}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <TimeInput
+        ref={durationRef}
+        label={t('bank.dialog.duration')}
+        hint={t('bank.dialog.durationHint')}
+        value={duration}
+        min={MIN_ACTIVITY_MINUTES}
+        max={MAX_ACTIVITY_MINUTES}
+        onChange={setDuration}
+        showErrors={submitted}
+        messages={durationMessages}
+      />
       <ColorSwatches
         label={t('bank.dialog.color')}
         value={color}

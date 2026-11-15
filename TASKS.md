@@ -37,7 +37,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M6.6a | RPC `import_trips(jsonb)` + DB tests (480 assertions) + types | db-engineer | M6.5 | done | Reviewed APPROVE; applied to dev, NOT prod (prod only at M11.2) |
 | M6.6b | `backupRepo.importAll/exportAll` + mapping, `AppError.location` | core-engineer | M6.6a | done | |
 | M6.6c | Backup UI (export all, import with preview + Hebrew warnings, duplicate warning) | frontend-engineer | M6.6b, M6.3 | done | Composed in src/app/TripsRoute (no trips↔backup cycle). E2E for backup import still to add | |
-| UX-5 | HHMM typed time inputs for duration and trip times, rounded to half hours (DEC-035) | frontend-engineer | — | in progress | owner request after demo |
+| UX-5 | HHMM typed time inputs for duration and trip times, rounded to half hours (DEC-035) | frontend-engineer | — | done | `TimeInput` primitive; displays HH:MM after blur |
 | IDEA-1 | Quarter-hour steps (DB checks, grid, drag, export, import) | — | after M8 | deferred | owner: revisit after real use (DEC-035) |
 | M7.1 | Phone layout: single-day timetable with day switcher/swipe, bank as bottom sheet | scheduler-engineer | M5.4 | in progress | |
 | UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | todo | from DATA-1 review |

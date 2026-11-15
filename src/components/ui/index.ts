@@ -24,6 +24,8 @@ export { PagePlaceholder } from './PagePlaceholder';
 export { Select, type SelectProps } from './Select';
 export { SidebarLayout, type SidebarLayoutProps } from './SidebarLayout';
 export { Textarea, type TextareaProps } from './Textarea';
+export { TimeInput, type TimeInputProps } from './TimeInput';
+export { parseHhmm, type HhmmError, type HhmmOptions, type HhmmResult } from './parseHhmm';
 export { ToastProvider } from './ToastProvider';
 export { useToast, type ToastApi, type ToastOptions, type ToastTone } from './toastContext';
 export { cx } from './cx';

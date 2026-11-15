@@ -64,22 +64,48 @@ describe('TripDialog — new trip (FR-2.2–2.5)', () => {
     await renderDialog();
     expect(screen.getByRole('dialog', { name: 'טיול חדש' })).toBeInTheDocument();
     expect(screen.getByLabelText('שם הטיול')).toHaveFocus();
-    expect(screen.getByLabelText('שעת התחלה ביום הראשון')).toHaveValue('600');
-    expect(screen.getByLabelText('שעת סיום ביום האחרון')).toHaveValue('1200');
+    expect(screen.getByLabelText('שעת התחלה ביום הראשון')).toHaveValue('10:00');
+    expect(screen.getByLabelText('שעת סיום ביום האחרון')).toHaveValue('20:00');
     expect(screen.getByRole('group', { name: 'ימי הטיול' })).toBeInTheDocument();
     expect(screen.getByText(/4 ימים/)).toBeInTheDocument();
   });
 
-  it('offers 48 start times 00:00–23:30 and 48 end times 00:30–24:00', async () => {
+  it('takes typed HHMM times, rounded to the half hour (UX-5)', async () => {
+    repo.create.mockImplementation(async (input) => ({ ...makeTrip({ id: 'new-1' }), ...input }));
     await renderDialog();
-    const start = within(screen.getByLabelText('שעת התחלה ביום הראשון')).getAllByRole('option');
-    const end = within(screen.getByLabelText('שעת סיום ביום האחרון')).getAllByRole('option');
-    expect(start).toHaveLength(48);
-    expect(start[0]).toHaveTextContent('00:00');
-    expect(start.at(-1)).toHaveTextContent('23:30');
-    expect(end).toHaveLength(48);
-    expect(end[0]).toHaveTextContent('00:30');
-    expect(end.at(-1)).toHaveTextContent('24:00');
+    const start = screen.getByLabelText('שעת התחלה ביום הראשון');
+    const end = screen.getByLabelText('שעת סיום ביום האחרון');
+    expect(start).toHaveAttribute('inputmode', 'numeric');
+    expect(start).toHaveAccessibleDescription('לדוגמה 0800');
+    expect(end).toHaveAccessibleDescription('לדוגמה 2200');
+    fireEvent.change(start, { target: { value: '0815' } });
+    fireEvent.blur(start);
+    expect(start).toHaveValue('08:30');
+    expect(screen.getByText(/עוגל ל-08:30/)).toBeInTheDocument();
+    fireEvent.change(end, { target: { value: '2400' } });
+    save('יצירת הטיול');
+    expect(await screen.findByText('דף הטיול החדש')).toBeInTheDocument();
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        window: expect.objectContaining({ startMinute: 510, endMinute: 1440 }),
+      }),
+    );
+  });
+
+  it.each([
+    ['שעת התחלה ביום הראשון', '2400', 'השעה המאוחרת ביותר היא 23:30'],
+    ['שעת התחלה ביום הראשון', '0870', 'הדקות צריכות להיות בין 00 ל-59'],
+    ['שעת סיום ביום האחרון', '0000', 'השעה המוקדמת ביותר היא 00:30'],
+    ['שעת סיום ביום האחרון', 'ערב', 'צריך להקליד ספרות בלבד, למשל 0800 או 08:00'],
+  ])('blocks saving when %s is %j', async (label, text, message) => {
+    await renderDialog();
+    const field = screen.getByLabelText(label);
+    fireEvent.change(field, { target: { value: text } });
+    save('יצירת הטיול');
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(repo.create).not.toHaveBeenCalled();
   });
 
   it('uses the default name "הטיול שלי" and opens the new trip', async () => {
@@ -160,8 +186,8 @@ describe('TripDialog — calendar and validation', () => {
     await renderDialog(trip);
     clickDay(10);
     clickDay(10);
-    fireEvent.change(screen.getByLabelText('שעת התחלה ביום הראשון'), { target: { value: '1080' } });
-    fireEvent.change(screen.getByLabelText('שעת סיום ביום האחרון'), { target: { value: '600' } });
+    fireEvent.change(screen.getByLabelText('שעת התחלה ביום הראשון'), { target: { value: '1800' } });
+    fireEvent.change(screen.getByLabelText('שעת סיום ביום האחרון'), { target: { value: '1000' } });
     save();
     const end = screen.getByLabelText('שעת סיום ביום האחרון');
     expect(end).toHaveFocus();
@@ -200,7 +226,7 @@ describe('TripDialog — edit (FR-2.6)', () => {
     await renderDialog(trip);
     expect(screen.getByRole('dialog', { name: 'עריכת טיול' })).toBeInTheDocument();
     expect(screen.getByLabelText('שם הטיול')).toHaveValue('רומא');
-    expect(screen.getByLabelText('שעת סיום ביום האחרון')).toHaveValue('1080');
+    expect(screen.getByLabelText('שעת סיום ביום האחרון')).toHaveValue('18:00');
     clickDay(2);
     clickDay(5);
     save();

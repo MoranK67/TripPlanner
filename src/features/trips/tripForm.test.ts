@@ -1,9 +1,7 @@
 import {
   defaultRange,
-  endMinuteOptions,
   isTripWindowError,
   nextRange,
-  startMinuteOptions,
   tripWindowFormError,
   windowFromForm,
 } from './tripForm';
@@ -38,17 +36,6 @@ describe('nextRange (FR-2.3: first click = start, second click = end)', () => {
     expect(nextRange({ from: '2026-05-10', to: '2026-05-14' }, '2026-06-01')).toEqual({
       from: '2026-06-01',
     });
-  });
-});
-
-describe('time options (FR-2.4)', () => {
-  it('offers starts 00:00–23:30 and ends 00:30–24:00 every 30 minutes', () => {
-    expect(startMinuteOptions()).toHaveLength(48);
-    expect(startMinuteOptions()[0]).toBe(0);
-    expect(startMinuteOptions().at(-1)).toBe(1410);
-    expect(endMinuteOptions()).toHaveLength(48);
-    expect(endMinuteOptions()[0]).toBe(30);
-    expect(endMinuteOptions().at(-1)).toBe(1440);
   });
 });
 

@@ -4,10 +4,6 @@
 import {
   addDays,
   compareDates,
-  MAX_END_MINUTE,
-  MAX_START_MINUTE,
-  MIN_END_MINUTE,
-  SLOT_MINUTES,
   validateTripWindow,
   type IsoDate,
   type Minute,
@@ -39,22 +35,6 @@ export function nextRange(range: DayRange, day: IsoDate): DayRange {
   if (!range.from || range.to) return { from: day };
   if (compareDates(day, range.from) < 0) return { from: day, to: range.from };
   return { from: range.from, to: day };
-}
-
-/** Start-time options 00:00–23:30 (FR-2.4). */
-export function startMinuteOptions(): Minute[] {
-  return gridMinutes(0, MAX_START_MINUTE);
-}
-
-/** End-time options 00:30–24:00 (FR-2.4). */
-export function endMinuteOptions(): Minute[] {
-  return gridMinutes(MIN_END_MINUTE, MAX_END_MINUTE);
-}
-
-function gridMinutes(from: Minute, to: Minute): Minute[] {
-  const result: Minute[] = [];
-  for (let m = from; m <= to; m += SLOT_MINUTES) result.push(m);
-  return result;
 }
 
 /** Form-level window problem: an incomplete calendar selection, or a domain `TripWindowError`. */

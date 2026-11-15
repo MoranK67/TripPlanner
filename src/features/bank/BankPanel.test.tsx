@@ -104,7 +104,7 @@ describe('add activity (FR-3.1, FR-3.2)', () => {
     expect(within(dialog).getByLabelText('שם האטרקציה')).toHaveFocus();
     // colorCursor 5 → PALETTE[5] (sky).
     expect(within(dialog).getByRole('radio', { name: 'תכלת' })).toBeChecked();
-    expect(within(dialog).getByLabelText('כמה זמן זה לוקח?')).toHaveValue('60');
+    expect(within(dialog).getByLabelText('כמה זמן זה לוקח?')).toHaveValue('01:00');
 
     fireEvent.change(within(dialog).getByLabelText('שם האטרקציה'), {
       target: { value: '  גלידה ' },
@@ -119,7 +119,7 @@ describe('add activity (FR-3.1, FR-3.2)', () => {
     renderBank();
     fireEvent.click(screen.getByRole('button', { name: '+ הוספה' }));
     fireEvent.change(screen.getByLabelText('שם האטרקציה'), { target: { value: 'גלידה' } });
-    fireEvent.change(screen.getByLabelText('כמה זמן זה לוקח?'), { target: { value: '150' } });
+    fireEvent.change(screen.getByLabelText('כמה זמן זה לוקח?'), { target: { value: '0230' } });
     fireEvent.click(screen.getByRole('radio', { name: 'מנטה' }));
     fireEvent.click(screen.getByRole('button', { name: 'הוספה למאגר' }));
     await waitFor(() =>
@@ -131,18 +131,41 @@ describe('add activity (FR-3.1, FR-3.2)', () => {
     );
   });
 
-  it('offers durations from half an hour to 24 hours with Hebrew labels', () => {
+  it('takes a typed HHMM duration, rounded to the half hour (UX-5)', async () => {
+    repo.create.mockResolvedValue(activity({ id: 'new' }));
     renderBank();
     fireEvent.click(screen.getByRole('button', { name: '+ הוספה' }));
-    const options = within(screen.getByLabelText('כמה זמן זה לוקח?')).getAllByRole('option');
-    expect(options).toHaveLength(48);
-    expect(options.map((o) => o.textContent).slice(0, 4)).toEqual([
-      'חצי שעה',
-      'שעה',
-      'שעה וחצי',
-      'שעתיים',
-    ]);
-    expect(options.at(-1)).toHaveTextContent('24 שעות');
+    const duration = screen.getByLabelText('כמה זמן זה לוקח?');
+    expect(duration).toHaveAttribute('inputmode', 'numeric');
+    expect(duration).toHaveAccessibleDescription('שעות ודקות, לדוגמה 0130 = שעה וחצי');
+    fireEvent.change(screen.getByLabelText('שם האטרקציה'), { target: { value: 'גלידה' } });
+    fireEvent.change(duration, { target: { value: '0145' } });
+    fireEvent.blur(duration);
+    expect(duration).toHaveValue('02:00');
+    expect(screen.getByText(/עוגל ל-02:00/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'הוספה למאגר' }));
+    await waitFor(() =>
+      expect(repo.create).toHaveBeenCalledWith('trip-1', { name: 'גלידה', durationMinutes: 120 }),
+    );
+  });
+
+  it.each([
+    ['0000', 'משך מינימלי חצי שעה'],
+    ['0014', 'משך מינימלי חצי שעה'],
+    ['2430', 'משך מקסימלי 24 שעות'],
+    ['שעה', 'צריך להקליד ספרות בלבד, למשל 0130 או 1:30'],
+    ['', 'צריך להקליד משך זמן, למשל 0130'],
+  ])('blocks saving an invalid duration %j', (text, message) => {
+    renderBank();
+    fireEvent.click(screen.getByRole('button', { name: '+ הוספה' }));
+    fireEvent.change(screen.getByLabelText('שם האטרקציה'), { target: { value: 'גלידה' } });
+    const duration = screen.getByLabelText('כמה זמן זה לוקח?');
+    fireEvent.change(duration, { target: { value: text } });
+    fireEvent.click(screen.getByRole('button', { name: 'הוספה למאגר' }));
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(duration).toHaveFocus();
+    expect(duration).toHaveAttribute('aria-invalid', 'true');
+    expect(repo.create).not.toHaveBeenCalled();
   });
 
   it('requires a name', () => {
@@ -166,9 +189,9 @@ describe('edit activity (FR-3.5, FR-3.6)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'קולוסיאום שעתיים' }));
     const dialog = screen.getByRole('dialog', { name: 'עריכת אטרקציה' });
     expect(within(dialog).getByLabelText('שם האטרקציה')).toHaveValue('קולוסיאום');
-    expect(within(dialog).getByLabelText('כמה זמן זה לוקח?')).toHaveValue('120');
+    expect(within(dialog).getByLabelText('כמה זמן זה לוקח?')).toHaveValue('02:00');
     fireEvent.change(within(dialog).getByLabelText('כמה זמן זה לוקח?'), {
-      target: { value: '180' },
+      target: { value: '3' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'שמירה' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
