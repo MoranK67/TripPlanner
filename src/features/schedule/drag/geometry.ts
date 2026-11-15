@@ -124,3 +124,21 @@ export function autoScrollStep(
   const dx = -speed(pointer.x - area.left) + speed(area.right - pointer.x);
   return { dx, dy };
 }
+
+/**
+ * Which physical side edge of the timetable the pointer is holding during a drag: −1 = left,
+ * 1 = right, 0 = neither. Used by the phone's single-day view (M7.1) to switch to the neighbouring
+ * day when a block is held at the edge. `box` is the scroller's client box horizontally and the
+ * drop area vertically (so the header and whatever lies below the timetable never count); the
+ * zone on the time-column side lies over the time column.
+ */
+export function edgeSide(
+  box: Rect,
+  pointer: Point,
+  { edge = 40, overshoot = 24 }: { edge?: number; overshoot?: number } = {},
+): -1 | 0 | 1 {
+  if (pointer.y < box.top || pointer.y >= box.bottom) return 0;
+  if (pointer.x > box.left - overshoot && pointer.x < box.left + edge) return -1;
+  if (pointer.x >= box.right - edge && pointer.x < box.right + overshoot) return 1;
+  return 0;
+}

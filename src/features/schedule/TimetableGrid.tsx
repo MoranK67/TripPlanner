@@ -6,6 +6,8 @@ import {
   useMemo,
   useRef,
   type CSSProperties,
+  type HTMLAttributes,
+  type ReactNode,
   type Ref,
   type RefObject,
 } from 'react';
@@ -48,8 +50,26 @@ export interface TimetableGridProps {
   columnsRef?: Ref<HTMLDivElement>;
   /** Extra classes for placed blocks (drag affordances). Must be a stable string. */
   blockClassName?: string;
+  /**
+   * Show only `dayCount` days from trip day `firstDay` (phone single-day view, M7.1). Defaults to
+   * all days. Switching days keeps the scroll container (and so the vertical scroll position).
+   */
+  firstDay?: number;
+  dayCount?: number;
+  /**
+   * Replaces the default content of a day's sticky header (the phone's day switcher). It must
+   * render an element with `id={headingId}`: the day column is labelled by it.
+   */
+  renderDayHeader?: (date: IsoDate, dayIndex: number, headingId: string) => ReactNode;
+  /** Pointer handlers on the scroll container (the phone's day swipe). Must be stable. */
+  gestureHandlers?: GestureHandlers;
   className?: string;
 }
+
+export type GestureHandlers = Pick<
+  HTMLAttributes<HTMLDivElement>,
+  'onPointerDown' | 'onPointerUp' | 'onPointerCancel' | 'onPointerLeave'
+>;
 
 const HOUR_PX = 2 * SLOT_HEIGHT_PX;
 
@@ -89,6 +109,10 @@ export const TimetableGrid = memo(function TimetableGrid({
   scrollerRef,
   columnsRef,
   blockClassName,
+  firstDay = 0,
+  dayCount,
+  renderDayHeader,
+  gestureHandlers,
   className,
 }: TimetableGridProps) {
   const { t } = useTranslation();
@@ -96,7 +120,13 @@ export const TimetableGrid = memo(function TimetableGrid({
   const ownScrollerRef = useRef<HTMLDivElement>(null);
   const scroller = scrollerRef ?? ownScrollerRef;
 
-  const days = useMemo(() => tripDays(tripWindow), [tripWindow]);
+  const allDays = useMemo(() => tripDays(tripWindow), [tripWindow]);
+  const days = useMemo(
+    () => (dayCount === undefined ? allDays : allDays.slice(firstDay, firstDay + dayCount)),
+    [allDays, firstDay, dayCount],
+  );
+  /** Trip day index of the first rendered column (headers say "day N" of the whole trip). */
+  const offset = dayCount === undefined ? 0 : firstDay;
   const byDay = useMemo(() => groupByDay(activities), [activities]);
 
   // Stable callbacks so a parent re-render (new inline handlers) does not re-render every column.
@@ -131,9 +161,12 @@ export const TimetableGrid = memo(function TimetableGrid({
       // Focusable so keyboard users can scroll to empty days and hours (WCAG 2.1.1).
       tabIndex={0}
       data-testid="timetable-scroller"
+      {...gestureHandlers}
       className={cx(
         'min-h-0 flex-1 overflow-auto overscroll-contain rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-card)]',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink',
+        // Horizontal finger moves stay with the page (day swipe); vertical ones scroll the hours.
+        gestureHandlers && 'touch-pan-y touch-pinch-zoom',
         className,
       )}
     >
@@ -150,15 +183,22 @@ export const TimetableGrid = memo(function TimetableGrid({
         <div className="sticky start-0 top-0 z-[5] border-b border-line-strong bg-panel" />
         {days.map((date, i) => (
           <div
-            key={date}
-            className="sticky top-0 z-[3] border-s border-b border-line border-b-line-strong bg-panel px-1.5 py-2 text-center"
+            key={renderDayHeader ? 'header' : date}
+            className={cx(
+              'sticky top-0 z-[3] border-s border-b border-line border-b-line-strong bg-panel text-center',
+              renderDayHeader ? 'px-1' : 'px-1.5 py-2',
+            )}
           >
-            <h3 id={`${headingId}-${i}`} className="m-0 font-normal">
-              <span className="block text-sm font-semibold">{formatWeekday(date)}</span>
-              <span className="mt-0.5 block text-xs text-ink-soft">
-                {formatShortDate(date)} · {t('schedule.timetable.dayN', { n: i + 1 })}
-              </span>
-            </h3>
+            {renderDayHeader ? (
+              renderDayHeader(date, offset + i, `${headingId}-${offset + i}`)
+            ) : (
+              <h3 id={`${headingId}-${offset + i}`} className="m-0 font-normal">
+                <span className="block text-sm font-semibold">{formatWeekday(date)}</span>
+                <span className="mt-0.5 block text-xs text-ink-soft">
+                  {formatShortDate(date)} · {t('schedule.timetable.dayN', { n: offset + i + 1 })}
+                </span>
+              </h3>
+            )}
           </div>
         ))}
         <div className="sticky start-0 z-[2] bg-panel" aria-hidden="true">
@@ -188,7 +228,7 @@ export const TimetableGrid = memo(function TimetableGrid({
               <DayColumn
                 key={date}
                 date={date}
-                headingId={`${headingId}-${i}`}
+                headingId={`${headingId}-${offset + i}`}
                 startMinute={bounds?.startMinute ?? 0}
                 endMinute={bounds?.endMinute ?? MINUTES_PER_DAY}
                 activities={byDay.get(date) ?? NO_ACTIVITIES}

@@ -38,7 +38,7 @@ export interface PointerDragConfig<T> {
   /** Targets are compared with this to avoid publishing identical states. */
   sameTarget: (a: T | null, b: T | null) => boolean;
   onDrop: (source: DragSource, target: T | null) => void;
-  onDragStart?: () => void;
+  onDragStart?: (source: DragSource) => void;
   /** Mouse/pen: pixels to move before a drag starts (prototype: 6). */
   moveThreshold?: number;
   /** Touch: hold time before a drag starts. Moving earlier lets the page scroll instead. */
@@ -129,7 +129,7 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'grabbing';
       store.set({ source: s.source, target: null });
-      configRef.current.onDragStart?.();
+      configRef.current.onDragStart?.(s.source);
       s.raf = requestAnimationFrame(frame);
     };
 

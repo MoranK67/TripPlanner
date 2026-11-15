@@ -1,4 +1,4 @@
-import { autoScrollStep, dropArea, hitTestSlot, type GridMetrics } from './geometry';
+import { autoScrollStep, dropArea, edgeSide, hitTestSlot, type GridMetrics } from './geometry';
 
 // A scroller at x 0..800, y 0..600 with a 56 px sticky header and a 64 px time column.
 // 7 columns of 150 px; in RTL the first day sits next to the time column on the right.
@@ -91,5 +91,22 @@ describe('dropArea', () => {
 
   it('removes the header and the time column on the left in LTR', () => {
     expect(dropArea(box, 'ltr', 56, 64)).toEqual(ltr.viewport);
+  });
+});
+
+describe('edgeSide', () => {
+  const area = { left: 0, top: 56, right: 360, bottom: 600 };
+
+  it('reports the physical side edge the pointer holds', () => {
+    expect(edgeSide(area, { x: 10, y: 300 })).toBe(-1);
+    expect(edgeSide(area, { x: -20, y: 300 })).toBe(-1); // a little outside still counts
+    expect(edgeSide(area, { x: 350, y: 300 })).toBe(1);
+    expect(edgeSide(area, { x: 180, y: 300 })).toBe(0);
+  });
+
+  it('ignores the header, anything below the area, and far outside', () => {
+    expect(edgeSide(area, { x: 10, y: 30 })).toBe(0);
+    expect(edgeSide(area, { x: 10, y: 650 })).toBe(0);
+    expect(edgeSide(area, { x: -40, y: 300 })).toBe(0);
   });
 });

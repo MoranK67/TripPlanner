@@ -1,11 +1,17 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
-import { Button, Card, LoadingState, SidebarLayout } from '@/components/ui';
+import { Button, Card, LoadingState } from '@/components/ui';
 import { isAppError } from '@/data';
-import type { Activity, Trip } from '@/domain';
+import { isInBank, type Activity, type Trip } from '@/domain';
 import { BankPanel, useActivityDialogs } from '@/features/bank';
 import { ExportButton } from '@/features/export';
-import { Timetable, TimetableDragRoot, usePlacementActions } from '@/features/schedule';
+import {
+  PlannerLayout,
+  Timetable,
+  TimetableDragRoot,
+  usePlacementActions,
+} from '@/features/schedule';
 import { TripHeaderControls, useTripQuery } from '@/features/trips';
 import { errorMessage } from '@/i18n/errors';
 
@@ -63,6 +69,7 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
   // Placed blocks open the same edit / delete dialogs as the bank (FR-3.4, FR-3.5).
   const timetableDialogs = useActivityDialogs(trip);
   const placement = usePlacementActions(trip.id);
+  const bankCount = useMemo(() => activities.filter(isInBank).length, [activities]);
   return (
     <>
       <h2 className="sr-only">{trip.name}</h2>
@@ -77,9 +84,11 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
         onPlace={placement.place}
         onUnplace={placement.unplace}
       >
-        <SidebarLayout
-          sidebarLabel={t('bank.title')}
-          sidebar={<BankPanel trip={trip} activities={activities} />}
+        {/* Side panel + multi-day grid; on phones a bank bottom sheet + one-day view (M7.1). */}
+        <PlannerLayout
+          bankLabel={t('bank.title')}
+          bankCount={bankCount}
+          bank={<BankPanel trip={trip} activities={activities} />}
         >
           {/* Outline: h1 app title > h2 trip / bank / timetable > h3 day headers (in Timetable). */}
           <h2 className="sr-only">{t('planner.timetable')}</h2>
@@ -89,7 +98,7 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
             onOpenActivity={timetableDialogs.openEdit}
             onDeleteActivity={timetableDialogs.openDelete}
           />
-        </SidebarLayout>
+        </PlannerLayout>
       </TimetableDragRoot>
       {timetableDialogs.dialogs}
     </>

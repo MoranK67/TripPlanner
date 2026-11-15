@@ -28,23 +28,35 @@ import {
   type Trip,
 } from '@/domain';
 import { HEADER_PX, TIME_COL_PX, timeRangeLabel } from '../timetableLayout';
-import { BANK_DROP_OVER_CLASSES, DragRootContext, type DragRootContextValue } from './dragContext';
+import {
+  BANK_DROP_OVER_CLASSES,
+  DragRootContext,
+  type DayView,
+  type DragRootContextValue,
+} from './dragContext';
 import {
   autoScrollStep,
   contains,
   dropArea,
+  edgeSide,
   hitTestSlot,
   type Direction,
   type Point,
 } from './geometry';
-import { useDragSource, useDragState, usePointerDrag, type DragStore } from './usePointerDrag';
+import {
+  useDragSource,
+  useDragState,
+  usePointerDrag,
+  type DragSource,
+  type DragStore,
+} from './usePointerDrag';
 
 /** Where a dragged block would land. */
 export type DropTarget =
   | { kind: 'bank' }
   | {
       kind: 'grid';
-      /** 0 = first trip day. */
+      /** 0 = first trip day (not the visible column: the phone view shows one day of many). */
       dayIndex: number;
       slot: number;
       durationMinutes: number;
@@ -69,18 +81,21 @@ function readDirection(el: Element): Direction {
   return computed === 'rtl' ? 'rtl' : 'ltr';
 }
 
-/** Visible drop area of the scroll container (client box without the sticky header/time column). */
-function visibleDropArea(scroller: HTMLElement, direction: Direction) {
+/** Client box of the scroll container in viewport coordinates (without borders/scrollbars). */
+function clientBox(scroller: HTMLElement) {
   const r = scroller.getBoundingClientRect();
   const left = r.left + scroller.clientLeft;
   const top = r.top + scroller.clientTop;
-  return dropArea(
-    { left, top, right: left + scroller.clientWidth, bottom: top + scroller.clientHeight },
-    direction,
-    HEADER_PX,
-    TIME_COL_PX,
-  );
+  return { left, top, right: left + scroller.clientWidth, bottom: top + scroller.clientHeight };
 }
+
+/** Visible drop area of the scroll container (client box without the sticky header/time column). */
+function visibleDropArea(scroller: HTMLElement, direction: Direction) {
+  return dropArea(clientBox(scroller), direction, HEADER_PX, TIME_COL_PX);
+}
+
+/** How long a block must be held at a side edge of the phone's day view to switch the day. */
+export const EDGE_SWITCH_MS = 650;
 
 export interface TimetableDragRootProps {
   trip: Trip;
@@ -118,6 +133,11 @@ export function TimetableDragRoot({
   const directionRef = useRef<Direction>('rtl');
   // The preview is portalled into the columns layer from here, so it never re-renders the grid.
   const [columnsEl, setColumnsEl] = useState<HTMLDivElement | null>(null);
+  // Phone single-day view (M7.1): the visible days. State for the preview, ref for the frame loop.
+  const [view, setViewState] = useState<DayView | null>(null);
+  const viewRef = useRef<DayView | null>(null);
+  const sourceRef = useRef<DragSource | null>(null);
+  const edgeRef = useRef<{ delta: -1 | 1; since: number } | null>(null);
 
   const days = useMemo(() => tripDays(trip.window), [trip.window]);
   const byId = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities]);
@@ -129,11 +149,12 @@ export function TimetableDragRoot({
     const columns = columnsRef.current;
     const subject = byId.get(id);
     if (!scroller || !columns || !subject) return null;
+    const first = viewRef.current?.start ?? 0;
     const hit = hitTestSlot(
       {
         viewport: visibleDropArea(scroller, directionRef.current),
         columns: columns.getBoundingClientRect(),
-        dayCount: days.length,
+        dayCount: viewRef.current?.count ?? days.length,
         direction: directionRef.current,
         slotHeight: SLOT_HEIGHT_PX,
       },
@@ -141,7 +162,8 @@ export function TimetableDragRoot({
       grabOffsetY,
       blockSlots(subject.durationMinutes),
     );
-    const date = hit && days[hit.dayIndex];
+    const dayIndex = hit ? first + hit.dayIndex : -1;
+    const date = days[dayIndex];
     if (!hit || !date) return null;
     const check = canPlace({ window: trip.window, activities }, subject, {
       date,
@@ -149,7 +171,7 @@ export function TimetableDragRoot({
     });
     return {
       kind: 'grid',
-      dayIndex: hit.dayIndex,
+      dayIndex,
       slot: hit.slot,
       durationMinutes: subject.durationMinutes,
       check,
@@ -176,18 +198,55 @@ export function TimetableDragRoot({
     onPlace(id, date, startMinute);
   };
 
+  /**
+   * Phone day view: holding a block at the left/right edge for EDGE_SWITCH_MS shows the
+   * neighbouring day (and keeps going while held). Not for a placed block dragged by touch: its day
+   * column would unmount with the block the finger is on, and touch events of a removed element
+   * no longer reach the drag root (the browser could start scrolling mid-drag).
+   */
+  const edgeSwitch = (pointer: Point, scroller: HTMLElement) => {
+    const v = viewRef.current;
+    const source = sourceRef.current;
+    const touchMove = source?.pointerType === 'touch' && byId.get(source.id)?.placement;
+    if (!v || !source || touchMove || v.count >= days.length) {
+      edgeRef.current = null;
+      return;
+    }
+    const direction = directionRef.current;
+    const area = visibleDropArea(scroller, direction);
+    const box = clientBox(scroller);
+    const side = edgeSide({ ...box, top: area.top, bottom: area.bottom }, pointer);
+    // Physical side -> day: in RTL the later days lie to the left.
+    const delta: -1 | 1 = direction === 'rtl' ? (side === -1 ? 1 : -1) : side === -1 ? -1 : 1;
+    const next = v.start + delta;
+    if (side === 0 || next < 0 || next + v.count > days.length) {
+      edgeRef.current = null;
+      return;
+    }
+    const now = performance.now();
+    const held = edgeRef.current;
+    if (held?.delta !== delta) {
+      edgeRef.current = { delta, since: now };
+    } else if (now - held.since >= EDGE_SWITCH_MS) {
+      edgeRef.current = { delta, since: now };
+      v.shift(delta);
+    }
+  };
+
   const drag = usePointerDrag<DropTarget>({
     rootRef,
     scrollerRef,
     getAutoScroll: (pointer) => {
       const scroller = scrollerRef.current;
-      return scroller
-        ? autoScrollStep(visibleDropArea(scroller, directionRef.current), pointer)
-        : { dx: 0, dy: 0 };
+      if (!scroller) return { dx: 0, dy: 0 };
+      edgeSwitch(pointer, scroller);
+      return autoScrollStep(visibleDropArea(scroller, directionRef.current), pointer);
     },
     resolveTarget: (source, pointer) => resolveTarget(source.id, pointer, source.grabOffset.y),
     sameTarget,
-    onDragStart: () => {
+    onDragStart: (source) => {
+      sourceRef.current = source;
+      edgeRef.current = null;
       if (scrollerRef.current) directionRef.current = readDirection(scrollerRef.current);
     },
     onDrop: (source, target) => drop(source.id, target),
@@ -215,9 +274,20 @@ export function TimetableDragRoot({
   const setBank = useCallback((el: HTMLElement | null) => {
     bankRef.current = el;
   }, []);
+  const setView = useCallback((next: DayView | null) => {
+    viewRef.current = next;
+    setViewState(next);
+  }, []);
   const context = useMemo<DragRootContextValue>(
-    () => ({ scrollerRef, columnsRef: setColumns, bankRef: setBank }),
-    [setColumns, setBank],
+    () => ({
+      scrollerRef,
+      columnsRef: setColumns,
+      bankRef: setBank,
+      setView,
+      isDragging: () => store.get().source !== null,
+      subscribe: store.subscribe,
+    }),
+    [setColumns, setBank, setView, store],
   );
 
   return (
@@ -225,16 +295,36 @@ export function TimetableDragRoot({
       <div ref={rootRef} className="contents" data-testid="timetable-drag-root">
         {children}
       </div>
-      {columnsEl && createPortal(<DropPreview store={store} dayCount={days.length} />, columnsEl)}
+      {columnsEl &&
+        createPortal(
+          <DropPreview
+            store={store}
+            firstDay={view?.start ?? 0}
+            dayCount={view?.count ?? days.length}
+          />,
+          columnsEl,
+        )}
       <DragGhost store={store} ghostRef={drag.ghostRef} byId={byId} />
     </DragRootContext.Provider>
   );
 }
 
 /** Green/red outline of the snapped target (FR-5.2). Re-renders only when the target changes. */
-function DropPreview({ store, dayCount }: { store: DragStore<DropTarget>; dayCount: number }) {
+function DropPreview({
+  store,
+  firstDay,
+  dayCount,
+}: {
+  store: DragStore<DropTarget>;
+  /** Trip day index of the first visible column. */
+  firstDay: number;
+  /** Number of visible columns. */
+  dayCount: number;
+}) {
   const { target } = useDragState(store);
   if (target?.kind !== 'grid') return null;
+  const column = target.dayIndex - firstDay;
+  if (column < 0 || column >= dayCount) return null;
   const valid = target.check.ok;
   return (
     <div
@@ -247,7 +337,7 @@ function DropPreview({ store, dayCount }: { store: DragStore<DropTarget>; dayCou
         valid ? 'border-ok bg-ok/25' : 'border-danger-ink/40 bg-danger/40',
       )}
       style={{
-        insetInlineStart: `calc(${target.dayIndex} * 100% / ${dayCount} + 4px)`,
+        insetInlineStart: `calc(${column} * 100% / ${dayCount} + 4px)`,
         width: `calc(100% / ${dayCount} - 8px)`,
         top: target.slot * SLOT_HEIGHT_PX + 1,
         height: activityBlockHeight(target.durationMinutes),
