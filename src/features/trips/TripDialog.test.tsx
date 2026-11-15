@@ -26,13 +26,19 @@ function Harness({ trip }: { trip?: Trip }) {
   );
 }
 
+/**
+ * Waiting for the lazy calendar can exceed the default 1 s findBy timeout on a slow CI runner
+ * (first render of react-day-picker), so allow more; it stays below the 15 s test timeout.
+ */
+const LAZY_CALENDAR = { timeout: 10_000 };
+
 /** Renders the dialog and waits for the lazily loaded calendar. */
 async function renderDialog(trip?: Trip) {
   const result = renderRoute(<Harness trip={trip} />, {
     path: '/trips',
     extraRoutes: [{ path: '/trips/:id', element: <p>דף הטיול החדש</p> }],
   });
-  await screen.findByRole('grid');
+  await screen.findByRole('grid', undefined, LAZY_CALENDAR);
   return result;
 }
 
