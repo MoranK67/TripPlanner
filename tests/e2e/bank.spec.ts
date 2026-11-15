@@ -3,7 +3,15 @@
 import { rest } from './fake-backend/server';
 import { expect, test, toast } from './support/fixtures';
 import { t } from './support/i18n';
-import { activityDialog, addActivity, bank, bankBlock, pickColor } from './support/pages';
+import {
+  activityDialog,
+  addActivity,
+  bank,
+  bankBlock,
+  openBank,
+  pickColor,
+  typeTime,
+} from './support/pages';
 import { TRIPS } from '../fixtures/testData';
 
 const PINK = '#FFD6E0';
@@ -21,6 +29,7 @@ test('add: validation, automatic colour progression and a custom colour (FR-3.1,
 }) => {
   const trip = backend.db.seedTrip(user, TRIPS.rome);
   await page.goto(`/trips/${trip.id}`);
+  await openBank(page);
   await expect(bank(page).getByText(t('bank.empty').split('\n')[0]!)).toBeVisible();
 
   // An empty name is flagged at the field.
@@ -36,7 +45,7 @@ test('add: validation, automatic colour progression and a custom colour (FR-3.1,
   await expect(dialog).toBeHidden();
   expect(backend.requestsTo(rest('POST', 'activities'))).toHaveLength(0);
 
-  await addActivity(page, 'שוק קמפו דה פיורי', { duration: 'שעה וחצי' });
+  await addActivity(page, 'שוק קמפו דה פיורי', { duration: '0130' });
   await bank(page)
     .getByRole('button', { name: t('bank.add') })
     .click();
@@ -88,6 +97,7 @@ test('edit: the dialog is prefilled and saves name, duration and colour (FR-3.5)
 }) => {
   const trip = backend.db.seedTrip(user, TRIPS.rome, [{ name: 'מוזיאון', duration_minutes: 60 }]);
   await page.goto(`/trips/${trip.id}`);
+  await openBank(page);
   await bankBlock(page, 'מוזיאון')
     .getByRole('button', { name: /מוזיאון/ })
     .first()
@@ -95,9 +105,11 @@ test('edit: the dialog is prefilled and saves name, duration and colour (FR-3.5)
 
   const dialog = activityDialog(page, 'edit');
   await expect(dialog.getByLabel(t('bank.dialog.name'))).toHaveValue('מוזיאון');
+  await expect(dialog.getByLabel(t('bank.dialog.duration'))).toHaveValue('01:00');
   await expect(dialog.getByRole('radio', { name: t('common.colors.pink') })).toBeChecked();
   await dialog.getByLabel(t('bank.dialog.name')).fill('מוזיאוני הוותיקן');
-  await dialog.getByLabel(t('bank.dialog.duration')).selectOption({ label: 'שעתיים' });
+  await typeTime(dialog.getByLabel(t('bank.dialog.duration')), '0200', '02:00');
+  await expect(dialog.getByText(t('common.timeInput.rounded', { time: '02:00' }))).toHaveCount(0);
   await pickColor(dialog, t('common.colors.sky'));
   await dialog.getByRole('button', { name: t('common.save') }).click();
 
@@ -122,12 +134,15 @@ test('edit: "returned to bank" from the server is announced (FR-3.6)', async ({
   const trip = backend.db.seedTrip(user, TRIPS.rome, [{ name: 'שייט בטיבר' }]);
   backend.db.forceReturnedToBank = true;
   await page.goto(`/trips/${trip.id}`);
+  await openBank(page);
   await bankBlock(page, 'שייט בטיבר')
     .getByRole('button', { name: /שייט בטיבר/ })
     .first()
     .click();
   const dialog = activityDialog(page, 'edit');
-  await dialog.getByLabel(t('bank.dialog.duration')).selectOption({ label: '3 שעות' });
+  // 2:50 is rounded to the nearest half hour (3:00), and the dialog says so (UX-5).
+  await typeTime(dialog.getByLabel(t('bank.dialog.duration')), '0250', '03:00');
+  await expect(dialog.getByText(t('common.timeInput.rounded', { time: '03:00' }))).toBeVisible();
   await dialog.getByRole('button', { name: t('common.save') }).click();
   await expect(dialog).toBeHidden();
   await expect(toast(page, t('bank.returnedToBank'))).toBeVisible();
@@ -145,6 +160,7 @@ test('delete asks first and moves focus to the next block, else the previous (FR
     { name: 'שלוש' },
   ]);
   await page.goto(`/trips/${trip.id}`);
+  await openBank(page);
   const confirm = page.getByRole('alertdialog', { name: t('bank.deleteConfirm.title') });
   const deleteOf = (name: string) =>
     bank(page).getByRole('button', { name: t('common.activityBlock.delete', { name }) });
@@ -181,24 +197,37 @@ test('delete asks first and moves focus to the next block, else the previous (FR
   expect(backend.db.activities).toHaveLength(0);
 });
 
-test('layout: bank beside the timetable on desktop, above it on phones (2 blocks per row)', async ({
+test('layout: bank beside the timetable on desktop, a bottom sheet under it on phones (M7.1)', async ({
   page,
   backend,
   user,
 }, testInfo) => {
   const trip = backend.db.seedTrip(user, TRIPS.rome, [{ name: 'א' }, { name: 'ב' }]);
   await page.goto(`/trips/${trip.id}`);
-  const bankBox = (await bank(page).boundingBox())!;
   const timetable = page.getByRole('region', { name: t('planner.timetable') });
-  const timetableBox = (await timetable.boundingBox())!;
-  const first = (await bankBlock(page, 'א').boundingBox())!;
-  const second = (await bankBlock(page, 'ב').boundingBox())!;
 
   if (testInfo.project.name === 'phone') {
-    expect(bankBox.y + bankBox.height).toBeLessThanOrEqual(timetableBox.y);
+    // Collapsed: only the handle with the bank's name and count; the blocks are hidden.
+    const handle = bank(page).getByRole('button', { expanded: false });
+    await expect(handle).toHaveText(
+      `${t('bank.title')} ${t('schedule.sheet.count', { count: 2 })}`,
+    );
+    await expect(bankBlock(page, 'א')).toBeHidden();
+    await openBank(page);
+    await expect(bankBlock(page, 'א')).toBeVisible();
+    const bankBox = (await bank(page).boundingBox())!;
+    const timetableBox = (await timetable.boundingBox())!;
+    expect(bankBox.y).toBeGreaterThanOrEqual(timetableBox.y + timetableBox.height); // below
+    const first = (await bankBlock(page, 'א').boundingBox())!;
+    const second = (await bankBlock(page, 'ב').boundingBox())!;
     expect(Math.abs(first.y - second.y)).toBeLessThan(1); // same row
     expect(second.x).toBeLessThan(first.x); // RTL: the second block is to the left
   } else {
+    await openBank(page);
+    const bankBox = (await bank(page).boundingBox())!;
+    const timetableBox = (await timetable.boundingBox())!;
+    const first = (await bankBlock(page, 'א').boundingBox())!;
+    const second = (await bankBlock(page, 'ב').boundingBox())!;
     // RTL: the side panel is on the right of the timetable, side by side.
     expect(bankBox.x).toBeGreaterThanOrEqual(timetableBox.x + timetableBox.width);
     expect(second.y).toBeGreaterThan(first.y); // one block per row

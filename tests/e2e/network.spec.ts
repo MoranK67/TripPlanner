@@ -5,7 +5,7 @@ import type { Locator, Page } from '@playwright/test';
 import { rest } from './fake-backend/server';
 import { expect, header, test, toast } from './support/fixtures';
 import { t } from './support/i18n';
-import { activityDialog, bank, bankBlock, tripDialog } from './support/pages';
+import { activityDialog, bank, bankBlock, openBank, tripDialog } from './support/pages';
 import { TRIPS } from '../fixtures/testData';
 
 const NETWORK = t('errors.kinds.network');
@@ -62,6 +62,7 @@ test('trip page: load failure offers retry (not "not found")', async ({ page, ba
 
   backend.clearFaults();
   await page.getByRole('button', { name: t('common.retry') }).click();
+  await openBank(page);
   await expect(bankBlock(page, 'פורום רומאנום')).toBeVisible();
 });
 
@@ -132,6 +133,7 @@ test('add activity offline: error in the dialog, retry succeeds', async ({
 }) => {
   const trip = backend.db.seedTrip(user, TRIPS.rome);
   await page.goto(`/trips/${trip.id}`);
+  await openBank(page);
   await bank(page)
     .getByRole('button', { name: t('bank.add') })
     .click();
@@ -156,6 +158,7 @@ test('delete activity offline: the block comes back and an error toast is shown'
 }) => {
   const trip = backend.db.seedTrip(user, TRIPS.rome, [{ name: 'ספרדי' }, { name: 'בורגזה' }]);
   await page.goto(`/trips/${trip.id}`);
+  await openBank(page);
   backend.fail(rest('DELETE', 'activities'), { kind: 'network' }, 1);
   await bank(page)
     .getByRole('button', { name: t('common.activityBlock.delete', { name: 'ספרדי' }) })

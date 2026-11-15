@@ -28,15 +28,50 @@ export async function nextMonth(dialog: Locator, times = 1): Promise<void> {
   }
 }
 
-/** Times are option labels, e.g. '09:00', '24:00'. */
-export async function setTripTimes(dialog: Locator, start?: string, end?: string): Promise<void> {
-  if (start) await dialog.getByLabel(t('trips.dialog.startTime')).selectOption({ label: start });
-  if (end) await dialog.getByLabel(t('trips.dialog.endTime')).selectOption({ label: end });
+/**
+ * Types into a typed time field (UX-5, `TimeInput`) the way a user does: the digits (e.g.
+ * '0130'), then leaves the field. On blur the field rewrites itself as 'HH:MM' (rounded to the
+ * half hour), which is asserted as `shown`.
+ */
+export async function typeTime(field: Locator, typed: string, shown: string): Promise<void> {
+  await field.fill(typed);
+  await field.blur();
+  await expect(field).toHaveValue(shown);
 }
 
-/** The bank side panel (an `aside` landmark named "מאגר אטרקציות"). */
+/** Times as shown, e.g. '09:00', '24:00'; they are typed as HHMM ('0900', '2400'). */
+export async function setTripTimes(dialog: Locator, start?: string, end?: string): Promise<void> {
+  if (start) {
+    await typeTime(dialog.getByLabel(t('trips.dialog.startTime')), start.replace(':', ''), start);
+  }
+  if (end) await typeTime(dialog.getByLabel(t('trips.dialog.endTime')), end.replace(':', ''), end);
+}
+
+/**
+ * The bank (an `aside` landmark named "מאגר אטרקציות"): the side panel on desktop, the bottom
+ * sheet on phones (see `openBank`).
+ */
 export function bank(page: Page): Locator {
   return page.getByRole('complementary', { name: t('bank.title') });
+}
+
+/** Same breakpoint as the app's phone layout (< 601 px, DEC-018 / M7.1). */
+export function isPhone(page: Page): boolean {
+  return (page.viewportSize()?.width ?? Infinity) < 601;
+}
+
+/**
+ * Makes the bank's activities reachable. Desktop: the side panel is always shown (no-op).
+ * Phone (M7.1): the bank is a bottom sheet that starts collapsed; tap its handle
+ * ("מאגר אטרקציות (N)", aria-expanded) to open it. Safe to call when it is already open.
+ */
+export async function openBank(page: Page): Promise<void> {
+  const sheet = bank(page);
+  await expect(sheet).toBeVisible();
+  if (!isPhone(page)) return;
+  const handle = sheet.locator(':scope > button[aria-expanded]');
+  if ((await handle.getAttribute('aria-expanded')) !== 'true') await handle.click();
+  await expect(handle).toHaveAttribute('aria-expanded', 'true');
 }
 
 /** The open button of a bank block (its accessible name is "<name> <duration>"). */
@@ -52,19 +87,28 @@ export function activityDialog(page: Page, mode: 'new' | 'edit' = 'new'): Locato
   });
 }
 
-/** Adds an activity through the bank's dialog and waits until its block is shown. */
+/**
+ * Adds an activity through the bank's dialog and waits until its block is shown.
+ * `duration` is typed as HHMM, e.g. '0130' (shown as '01:30' after leaving the field).
+ */
 export async function addActivity(
   page: Page,
   name: string,
   options: { duration?: string; color?: string } = {},
 ): Promise<void> {
+  await openBank(page);
   await bank(page)
     .getByRole('button', { name: t('bank.add') })
     .click();
   const dialog = activityDialog(page);
   await dialog.getByLabel(t('bank.dialog.name')).fill(name);
   if (options.duration) {
-    await dialog.getByLabel(t('bank.dialog.duration')).selectOption({ label: options.duration });
+    const d = options.duration;
+    await typeTime(
+      dialog.getByLabel(t('bank.dialog.duration')),
+      d,
+      `${d.slice(0, 2)}:${d.slice(2)}`,
+    );
   }
   if (options.color) await pickColor(dialog, options.color);
   await dialog.getByRole('button', { name: t('bank.dialog.add') }).click();

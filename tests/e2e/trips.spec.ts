@@ -4,7 +4,7 @@
 import { rest } from './fake-backend/server';
 import { expect, header, test, toast } from './support/fixtures';
 import { t } from './support/i18n';
-import { bank, nextMonth, pickDay, setTripTimes, tripDialog } from './support/pages';
+import { bank, nextMonth, openBank, pickDay, setTripTimes, tripDialog } from './support/pages';
 import { TRIPS } from '../fixtures/testData';
 
 test.beforeEach(async ({ signIn }) => {
@@ -41,7 +41,8 @@ test.describe('trips list', () => {
     });
     await expect(page).toHaveURL(new RegExp(`/trips/${created.id}$`));
     await expect(header(page).getByText('15.3 09:00 עד 18.3 18:00 · 4 ימים')).toBeVisible();
-    await expect(bank(page).getByText(t('bank.title'))).toBeVisible();
+    await openBank(page);
+    await expect(bank(page).getByRole('heading', { name: t('bank.title') })).toBeVisible();
   });
 
   test('an empty name becomes the default name; a click before the start swaps the days', async ({
@@ -198,6 +199,7 @@ test.describe('trip page', () => {
       { name: 'ג׳לטו' },
     ]);
     await page.goto(`/trips/${trip.id}`);
+    await openBank(page);
     await expect(bank(page).getByRole('listitem')).toHaveCount(1);
 
     await header(page)
@@ -234,6 +236,9 @@ test.describe('trip page', () => {
       .click();
     const dialog = tripDialog(page, 'edit');
     await dialog.getByLabel(t('trips.dialog.name')).fill('רומא והוותיקן');
+    // Prefilled in the typed fields' HH:MM display (UX-5).
+    await expect(dialog.getByLabel(t('trips.dialog.startTime'))).toHaveValue('10:00');
+    await expect(dialog.getByLabel(t('trips.dialog.endTime'))).toHaveValue('20:00');
     await setTripTimes(dialog, undefined, '22:00');
     await dialog.getByRole('button', { name: t('common.save') }).click();
     await expect(dialog).toBeHidden();
