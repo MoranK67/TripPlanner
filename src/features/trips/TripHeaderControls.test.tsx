@@ -1,7 +1,11 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { configure, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { AppError } from '@/data';
 import { makeSummary, makeTrip, renderRoute } from './testUtils';
 import { TripHeaderControls } from './TripHeaderControls';
+
+// Under load (parallel workers, a busy machine) data and lazy chunks can take longer than
+// Testing Library's 1 s default; give findBy / waitFor more room in this file.
+configure({ asyncUtilTimeout: 5_000 });
 
 const repo = vi.hoisted(() => ({
   list: vi.fn(),
@@ -32,7 +36,7 @@ function header() {
 // The calendar is lazy-loaded; transform it once up front so no single test pays for it.
 beforeAll(async () => {
   await import('./TripRangeCalendar');
-}, 60_000);
+}, 120_000);
 
 beforeEach(() => {
   for (const fn of Object.values(repo)) fn.mockReset();
@@ -110,5 +114,26 @@ describe('TripHeaderControls', () => {
       .map((b) => b.textContent);
     expect(buttons.indexOf('ייצוא')).toBeGreaterThanOrEqual(0);
     expect(buttons.indexOf('ייצוא')).toBeLessThan(buttons.indexOf('עריכה'));
+  });
+});
+
+describe('TripHeaderControls offline (M7.3, FR-8.3)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('disables edit, delete and new trip with the reason; switching trips still works', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const { router } = renderControls();
+    for (const name of ['עריכה', 'מחיקה', '+ טיול חדש']) {
+      const button = header().getByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button.getAttribute('title')).toMatch(/^אין חיבור לאינטרנט/);
+    }
+    const select = header().getByRole('combobox', { name: 'בחירת טיול' });
+    await header().findByRole('option', { name: 'פריז' });
+    fireEvent.change(select, { target: { value: 'trip-2' } });
+    expect(router.state.location.pathname).toBe('/trips/trip-2');
+    expect(repo.delete).not.toHaveBeenCalled();
   });
 });

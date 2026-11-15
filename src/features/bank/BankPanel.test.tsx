@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AppError } from '@/data';
 import { PALETTE, type Activity, type Trip, type TripWithActivities } from '@/domain';
 import { ToastProvider } from '@/components/ui';
@@ -84,7 +84,7 @@ describe('BankPanel list', () => {
     const items = within(screen.getByRole('list', { name: 'אטרקציות במאגר' })).getAllByRole(
       'listitem',
     );
-    expect(items.map((li) => li.textContent)).toEqual(['קולוסיאוםשעתיים×', 'שייט בנהרשעה וחצי×']);
+    expect(items.map((li) => li.textContent)).toEqual(['קולוסיאום שעתיים×', 'שייט בנהר שעה וחצי×']);
     expect(screen.queryByText('מוזיאון')).not.toBeInTheDocument();
   });
 
@@ -319,6 +319,56 @@ describe('dialogs while saving and focus after delete', () => {
       expect(
         queryClient.getQueryData<TripWithActivities>(tripKeys.detail('trip-1'))?.trip.colorCursor,
       ).toBe(0),
+    );
+  });
+});
+
+describe('offline (M7.3, FR-8.3)', () => {
+  const REASON = 'אין חיבור לאינטרנט, אז אי אפשר לשמור שינויים כרגע. העריכה תחזור כשהחיבור יחזור.';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('is read-only: add, import and × are disabled with the reason', () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    renderBank();
+    for (const name of ['+ הוספה', 'ייבוא רשימה']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', REASON);
+    }
+    const remove = screen.getByRole('button', { name: 'מחיקת קולוסיאום' });
+    expect(remove).toHaveAttribute('aria-disabled', 'true');
+    expect(remove).toHaveAccessibleDescription(REASON);
+    fireEvent.click(remove);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('still opens an activity, but its dialog cannot save (no request is made)', () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    renderBank();
+    fireEvent.click(screen.getByRole('button', { name: 'קולוסיאום שעתיים' }));
+    const dialog = screen.getByRole('dialog', { name: 'עריכת אטרקציה' });
+    expect(within(dialog).getByText(REASON)).toBeInTheDocument();
+    const save = within(dialog).getByRole('button', { name: 'שמירה' });
+    expect(save).toBeDisabled();
+    // Enter in a field submits the form: still nothing is sent.
+    fireEvent.submit(save.closest('form')!);
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('enables editing again when the connection returns', () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    renderBank();
+    expect(screen.getByRole('button', { name: '+ הוספה' })).toBeDisabled();
+    onLine.mockReturnValue(true);
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(screen.getByRole('button', { name: '+ הוספה' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'מחיקת קולוסיאום' })).not.toHaveAttribute(
+      'aria-disabled',
     );
   });
 });

@@ -178,3 +178,21 @@ describe('restore (FR-8.1)', () => {
     expect(screen.getByRole('dialog', { name: 'שחזור טיולים מקובץ גיבוי' })).toBeInTheDocument();
   });
 });
+
+describe('offline (M7.3, FR-8.3)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('disables saving and restoring a backup, with the reason', () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    setup();
+    for (const name of ['שמירת גיבוי', 'שחזור מגיבוי']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button.getAttribute('title')).toMatch(/^אין חיבור לאינטרנט/);
+    }
+    fireEvent.click(exportButton());
+    expect(repo.exportAll).not.toHaveBeenCalled();
+  });
+});

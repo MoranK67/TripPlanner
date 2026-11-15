@@ -39,6 +39,11 @@ export interface PointerDragConfig<T> {
   sameTarget: (a: T | null, b: T | null) => boolean;
   onDrop: (source: DragSource, target: T | null) => void;
   onDragStart?: (source: DragSource) => void;
+  /**
+   * Asked when a drag would start (threshold passed / long press done). `false` drops the press
+   * silently (no ghost, no drop); the caller explains why (e.g. offline, M7.3).
+   */
+  canStart?: (source: DragSource) => boolean;
   /** Mouse/pen: pixels to move before a drag starts (prototype: 6). */
   moveThreshold?: number;
   /** Touch: hold time before a drag starts. Moving earlier lets the page scroll instead. */
@@ -53,6 +58,8 @@ interface Session {
   source: DragSource;
   pointer: Point;
   started: boolean;
+  /** `canStart` said no: ignore the rest of this press and swallow its click. */
+  refused: boolean;
   timer: number | undefined;
   raf: number | undefined;
 }
@@ -124,6 +131,12 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
     };
 
     const start = (s: Session) => {
+      const allowed = configRef.current.canStart?.(s.source) ?? true;
+      if (!allowed) {
+        // Keep the session until the pointer is released, so its click does not open the block.
+        s.refused = true;
+        return;
+      }
       s.started = true;
       s.element.dataset.dragging = 'true';
       document.body.style.userSelect = 'none';
@@ -143,7 +156,11 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
       window.removeEventListener('keydown', onKey, true);
-      if (!s.started) return;
+      if (!s.started) {
+        // A refused drag still ends in a click on the block: it must not open the edit dialog.
+        if (s.refused && drop) releaseClickGuard = swallowNextClick();
+        return;
+      }
       delete s.element.dataset.dragging;
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
@@ -160,6 +177,7 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
       const s = session;
       if (!s || e.pointerId !== s.pointerId) return;
       s.pointer = { x: e.clientX, y: e.clientY };
+      if (s.refused) return;
       if (s.started) {
         e.preventDefault();
         return; // the frame loop picks up the new position
@@ -205,6 +223,7 @@ export function usePointerDrag<T>(config: PointerDragConfig<T>): PointerDrag<T> 
         element,
         pointer,
         started: false,
+        refused: false,
         timer: undefined,
         raf: undefined,
         source: {

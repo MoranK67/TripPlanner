@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Button, Card, HeaderActions, LoadingState } from '@/components/ui';
+import { Button, Card, HeaderActions, LoadingState, useCanEdit } from '@/components/ui';
 import { paletteColorAt, type TripSummary } from '@/domain';
 import { errorMessage } from '@/i18n/errors';
 import { useTripsQuery } from './hooks';
@@ -20,13 +20,16 @@ export interface TripsPageProps {
 export function TripsPage({ headerActions }: TripsPageProps = {}) {
   const { t } = useTranslation();
   const trips = useTripsQuery();
+  const { canEdit, reason } = useCanEdit();
   const [creating, setCreating] = useState(false);
   const openCreate = () => setCreating(true);
 
   let body;
   if (trips.isPending) {
     body = <LoadingState />;
-  } else if (trips.isError) {
+  } else if (trips.data === undefined) {
+    // Only when there is nothing to show: a failed refetch keeps the (cached) list on screen,
+    // e.g. offline after a reload (M7.3).
     body = (
       <Card className="mx-auto max-w-md text-center">
         <p role="alert" className="mt-0 mb-4 leading-relaxed">
@@ -38,7 +41,7 @@ export function TripsPage({ headerActions }: TripsPageProps = {}) {
       </Card>
     );
   } else if (trips.data.length === 0) {
-    body = <EmptyTrips onCreate={openCreate} />;
+    body = <EmptyTrips onCreate={openCreate} disabledReason={reason} />;
   } else {
     body = (
       <ul className="m-0 grid list-none gap-3 p-0 tablet:grid-cols-2 tablet:gap-4 desktop:grid-cols-3">
@@ -54,7 +57,7 @@ export function TripsPage({ headerActions }: TripsPageProps = {}) {
   return (
     <div className="mx-auto max-w-5xl">
       <HeaderActions>
-        <Button variant="primary" size="sm" onClick={openCreate}>
+        <Button variant="primary" size="sm" disabled={!canEdit} title={reason} onClick={openCreate}>
           {t('trips.new')}
         </Button>
         {headerActions}
@@ -90,7 +93,14 @@ function TripCard({ trip, accent }: { trip: TripSummary; accent: string }) {
 }
 
 /** Prototype empty state: pastel blocks, a short explanation and one clear action. */
-function EmptyTrips({ onCreate }: { onCreate: () => void }) {
+function EmptyTrips({
+  onCreate,
+  disabledReason,
+}: {
+  onCreate: () => void;
+  /** Set while creating is impossible (offline): the button is disabled with this reason. */
+  disabledReason?: string;
+}) {
   const { t } = useTranslation();
   const bars = [34, 52, 24, 42];
   return (
@@ -107,7 +117,12 @@ function EmptyTrips({ onCreate }: { onCreate: () => void }) {
         </div>
         <h3 className="mt-0 mb-2 text-[22px] font-bold">{t('trips.empty.title')}</h3>
         <p className="mt-0 mb-[22px] leading-relaxed text-ink-soft">{t('trips.empty.body')}</p>
-        <Button variant="primary" onClick={onCreate}>
+        <Button
+          variant="primary"
+          disabled={disabledReason !== undefined}
+          title={disabledReason}
+          onClick={onCreate}
+        >
           {t('trips.empty.create')}
         </Button>
       </Card>

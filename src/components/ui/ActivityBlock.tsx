@@ -1,4 +1,4 @@
-import { forwardRef, useId, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDurationHe, isHexColor, normalizeHexColor, PALETTE } from '@/domain';
 import { activityBlockHeight, isShortBlock, SLOT_HEIGHT_PX } from './activityBlockLayout';
@@ -23,6 +23,11 @@ export interface ActivityBlockProps extends Omit<
   onOpen?: () => void;
   /** Shows the × button. The caller must confirm with ConfirmDialog before deleting (FR-3.4). */
   onDelete?: () => void;
+  /**
+   * Set while deleting is impossible (e.g. offline, M7.3): the × stays in place and focusable but
+   * is `aria-disabled`, ignores clicks, and offers this reason as its title / description.
+   */
+  deleteDisabledReason?: string;
   /** Pixel height of one slot. Keep the default so bank and timetable share one scale. */
   slotHeight?: number;
 }
@@ -53,6 +58,7 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
     meta,
     onOpen,
     onDelete,
+    deleteDisabledReason,
     slotHeight = SLOT_HEIGHT_PX,
     className,
     style,
@@ -61,10 +67,10 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
   ref,
 ) {
   const { t } = useTranslation();
-  const id = useId();
   const short = isShortBlock(durationMinutes);
   const blockColor = isHexColor(color) ? normalizeHexColor(color) : FALLBACK_COLOR;
   const subtitle = meta ?? formatDurationHe(durationMinutes);
+  const deleteDisabled = deleteDisabledReason !== undefined;
 
   const bodyClass = cx(
     'flex size-full min-w-0 px-2.5 text-start text-block-ink',
@@ -75,7 +81,6 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
   const content = (
     <>
       <span
-        id={`${id}-name`}
         className={cx(
           'block text-[13px] leading-[1.3] font-semibold',
           short ? 'min-w-0 flex-1 truncate' : '[overflow-wrap:anywhere]',
@@ -83,8 +88,9 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
       >
         {name}
       </span>
+      {/* A real space so the name computed from content reads "קפה 09:00–10:00" whatever the CSS
+          display. Whitespace-only text between flex items is not rendered, so layout is unchanged. */}{' '}
       <span
-        id={`${id}-meta`}
         className={cx(
           'block text-[11.5px] text-block-ink-soft',
           short ? 'shrink-0 whitespace-nowrap' : 'mt-px',
@@ -123,8 +129,9 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
         <button
           type="button"
           onClick={onOpen}
-          // Name + meta as separate words ("קפה 09:00–10:00"), independent of CSS display.
-          aria-labelledby={`${id}-name ${id}-meta`}
+          // The accessible name comes from the visible content ("name meta"), so it always
+          // contains the visible text in order (WCAG 2.5.3 Label in Name; axe
+          // label-content-name-mismatch). Don't add aria-label / aria-labelledby here.
           className={cx(
             bodyClass,
             'cursor-pointer border-0 bg-transparent',
@@ -140,13 +147,19 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
       {onDelete && (
         <button
           type="button"
-          onClick={onDelete}
+          // aria-disabled (not `disabled`), so a focused × keeps focus when the connection drops.
+          onClick={deleteDisabled ? undefined : onDelete}
+          aria-disabled={deleteDisabled || undefined}
+          title={deleteDisabledReason}
           aria-label={t('common.activityBlock.delete', { name })}
           // The timetable's pointer engine (M5) never starts a drag from elements marked like this.
           data-no-drag=""
           className={cx(
-            'absolute end-1 grid size-5 cursor-pointer place-items-center rounded-full border-0 bg-panel/75 p-0',
-            'text-sm leading-none text-ink-soft transition hover:bg-panel hover:text-danger-ink',
+            'absolute end-1 grid size-5 place-items-center rounded-full border-0 bg-panel/75 p-0',
+            'text-sm leading-none text-ink-soft transition',
+            deleteDisabled
+              ? 'cursor-not-allowed'
+              : 'cursor-pointer hover:bg-panel hover:text-danger-ink',
             // Hidden until the block is hovered or focused; always visible on touch screens.
             'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-85',
             'focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-accent-ink',

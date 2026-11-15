@@ -8,6 +8,7 @@ import {
   addActivity,
   bank,
   bankBlock,
+  openActivityEditor,
   openBank,
   pickColor,
   typeTime,
@@ -97,11 +98,7 @@ test('edit: the dialog is prefilled and saves name, duration and colour (FR-3.5)
 }) => {
   const trip = backend.db.seedTrip(user, TRIPS.rome, [{ name: 'מוזיאון', duration_minutes: 60 }]);
   await page.goto(`/trips/${trip.id}`);
-  await openBank(page);
-  await bankBlock(page, 'מוזיאון')
-    .getByRole('button', { name: /מוזיאון/ })
-    .first()
-    .click();
+  await openActivityEditor(page, 'מוזיאון');
 
   const dialog = activityDialog(page, 'edit');
   await expect(dialog.getByLabel(t('bank.dialog.name'))).toHaveValue('מוזיאון');
@@ -134,11 +131,7 @@ test('edit: "returned to bank" from the server is announced (FR-3.6)', async ({
   const trip = backend.db.seedTrip(user, TRIPS.rome, [{ name: 'שייט בטיבר' }]);
   backend.db.forceReturnedToBank = true;
   await page.goto(`/trips/${trip.id}`);
-  await openBank(page);
-  await bankBlock(page, 'שייט בטיבר')
-    .getByRole('button', { name: /שייט בטיבר/ })
-    .first()
-    .click();
+  await openActivityEditor(page, 'שייט בטיבר');
   const dialog = activityDialog(page, 'edit');
   // 2:50 is rounded to the nearest half hour (3:00), and the dialog says so (UX-5).
   await typeTime(dialog.getByLabel(t('bank.dialog.duration')), '0250', '03:00');

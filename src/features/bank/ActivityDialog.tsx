@@ -8,7 +8,9 @@ import {
   FormError,
   Input,
   Modal,
+  OfflineNote,
   TimeInput,
+  useCanEdit,
   useToast,
 } from '@/components/ui';
 import { isAppError } from '@/data';
@@ -89,6 +91,7 @@ function ActivityForm({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const { canEdit, reason: offlineReason } = useCanEdit();
   const createActivity = useCreateActivity(tripId);
   const updateActivity = useUpdateActivity(tripId);
   const mutation = activity ? updateActivity : createActivity;
@@ -145,6 +148,8 @@ function ActivityForm({
       durationRef.current?.focus();
       return;
     }
+    // Offline the save button is disabled; Enter in a field must not start a write either (M7.3).
+    if (!canEdit) return;
     if (activity) {
       const patch: ActivityPatch = { name: trimmed, durationMinutes: duration, color };
       updateActivity.mutate(
@@ -169,6 +174,7 @@ function ActivityForm({
 
   return (
     <form noValidate onSubmit={handleSubmit}>
+      <OfflineNote />
       {generalError && <FormError>{generalError}</FormError>}
       <Field label={t('bank.dialog.name')} error={shownNameError}>
         <Input
@@ -198,7 +204,13 @@ function ActivityForm({
         className="mb-3.5"
       />
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="primary" loading={mutation.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={mutation.isPending}
+          disabled={!canEdit}
+          title={offlineReason}
+        >
           {activity ? t('common.save') : t('bank.dialog.add')}
         </Button>
         <Button variant="ghost" onClick={onDone} disabled={mutation.isPending}>

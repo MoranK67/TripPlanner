@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, Outlet } from 'react-router-dom';
 import { HeaderSlotProvider } from '@/components/ui';
 import { SignOutButton } from '@/features/auth';
+import { OfflineBanner } from './OfflineBanner';
 import { ServerStatus } from './ServerStatus';
 
 export const MAIN_CONTENT_ID = 'main-content';
@@ -44,6 +45,7 @@ export function AppLayout() {
           className="flex w-full flex-wrap items-center gap-2 empty:hidden tablet:w-auto"
         />
       </header>
+      <OfflineBanner />
       <main
         id={MAIN_CONTENT_ID}
         tabIndex={-1}

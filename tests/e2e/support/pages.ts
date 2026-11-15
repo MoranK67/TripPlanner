@@ -81,6 +81,25 @@ export function bankBlock(page: Page, name: string): Locator {
     .filter({ has: page.getByTitle(name, { exact: true }) });
 }
 
+/**
+ * Opens a bank activity's edit dialog the way a user does. Desktop: a mouse click on the block.
+ * Phone (M7.2): a tap picks the block up for tap-to-place, and the placing bar's "עריכה" button
+ * opens the dialog.
+ */
+export async function openActivityEditor(page: Page, name: string): Promise<void> {
+  await openBank(page);
+  const open = bankBlock(page, name).getByRole('button').first();
+  if (!isPhone(page)) {
+    await open.click();
+    return;
+  }
+  await open.tap();
+  await page
+    .getByTestId('placing-bar')
+    .getByRole('button', { name: t('schedule.place.edit'), exact: true })
+    .tap();
+}
+
 export function activityDialog(page: Page, mode: 'new' | 'edit' = 'new'): Locator {
   return page.getByRole('dialog', {
     name: t(mode === 'new' ? 'bank.dialog.newTitle' : 'bank.dialog.editTitle'),

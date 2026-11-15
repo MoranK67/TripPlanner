@@ -140,7 +140,9 @@ describe('Timetable', () => {
       scroller,
       ...Array.from(scroller.querySelectorAll<HTMLElement>('button, [tabindex], a, input')),
     ];
-    expect(focusable.map((el) => (el === scroller ? 'region' : el.textContent))).toEqual([
+    // Whitespace-insensitive: ActivityBlock may put a space between name and time (a11y name).
+    const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s+/g, '');
+    expect(focusable.map((el) => (el === scroller ? 'region' : text(el)))).toEqual([
       'region',
       'קפה07:00–07:30', // time order within a day
       'מוזיאון09:00–10:30',

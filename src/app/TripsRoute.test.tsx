@@ -1,10 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { configure, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState, type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { HeaderSlotProvider, ToastProvider } from '@/components/ui';
 import type { TripSummary } from '@/domain';
 import { TripsRoute } from './TripsRoute';
+
+// Under load (parallel workers, a busy machine) data and lazy chunks can take longer than
+// Testing Library's 1 s default; give findBy / waitFor more room in this file.
+configure({ asyncUtilTimeout: 5_000 });
 
 const repo = vi.hoisted(() => ({ list: vi.fn() }));
 

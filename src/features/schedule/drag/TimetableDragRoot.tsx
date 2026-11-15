@@ -15,6 +15,7 @@ import {
   blockSlots,
   cx,
   SLOT_HEIGHT_PX,
+  useCanEdit,
   useToast,
 } from '@/components/ui';
 import {
@@ -27,6 +28,8 @@ import {
   type PlacementCheck,
   type Trip,
 } from '@/domain';
+import { PlacingContext } from '../place/placingContext';
+import { useTapToPlace } from '../place/useTapToPlace';
 import { HEADER_PX, TIME_COL_PX, timeRangeLabel } from '../timetableLayout';
 import {
   BANK_DROP_OVER_CLASSES,
@@ -34,6 +37,7 @@ import {
   type DayView,
   type DragRootContextValue,
 } from './dragContext';
+import { readDirection } from './direction';
 import {
   autoScrollStep,
   contains,
@@ -76,11 +80,6 @@ function sameTarget(a: DropTarget | null, b: DropTarget | null): boolean {
   );
 }
 
-function readDirection(el: Element): Direction {
-  const computed = getComputedStyle(el).direction || document.documentElement.dir;
-  return computed === 'rtl' ? 'rtl' : 'ltr';
-}
-
 /** Client box of the scroll container in viewport coordinates (without borders/scrollbars). */
 function clientBox(scroller: HTMLElement) {
   const r = scroller.getBoundingClientRect();
@@ -115,6 +114,9 @@ export interface TimetableDragRootProps {
  * half-hour slots; a green/red preview shows the `canPlace` result; an invalid drop shows the
  * reason and changes nothing; the timetable auto-scrolls near its edges; Escape cancels.
  *
+ * Also the non-drag path (M7.2, FR-5.5/5.6): tap-to-place and keyboard placement, see
+ * `useTapToPlace`. Offline (M7.3) neither a drag nor tap-to-place starts.
+ *
  * Renders no box of its own (`display: contents`), so it does not change the page layout.
  */
 export function TimetableDragRoot({
@@ -141,6 +143,25 @@ export function TimetableDragRoot({
 
   const days = useMemo(() => tripDays(trip.window), [trip.window]);
   const byId = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities]);
+  // Offline (M7.3): the app-wide rule and reason text.
+  const { canEdit, reason: readOnlyReason } = useCanEdit();
+
+  const tap = useTapToPlace({
+    tripWindow: trip.window,
+    activities,
+    days,
+    byId,
+    rootRef,
+    scrollerRef,
+    columnsRef,
+    view,
+    columnsEl,
+    canEdit,
+    readOnlyReason,
+    onPlace,
+    onUnplace,
+    toast,
+  });
 
   const resolveTarget = (id: string, pointer: Point, grabOffsetY: number): DropTarget | null => {
     const bank = bankRef.current;
@@ -244,7 +265,13 @@ export function TimetableDragRoot({
     },
     resolveTarget: (source, pointer) => resolveTarget(source.id, pointer, source.grabOffset.y),
     sameTarget,
+    canStart: () => {
+      if (canEdit) return true;
+      if (readOnlyReason) toast.show(readOnlyReason, { tone: 'error' });
+      return false;
+    },
     onDragStart: (source) => {
+      tap.end();
       sourceRef.current = source;
       edgeRef.current = null;
       if (scrollerRef.current) directionRef.current = readDirection(scrollerRef.current);
@@ -292,9 +319,12 @@ export function TimetableDragRoot({
 
   return (
     <DragRootContext.Provider value={context}>
-      <div ref={rootRef} className="contents" data-testid="timetable-drag-root">
-        {children}
-      </div>
+      <PlacingContext.Provider value={tap.context}>
+        <div ref={rootRef} className="contents" data-testid="timetable-drag-root">
+          {children}
+        </div>
+      </PlacingContext.Provider>
+      {tap.nodes}
       {columnsEl &&
         createPortal(
           <DropPreview

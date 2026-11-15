@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button, ConfirmDialog, HeaderActions, useToast } from '@/components/ui';
+import { Button, ConfirmDialog, HeaderActions, useCanEdit, useToast } from '@/components/ui';
 import type { Trip } from '@/domain';
 import { errorMessage } from '@/i18n/errors';
 import { useDeleteTrip, useTripsQuery } from './hooks';
@@ -26,6 +26,8 @@ export function TripHeaderControls({
   const toast = useToast();
   const trips = useTripsQuery();
   const deleteTrip = useDeleteTrip();
+  // Offline the trip stays readable from the cache, but every change is disabled (M7.3).
+  const { canEdit, reason } = useCanEdit();
   const [dialog, setDialog] = useState<'edit' | 'new' | 'delete' | null>(null);
   const selectId = useId();
 
@@ -35,6 +37,7 @@ export function TripHeaderControls({
     : [{ id: trip.id, name: trip.name }, ...(trips.data ?? [])];
 
   function confirmDelete() {
+    if (!canEdit) return;
     deleteTrip.mutate(trip.id, {
       onSuccess: () => {
         setDialog(null);
@@ -70,13 +73,25 @@ export function TripHeaderControls({
         {tripRangeLabel(trip.window, t, 'short')} · {tripDaysLabel(trip.window, t)}
       </span>
       {exportAction}
-      <Button size="sm" onClick={() => setDialog('edit')}>
+      <Button size="sm" disabled={!canEdit} title={reason} onClick={() => setDialog('edit')}>
         {t('trips.edit')}
       </Button>
-      <Button size="sm" variant="ghost" onClick={() => setDialog('delete')}>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={!canEdit}
+        title={reason}
+        onClick={() => setDialog('delete')}
+      >
         {t('common.delete')}
       </Button>
-      <Button size="sm" variant="primary" onClick={() => setDialog('new')}>
+      <Button
+        size="sm"
+        variant="primary"
+        disabled={!canEdit}
+        title={reason}
+        onClick={() => setDialog('new')}
+      >
         {t('trips.new')}
       </Button>
 
@@ -87,6 +102,7 @@ export function TripHeaderControls({
         title={t('trips.deleteConfirm.title')}
         message={t('trips.deleteConfirm.message', { name: trip.name })}
         loading={deleteTrip.isPending}
+        disabledReason={reason}
         onConfirm={confirmDelete}
         onCancel={() => setDialog(null)}
       />

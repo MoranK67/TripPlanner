@@ -7,6 +7,7 @@ import {
   useIsDragging,
   type DragRootContextValue,
 } from '../drag/dragContext';
+import { usePlacing } from '../place/placingContext';
 
 export interface BankSheetProps {
   /** Accessible name of the sheet and the handle's text, e.g. "מאגר אטרקציות". */
@@ -30,6 +31,9 @@ const noRef = () => {};
  * placed block can be returned while the sheet is collapsed. While any drag is in progress the
  * panel shrinks to zero height, so the timetable gets the room; the panel stays mounted (a removed
  * element would lose the finger's touch events mid-drag) and comes back after the drop.
+ *
+ * Tap-to-place (M7.2): while an activity waits for a slot the panel is hidden, so the day is in
+ * full view; it comes back when the mode ends. The handle then leaves the mode and opens the bank.
  */
 export function BankSheet({ label, count, children }: BankSheetProps) {
   const { t } = useTranslation();
@@ -37,6 +41,9 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
   const panelId = useId();
   const drag = useDragRoot();
   const dragging = useIsDragging();
+  const placingMode = usePlacing();
+  const placing = !!placingMode?.activity;
+  const shown = open && !placing;
 
   // The sheet registers itself as the bank drop zone; the panel inside must not replace it.
   const inner = useMemo<DragRootContextValue | null>(
@@ -58,11 +65,17 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
     const dy = e.clientY - s.y;
     if (Math.abs(dy) < HANDLE_SWIPE_PX) return;
     swiped.current = true;
+    if (dy < 0 && placing) placingMode?.cancel();
     setOpen(dy < 0);
   };
   const onClick = () => {
     if (swiped.current) {
       swiped.current = false;
+      return;
+    }
+    if (placing) {
+      placingMode?.cancel();
+      setOpen(true);
       return;
     }
     setOpen((o) => !o);
@@ -73,12 +86,12 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
       ref={drag?.bankRef}
       aria-label={label}
       data-testid="bank-sheet"
-      data-open={open || undefined}
+      data-open={shown || undefined}
       className="flex shrink-0 flex-col rounded-t-[var(--radius-card)] border border-b-0 border-line bg-panel pb-[env(safe-area-inset-bottom)] shadow-[var(--shadow-card)]"
     >
       <button
         type="button"
-        aria-expanded={open}
+        aria-expanded={shown}
         aria-controls={panelId}
         onClick={onClick}
         onPointerDown={onPointerDown}
@@ -100,7 +113,7 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
       </button>
       <div
         id={panelId}
-        hidden={!open}
+        hidden={!shown}
         data-testid="bank-sheet-panel"
         className={cx(
           'flex min-h-0 flex-col px-2',
@@ -109,7 +122,7 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
       >
         <DragRootContext.Provider value={inner}>{children}</DragRootContext.Provider>
         <p className="m-0 px-2 pt-1.5 text-center text-xs leading-normal text-ink-soft">
-          {t('schedule.sheet.hint')}
+          {t('schedule.sheet.hintPlace')}
         </p>
       </div>
     </aside>

@@ -26,11 +26,12 @@ export function TripPage() {
   const query = useTripQuery(tripId);
 
   if (query.isPending) return <LoadingState />;
-  if (query.isError) {
-    // A malformed id in the URL fails validation; for the user that is simply "no such trip".
-    const notFound =
-      isAppError(query.error) &&
-      (query.error.kind === 'not_found' || query.error.kind === 'validation');
+  // A malformed id in the URL fails validation; for the user that is simply "no such trip".
+  const notFound =
+    isAppError(query.error) &&
+    (query.error.kind === 'not_found' || query.error.kind === 'validation');
+  // Any other failed refetch keeps the (cached) trip on screen, e.g. offline (M7.3).
+  if (query.data === undefined || notFound) {
     return (
       <div className="grid place-items-center p-6">
         <Card className="max-w-md text-center">

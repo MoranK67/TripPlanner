@@ -1,7 +1,11 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { configure, act, fireEvent, screen, within } from '@testing-library/react';
 import { AppError } from '@/data';
 import { makeSummary, renderRoute } from './testUtils';
 import { TripsPage } from './TripsPage';
+
+// Under load (parallel workers, a busy machine) data and lazy chunks can take longer than
+// Testing Library's 1 s default; give findBy / waitFor more room in this file.
+configure({ asyncUtilTimeout: 5_000 });
 
 const repo = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn() }));
 
@@ -13,7 +17,7 @@ vi.mock('@/data', async (importOriginal) => {
 // The calendar is lazy-loaded; transform it once up front so no single test pays for it.
 beforeAll(async () => {
   await import('./TripRangeCalendar');
-}, 60_000);
+}, 120_000);
 
 beforeEach(() => {
   repo.list.mockReset();
@@ -78,5 +82,39 @@ describe('TripsPage (FR-2.1, FR-2.8)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('אין חיבור לשרת');
     fireEvent.click(screen.getByRole('button', { name: 'ניסיון נוסף' }));
     expect(await screen.findByRole('heading', { name: 'עדיין אין טיולים' })).toBeInTheDocument();
+  });
+});
+
+describe('TripsPage offline (M7.3, FR-8.3)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('keeps showing the cached list when a refetch fails (e.g. offline after a reload)', async () => {
+    repo.list.mockResolvedValueOnce([makeSummary({ id: 'a', name: 'רומא' })]);
+    const { queryClient } = renderRoute(<TripsPage />, { path: '/trips' });
+    expect(await screen.findByText('רומא')).toBeInTheDocument();
+
+    repo.list.mockRejectedValueOnce(new AppError('network', { retryable: true }));
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['trips', 'list'] });
+    });
+    expect(screen.getByText('רומא')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('disables creating trips with the reason', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    repo.list.mockResolvedValue([]);
+    renderRoute(<TripsPage />, { path: '/trips' });
+    const create = await screen.findByRole('button', { name: '+ יצירת טיול ראשון' });
+    expect(create).toBeDisabled();
+    expect(create.getAttribute('title')).toMatch(/^אין חיבור לאינטרנט/);
+    const headerNew = within(screen.getByTestId('header')).getByRole('button', {
+      name: '+ טיול חדש',
+    });
+    expect(headerNew).toBeDisabled();
+    fireEvent.click(headerNew);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { checkServerConnection, isSupabaseConfigured } from '@/data';
+import { useOnlineStatus } from '@/platform';
 
 /** Small chip showing whether the app can reach Supabase (M0 smoke check). */
 export function ServerStatus() {
   const { t } = useTranslation();
   const configured = isSupabaseConfigured();
+  const online = useOnlineStatus();
   const { data, isPending } = useQuery({
     queryKey: ['server-health'],
     queryFn: checkServerConnection,
@@ -15,7 +17,11 @@ export function ServerStatus() {
 
   let label: string;
   let dot: string;
-  if (!configured) {
+  if (!online) {
+    // The browser has no network at all; the offline banner explains what still works.
+    label = t('server.offline');
+    dot = 'bg-danger-ink';
+  } else if (!configured) {
     label = t('server.notConfigured');
     dot = 'bg-danger-ink';
   } else if (isPending) {

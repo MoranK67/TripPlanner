@@ -1,7 +1,16 @@
 import { useIsMutating } from '@tanstack/react-query';
 import { useDeferredValue, useId, useMemo, useState, type FormEvent } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Button, Field, FormError, Modal, Textarea, useToast } from '@/components/ui';
+import {
+  Button,
+  Field,
+  FormError,
+  Modal,
+  OfflineNote,
+  Textarea,
+  useCanEdit,
+  useToast,
+} from '@/components/ui';
 import {
   ACTIVITY_NAME_MAX,
   formatDurationHe,
@@ -73,6 +82,7 @@ function ImportForm({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const { canEdit, reason: offlineReason } = useCanEdit();
   const importActivities = useImportActivities(trip.id);
   const saving = importActivities.isPending;
   const limitId = useId();
@@ -114,7 +124,8 @@ function ImportForm({
     e.preventDefault();
     // Parse the current text, not the deferred one, so exactly what the user sees is imported.
     const current = parseImport(text);
-    if (current.validCount === 0 || current.exceedsLimit || saving) return;
+    // Offline nothing is imported (M7.3): the button is disabled, and Enter must not slip through.
+    if (current.validCount === 0 || current.exceedsLimit || saving || !canEdit) return;
     const items = validItems(current);
     importActivities.reset();
     importActivities.mutate(items, {
@@ -127,6 +138,7 @@ function ImportForm({
 
   return (
     <form noValidate onSubmit={handleSubmit}>
+      <OfflineNote />
       {generalError && <FormError>{generalError}</FormError>}
       <Field label={t('import.textLabel')}>
         <Textarea
@@ -214,7 +226,8 @@ function ImportForm({
           type="submit"
           variant="primary"
           loading={saving}
-          disabled={!canImport}
+          disabled={!canImport || !canEdit}
+          title={offlineReason}
           aria-describedby={exceedsLimit ? limitId : undefined}
         >
           {canImport ? t('import.submit', { count: validCount }) : t('import.submitNone')}

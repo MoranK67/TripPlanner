@@ -9,7 +9,9 @@ import {
   Input,
   LoadingState,
   Modal,
+  OfflineNote,
   TimeInput,
+  useCanEdit,
   useToast,
 } from '@/components/ui';
 import { isAppError } from '@/data';
@@ -94,6 +96,7 @@ function TripForm({
   const { t } = useTranslation();
   const toast = useToast();
   const navigate = useNavigate();
+  const { canEdit, reason: offlineReason } = useCanEdit();
   const createTrip = useCreateTrip();
   const updateTrip = useUpdateTripWindow();
   const mutation = trip ? updateTrip : createTrip;
@@ -173,6 +176,8 @@ function TripForm({
     }
     const window = windowFromForm(range, startMinute, endMinute);
     if (!window) return;
+    // Offline the save button is disabled; Enter in a field must not start a write either (M7.3).
+    if (!canEdit) return;
     const input = { name: finalName, window };
 
     if (trip) {
@@ -216,6 +221,7 @@ function TripForm({
 
   return (
     <form noValidate onSubmit={handleSubmit}>
+      <OfflineNote />
       {generalError && <FormError>{generalError}</FormError>}
       <Field
         label={t('trips.dialog.name')}
@@ -287,7 +293,13 @@ function TripForm({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button type="submit" variant="primary" loading={mutation.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={mutation.isPending}
+          disabled={!canEdit}
+          title={offlineReason}
+        >
           {trip ? t('common.save') : t('trips.dialog.create')}
         </Button>
         <Button variant="ghost" onClick={onCancel} disabled={mutation.isPending}>

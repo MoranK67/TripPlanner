@@ -287,7 +287,7 @@ describe('from the bank panel', () => {
     const items = within(screen.getByRole('list', { name: 'אטרקציות במאגר' })).getAllByRole(
       'listitem',
     );
-    expect(items.map((li) => li.textContent)).toEqual(['מוזיאוןשעה×', 'קפהשעה×', 'גלידהשעה×']);
+    expect(items.map((li) => li.textContent)).toEqual(['מוזיאון שעה×', 'קפה שעה×', 'גלידה שעה×']);
     expect(screen.getByRole('heading', { name: 'מאגר אטרקציות (3)' })).toBeInTheDocument();
   });
 });

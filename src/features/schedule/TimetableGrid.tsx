@@ -63,6 +63,8 @@ export interface TimetableGridProps {
   renderDayHeader?: (date: IsoDate, dayIndex: number, headingId: string) => ReactNode;
   /** Pointer handlers on the scroll container (the phone's day swipe). Must be stable. */
   gestureHandlers?: GestureHandlers;
+  /** Id of a description of the timetable region (how to place without dragging). */
+  describedBy?: string;
   className?: string;
 }
 
@@ -113,6 +115,7 @@ export const TimetableGrid = memo(function TimetableGrid({
   dayCount,
   renderDayHeader,
   gestureHandlers,
+  describedBy,
   className,
 }: TimetableGridProps) {
   const { t } = useTranslation();
@@ -158,6 +161,7 @@ export const TimetableGrid = memo(function TimetableGrid({
       ref={scroller}
       role="region"
       aria-label={t('schedule.timetable.label')}
+      aria-describedby={describedBy}
       // Focusable so keyboard users can scroll to empty days and hours (WCAG 2.1.1).
       tabIndex={0}
       data-testid="timetable-scroller"

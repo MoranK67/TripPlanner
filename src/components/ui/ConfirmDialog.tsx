@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from './Button';
 import { Modal } from './Modal';
@@ -23,6 +23,11 @@ export interface ConfirmDialogProps {
    * disabled and Esc / backdrop do nothing, so the user cannot cancel half-way.
    */
   loading?: boolean;
+  /**
+   * Set when the action can't run right now (e.g. offline, FR-8.3): the confirm button is
+   * disabled and this reason is shown in the dialog. Cancel still works.
+   */
+  disabledReason?: string;
 }
 
 /**
@@ -42,9 +47,11 @@ export function ConfirmDialog({
   onCancel,
   destructive = true,
   loading = false,
+  disabledReason,
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const reasonId = useId();
 
   // While loading, both buttons are disabled; a focused disabled button drops focus to <body>.
   // Park focus on the dialog itself instead, and give it back to Cancel when loading ends
@@ -82,6 +89,9 @@ export function ConfirmDialog({
           <Button
             variant={destructive ? 'danger' : 'primary'}
             loading={loading}
+            disabled={disabledReason !== undefined}
+            title={disabledReason}
+            aria-describedby={disabledReason !== undefined ? reasonId : undefined}
             onClick={onConfirm}
           >
             {confirmLabel ?? (destructive ? t('common.confirmDelete') : t('common.confirm'))}
@@ -91,6 +101,15 @@ export function ConfirmDialog({
           </Button>
         </>
       }
-    />
+    >
+      {disabledReason !== undefined && (
+        <p
+          id={reasonId}
+          className="m-0 rounded-xl bg-accent-soft px-3 py-2 text-[13.5px] leading-relaxed text-accent-ink"
+        >
+          {disabledReason}
+        </p>
+      )}
+    </Modal>
   );
 }

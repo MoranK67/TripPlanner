@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityBlock, Button } from '@/components/ui';
+import { ActivityBlock, Button, useCanEdit } from '@/components/ui';
 import { isInBank, type Activity, type Trip } from '@/domain';
 import { ImportDialog } from '@/features/import';
 import { dragSourceProps, useBankDropZone } from '@/features/schedule';
@@ -29,6 +29,8 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
   const focusAfterDelete = useRef<FocusAfterDelete | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [importOpen, setImportOpen] = useState(false);
+  // Offline the bank is read-only (M7.3): blocks still open (to view), but nothing can change.
+  const { canEdit, reason } = useCanEdit();
   const blockRefs = useRef(new Map<string, HTMLDivElement>());
   // Drag and drop (FR-5.1): blocks drag onto the timetable; placed blocks drop back here.
   const setDropZone = useBankDropZone();
@@ -78,10 +80,16 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
         </h2>
         <div className="flex shrink-0 items-center gap-1.5">
           {/* FR-6.1: paste a list. The accessible name starts with the visible word. */}
-          <Button size="sm" aria-label={t('import.openLabel')} onClick={() => setImportOpen(true)}>
+          <Button
+            size="sm"
+            aria-label={t('import.openLabel')}
+            disabled={!canEdit}
+            title={reason}
+            onClick={() => setImportOpen(true)}
+          >
             {t('import.open')}
           </Button>
-          <Button variant="primary" size="sm" onClick={openAdd}>
+          <Button variant="primary" size="sm" disabled={!canEdit} title={reason} onClick={openAdd}>
             {t('bank.add')}
           </Button>
         </div>
@@ -109,6 +117,8 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
                 color={activity.color}
                 onOpen={() => openEdit(activity)}
                 onDelete={() => openDelete(activity)}
+                // Offline the × stays (no layout shift, no focus loss) but is disabled (M7.3).
+                deleteDisabledReason={reason}
               />
             </li>
           ))}

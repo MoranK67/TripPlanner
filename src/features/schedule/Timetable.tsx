@@ -1,8 +1,18 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import {
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+} from 'react';
+import { useTranslation } from 'react-i18next';
 import { tripDays, type Activity, type IsoDate, type Trip } from '@/domain';
 import { DRAG_SOURCE_CLASS, useDragRoot } from './drag/dragContext';
 import { DaySwitcher } from './phone/DaySwitcher';
 import { usePlannerMode } from './phone/plannerMode';
+import { PlacingBar } from './place/PlacingBar';
 import { swipeDayDelta } from './phone/swipe';
 import { TimetableGrid, type GestureHandlers } from './TimetableGrid';
 
@@ -26,7 +36,8 @@ export interface TimetableProps {
  * The trip timetable (FR-4.1–4.5): day columns right-to-left, 48 half-hour rows, disabled slots
  * outside the trip window, sticky day headers and time column, opens at the trip start.
  * Fills its flex-column parent and scrolls on its own. Inside a `TimetableDragRoot` its placed
- * blocks can be dragged (FR-5.1–5.4); tap and keyboard placement follow in M5.6/M7.2.
+ * blocks can be dragged (FR-5.1–5.4), and placed without a drag (tap-to-place / keyboard, M7.2):
+ * a bar under the grid shows the activity waiting for a slot.
  *
  * On phones (`singleDay`) it shows one day: the sticky header becomes a day switcher, a quick
  * horizontal swipe changes the day, and the vertical scroll position is kept across days.
@@ -39,6 +50,8 @@ export function Timetable({
   singleDay,
   className,
 }: TimetableProps) {
+  const { t } = useTranslation();
+  const hintId = useId();
   const drag = useDragRoot();
   const mode = usePlannerMode();
   const oneDay = singleDay ?? mode === 'day';
@@ -51,10 +64,25 @@ export function Timetable({
     scrollerRef: drag?.scrollerRef,
     columnsRef: drag?.columnsRef,
     blockClassName: drag ? DRAG_SOURCE_CLASS : undefined,
+    describedBy: drag ? hintId : undefined,
     className,
   };
-  if (oneDay) return <SingleDayTimetable key={trip.id} {...common} />;
-  return <TimetableGrid {...common} />;
+  const grid = oneDay ? (
+    <SingleDayTimetable key={trip.id} {...common} />
+  ) : (
+    <TimetableGrid {...common} />
+  );
+  if (!drag) return grid;
+  return (
+    <>
+      {grid}
+      {/* How to place without dragging (NFR-7), read when entering the timetable. */}
+      <p id={hintId} className="sr-only">
+        {t('schedule.place.keyboardHint')}
+      </p>
+      <PlacingBar onOpenActivity={onOpenActivity} />
+    </>
+  );
 }
 
 type GridProps = Parameters<typeof TimetableGrid>[0];

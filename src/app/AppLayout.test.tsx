@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { Button, HeaderActions } from '@/components/ui';
 import { AppLayout, MAIN_CONTENT_ID } from './AppLayout';
@@ -84,6 +84,48 @@ describe('AppLayout sign-out', () => {
     renderLayout(<p>תוכן</p>);
     const banner = screen.getByRole('banner');
     expect(await within(banner).findByRole('button', { name: 'יציאה' })).toBeInTheDocument();
+  });
+});
+
+describe('AppLayout offline banner (M7.3, FR-8.3)', () => {
+  const OFFLINE_TEXT =
+    'אין חיבור לאינטרנט. אפשר לצפות בטיולים שנשמרו, אבל עריכה תחזור כשהחיבור יחזור.';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it('shows no banner online', () => {
+    renderLayout(<p>תוכן</p>);
+    expect(screen.queryByText(OFFLINE_TEXT)).not.toBeInTheDocument();
+  });
+
+  it('shows a polite status banner while offline and hides it on reconnect', () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    renderLayout(<p>תוכן</p>);
+    const banner = screen.getByText(OFFLINE_TEXT);
+    expect(banner.closest('[role="status"]')).not.toBeNull();
+    // Outside the header and the main region: visible on every page.
+    expect(within(screen.getByRole('banner')).queryByText(OFFLINE_TEXT)).not.toBeInTheDocument();
+    expect(within(screen.getByRole('main')).queryByText(OFFLINE_TEXT)).not.toBeInTheDocument();
+    // The header chip agrees with the banner.
+    expect(within(screen.getByRole('banner')).getByText('אין חיבור לאינטרנט')).toBeInTheDocument();
+
+    onLine.mockReturnValue(true);
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(screen.queryByText(OFFLINE_TEXT)).not.toBeInTheDocument();
+  });
+
+  it('announces the banner when the connection drops', () => {
+    renderLayout(<p>תוכן</p>);
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(screen.getByText(OFFLINE_TEXT).closest('[role="status"]')).not.toBeNull();
   });
 });
 

@@ -66,6 +66,24 @@ describe('ActivityBlock', () => {
     expect(open).toHaveFocus();
   });
 
+  it('names the open button from its visible text, in order (WCAG 2.5.3 Label in Name)', () => {
+    render(
+      <ActivityBlock
+        name="קפה"
+        durationMinutes={60}
+        color="#FFD6E0"
+        meta="09:00–10:00"
+        onOpen={() => {}}
+        onDelete={() => {}}
+      />,
+    );
+    const open = screen.getByRole('button', { name: 'קפה 09:00–10:00' });
+    // No author label that could diverge from what is shown (axe label-content-name-mismatch).
+    expect(open).not.toHaveAttribute('aria-label');
+    expect(open).not.toHaveAttribute('aria-labelledby');
+    expect(open.textContent).toBe('קפה 09:00–10:00');
+  });
+
   it('has a named delete × that does not trigger open', () => {
     const onOpen = vi.fn();
     const onDelete = vi.fn();
@@ -81,6 +99,28 @@ describe('ActivityBlock', () => {
     fireEvent.click(screen.getByRole('button', { name: 'מחיקת קפה' }));
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('keeps a disabled × focusable, with the reason, and ignores clicks', () => {
+    const onDelete = vi.fn();
+    render(
+      <ActivityBlock
+        name="קפה"
+        durationMinutes={60}
+        color="#FFD6E0"
+        onOpen={() => {}}
+        onDelete={onDelete}
+        deleteDisabledReason="אין חיבור לאינטרנט"
+      />,
+    );
+    const remove = screen.getByRole('button', { name: 'מחיקת קפה' });
+    expect(remove).toHaveAttribute('aria-disabled', 'true');
+    expect(remove).toHaveAccessibleDescription('אין חיבור לאינטרנט');
+    expect(remove).toBeEnabled();
+    remove.focus();
+    expect(remove).toHaveFocus();
+    fireEvent.click(remove);
+    expect(onDelete).not.toHaveBeenCalled();
   });
 
   it('marks only the delete × with data-no-drag, so pressing it never starts a drag', () => {

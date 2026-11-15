@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ToastProvider } from '@/components/ui';
 import { AppError } from '@/data';
@@ -25,6 +25,7 @@ function renderPage() {
       </ToastProvider>
     </QueryClientProvider>,
   );
+  return queryClient;
 }
 
 describe('TripPage', () => {
@@ -117,5 +118,48 @@ describe('TripPage', () => {
       fireEvent.click(within(confirm).getByRole('button', { name: 'כן, למחוק' }));
       await waitFor(() => expect(activities.delete).toHaveBeenCalledWith('placed-1'));
     });
+  });
+});
+
+describe('TripPage offline (M7.3, FR-8.3)', () => {
+  const tripData = {
+    trip: {
+      id: 'trip-1',
+      name: 'רומא',
+      window: { startDate: '2026-05-01', startMinute: 600, endDate: '2026-05-03', endMinute: 1080 },
+      colorCursor: 0,
+    },
+    activities: [],
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the (cached) trip on screen when a refetch fails with a network error', async () => {
+    trips.get.mockResolvedValueOnce(tripData);
+    const queryClient = renderPage();
+    await screen.findByRole('complementary', { name: 'מאגר אטרקציות' });
+
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    trips.get.mockRejectedValueOnce(new AppError('network', { retryable: true }));
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['trips', 'detail', 'trip-1'] });
+    });
+    expect(screen.getByRole('complementary', { name: 'מאגר אטרקציות' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('still says "not found" when a refetch finds the trip deleted', async () => {
+    trips.get.mockResolvedValueOnce(tripData);
+    const queryClient = renderPage();
+    await screen.findByRole('complementary', { name: 'מאגר אטרקציות' });
+
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    trips.get.mockRejectedValueOnce(new AppError('not_found'));
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['trips', 'detail', 'trip-1'] });
+    });
+    expect(await screen.findByRole('heading', { name: /הטיול לא נמצא/ })).toBeInTheDocument();
   });
 });

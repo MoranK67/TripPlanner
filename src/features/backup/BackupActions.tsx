@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Modal, useToast } from '@/components/ui';
+import { Button, Modal, useCanEdit, useToast } from '@/components/ui';
 import { useTripsQuery } from '@/features/trips';
 import { errorMessage } from '@/i18n/errors';
 import { platform } from '@/platform';
@@ -39,6 +39,8 @@ export function BackupActions() {
   const [step, setStep] = useState<ExportStep>({ kind: 'idle' });
   const [importing, setImporting] = useState(false);
   const busy = step.kind === 'building' || step.kind === 'saving';
+  // Offline (M7.3): saving a backup reads every trip from the server, and restoring writes.
+  const { canEdit, reason } = useCanEdit();
 
   // Ignore results that arrive after the page was left.
   const mounted = useRef(true);
@@ -74,7 +76,7 @@ export function BackupActions() {
   }
 
   async function startExport() {
-    if (busy) return;
+    if (busy || !canEdit) return;
     setStep({ kind: 'building' });
     let file: BackupFile;
     try {
@@ -101,11 +103,23 @@ export function BackupActions() {
   return (
     <>
       {canExport && (
-        <Button size="sm" loading={busy} onClick={() => void startExport()}>
+        <Button
+          size="sm"
+          loading={busy}
+          disabled={!canEdit}
+          title={reason}
+          onClick={() => void startExport()}
+        >
           {t('backup.export.open')}
         </Button>
       )}
-      <Button size="sm" aria-haspopup="dialog" onClick={() => setImporting(true)}>
+      <Button
+        size="sm"
+        aria-haspopup="dialog"
+        disabled={!canEdit}
+        title={reason}
+        onClick={() => setImporting(true)}
+      >
         {t('backup.import.open')}
       </Button>
       <p role="status" className="sr-only">

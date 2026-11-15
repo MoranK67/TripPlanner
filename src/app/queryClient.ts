@@ -1,6 +1,7 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { isAppError } from '@/data';
 import { isAbortedError } from '@/i18n/errors';
+import { QUERY_CACHE_MAX_AGE_MS } from './queryPersistence';
 
 // Retry policy (UX-1). TanStack Query is the ONLY retry layer for reads: postgrest-js's own
 // retries are disabled in the Supabase client (`db.retry: false`, src/data/supabaseClient.ts).
@@ -57,6 +58,9 @@ export function createQueryClient() {
     defaultOptions: {
       queries: {
         staleTime: 30_000,
+        // Keep data long enough for the offline read cache (M7.3): a query garbage-collected
+        // from memory would also drop out of the saved cache.
+        gcTime: QUERY_CACHE_MAX_AGE_MS,
         retry: shouldRetryQuery,
         retryDelay: queryRetryDelay,
         // 'offlineFirst': run the request even when offline instead of pausing silently, so an

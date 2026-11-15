@@ -48,10 +48,11 @@ export function useDragRoot(): DragRootContextValue | null {
 
 /**
  * Classes for a draggable block: no text selection or iOS callout on long press, taps still
- * scroll (`touch-manipulation`), dimmed while it is being dragged (`data-dragging`).
+ * scroll (`touch-manipulation`), dimmed while it is being dragged (`data-dragging`), outlined
+ * while it waits for a slot in tap-to-place mode (`data-picked`, M7.2).
  */
 export const DRAG_SOURCE_CLASS =
-  'cursor-grab touch-manipulation select-none [-webkit-touch-callout:none] data-dragging:opacity-30';
+  'cursor-grab touch-manipulation select-none [-webkit-touch-callout:none] data-dragging:opacity-30 data-picked:outline-2 data-picked:outline-offset-1 data-picked:outline-accent-ink data-picked:outline-dashed';
 
 /** Props that make an ActivityBlock draggable by the timetable's drag engine (spread them on it). */
 export function dragSourceProps(activityId: string): {

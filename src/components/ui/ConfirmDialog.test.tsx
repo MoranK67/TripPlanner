@@ -198,4 +198,19 @@ describe('ConfirmDialog', () => {
     expect(screen.getByRole('dialog', { name: 'עריכת אטרקציה' })).toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it('disables only the confirm button, with the reason shown, when disabledReason is set', () => {
+    render(<Harness disabledReason="אין חיבור לאינטרנט" />);
+    fireEvent.click(screen.getByRole('button', { name: 'מחיקה' }));
+    const confirm = screen.getByRole('button', { name: 'כן, למחוק' });
+    expect(confirm).toBeDisabled();
+    expect(confirm).toHaveAttribute('title', 'אין חיבור לאינטרנט');
+    expect(confirm).toHaveAccessibleDescription('אין חיבור לאינטרנט');
+    expect(screen.getByText('אין חיבור לאינטרנט')).toBeVisible();
+    fireEvent.click(confirm);
+    expect(screen.queryByText('נמחק')).not.toBeInTheDocument();
+    const cancel = screen.getByRole('button', { name: 'ביטול' });
+    expect(cancel).toBeEnabled();
+    expect(cancel).toHaveFocus();
+  });
 });

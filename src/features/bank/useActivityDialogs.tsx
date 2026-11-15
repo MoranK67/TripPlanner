@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ConfirmDialog, useToast } from '@/components/ui';
+import { ConfirmDialog, useCanEdit, useToast } from '@/components/ui';
 import type { Activity, Trip } from '@/domain';
 import { errorMessage, isAbortedError } from '@/i18n/errors';
 import { ActivityDialog } from './ActivityDialog';
@@ -37,6 +37,7 @@ export function useActivityDialogs(
   const { t } = useTranslation();
   const toast = useToast();
   const deleteActivity = useDeleteActivity(trip.id);
+  const { canEdit, reason } = useCanEdit();
   const [open, setOpen] = useState<DialogKind | null>(null);
   const [item, setItem] = useState<Activity | null>(null);
 
@@ -46,6 +47,8 @@ export function useActivityDialogs(
   }
 
   function confirmDelete(activity: Activity) {
+    // Offline the confirm button is disabled (M7.3); never start a delete that can't reach the server.
+    if (!canEdit) return;
     setOpen(null);
     onDeleteStart?.(activity);
     deleteActivity.mutate(activity.id, {
@@ -79,6 +82,7 @@ export function useActivityDialogs(
           if (item) confirmDelete(item);
         }}
         onCancel={close}
+        disabledReason={reason}
       />
     </>
   );

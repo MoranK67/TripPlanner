@@ -1,7 +1,7 @@
 import { useIsMutating } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, FormError, Modal, useToast } from '@/components/ui';
+import { Button, FormError, Modal, OfflineNote, useCanEdit, useToast } from '@/components/ui';
 import {
   MAX_BACKUP_TEXT_LENGTH,
   parseBackup,
@@ -68,6 +68,8 @@ function ImportForm({ onDone }: { onDone: () => void }) {
   const toast = useToast();
   const importBackup = useImportBackup();
   const saving = importBackup.isPending;
+  // Reading and checking a file works offline; only the import itself needs the server (M7.3).
+  const { canEdit, reason: offlineReason } = useCanEdit();
   const inputRef = useRef<HTMLInputElement>(null);
   const fileNameId = useId();
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'none' });
@@ -111,7 +113,7 @@ function ImportForm({ onDone }: { onDone: () => void }) {
   const trips = result?.ok ? result.trips : null;
 
   function handleImport() {
-    if (!result?.ok || saving) return;
+    if (!result?.ok || saving || !canEdit) return;
     const toImport = result.trips;
     importBackup.reset();
     importBackup.mutate(toImport, {
@@ -132,6 +134,7 @@ function ImportForm({ onDone }: { onDone: () => void }) {
 
   return (
     <div>
+      <OfflineNote />
       <input
         ref={inputRef}
         type="file"
@@ -184,7 +187,13 @@ function ImportForm({ onDone }: { onDone: () => void }) {
       {serverError && <FormError className="mt-3">{serverError}</FormError>}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <Button variant="primary" loading={saving} disabled={!trips} onClick={handleImport}>
+        <Button
+          variant="primary"
+          loading={saving}
+          disabled={!trips || !canEdit}
+          title={offlineReason}
+          onClick={handleImport}
+        >
           {trips
             ? t('backup.import.submit', { count: trips.length })
             : t('backup.import.submitNone')}
