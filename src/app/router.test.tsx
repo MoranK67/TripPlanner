@@ -1,3 +1,4 @@
+import type { MockInstance } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { Providers } from './Providers';
@@ -38,14 +39,29 @@ function renderAt(path: string) {
   return router;
 }
 
+/** Lazy route chunks are imported cold in jsdom; give them more than the 1 s default. */
+const LAZY = { timeout: 5000 };
+
+let warn: MockInstance<typeof console.warn>;
+
 beforeEach(() => {
   fake.signedIn = true;
+  warn = vi.spyOn(console, 'warn');
+});
+
+afterEach(() => {
+  // React Router logs deprecations / missing HydrateFallback through console.warn.
+  const routerWarnings = warn.mock.calls.filter((args) =>
+    args.some((a) => typeof a === 'string' && /react router|hydratefallback|future/i.test(a)),
+  );
+  expect(routerWarnings).toEqual([]);
+  warn.mockRestore();
 });
 
 describe('app shell routing', () => {
   it('redirects / to the trips page when signed in', async () => {
     const router = renderAt('/');
-    expect(await screen.findByRole('heading', { name: 'הטיולים שלי' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'הטיולים שלי' }, LAZY)).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/trips');
   });
 
@@ -78,9 +94,16 @@ describe('app shell routing', () => {
     expect(await screen.findByRole('heading', { name: 'הדף לא נמצא' })).toBeInTheDocument();
   });
 
+  it('shows a loading state while a lazy page loads on first visit', async () => {
+    renderAt('/dev/ui');
+    expect(await screen.findByText('טוען…')).toBeInTheDocument();
+  });
+
   it('serves the UI gallery at /dev/ui in development', async () => {
     renderAt('/dev/ui');
-    expect(await screen.findByRole('heading', { name: 'גלריית רכיבי ממשק' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'גלריית רכיבי ממשק' }, LAZY),
+    ).toBeInTheDocument();
   });
 
   it('sets the document direction to RTL', () => {

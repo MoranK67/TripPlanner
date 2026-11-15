@@ -73,11 +73,12 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M4.1–M4.4 | Trips list, trip dialog, edit/delete trip, bank panel | frontend-engineer | M1.7, M3.x | done | Follow-ups: per-trip mutation keys; verify the real reset email does not flash "invalid link" |
 | M4.5 | E2E: trip CRUD + bank CRUD | qa-engineer | M4.3, M4.4 | done | |
 
-| SEC-1 | (in progress: Orchestrator installed 7.18.5, audit 0; frontend-engineer adapting code) Upgrade react-router-dom 6.30.6 → 7 (npm audit: 2 moderate advisories, fixed only in v7; open-redirect via backslash already blocked by redirectTarget, SSR advisory not applicable) | frontend-engineer | — | todo | Before the first public deploy (M8) |
+| SEC-1 | react-router-dom 7.18.5 (npm audit: 0 vulnerabilities); HydrateFallback on lazy routes | frontend-engineer | — | done | Imports stay on react-router-dom; switch to `react-router` before v8 |
 
 | ~~QA-1~~ | (done, see current wave) E2E fake-backend fidelity + guard hardening (M4.5 review should-fixes: fail on blocked hosts as auto fixture, `update_activity` checks fit only on duration change, unknown token returns 401 PGRST303; plus nits). Also: 2 E2E tests were flaky (passed on retry) in the 14.11 run, so find and stabilise them | qa-engineer | M4.5 | todo | |
 | UX-1 | Collapse stacked read retries (postgrest 3× + TanStack 2× ≈ 25 s offline before an error): keep one layer, fail fast when offline | core-engineer + frontend-engineer | — | todo | Then shrink `skipRetryBackoff` in E2E |
-| A11Y-1 | Axe check in E2E (NFR-7), `@axe-core/playwright` 4.14.0 installed | qa-engineer | M4.5 | in progress | |
+| A11Y-1 | Axe check in E2E (NFR-7): tests/e2e/a11y.spec.ts + support/axe.ts written, NOT committed (would turn CI red) | qa-engineer | M4.5 | review | First finding: `label-content-name-mismatch` on activity-block buttons (aria-labelledby name+meta vs visible text) → fix in ActivityBlock (frontend), then run the spec, commit both. Phone trip-page step must open the bank sheet (M7.1) |
+| QA-2/QA-3 | CI fixes: lazy-calendar wait; E2E for HHMM fields + phone bank sheet | frontend / qa | — | done | Lesson: run test:e2e before UI commits |
 | UX-2 | Focus target after deleting a timetable block (via `onDeleteStart`); label the timetable region by the sr-only h2 (`aria-labelledby`) to avoid a double announcement | scheduler-engineer + frontend-engineer | M5.2 | todo | |
 
 ## Done
