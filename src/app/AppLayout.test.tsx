@@ -1,4 +1,5 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { useMutation } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { Button, HeaderActions } from '@/components/ui';
 import type { SessionResumeResult } from '@/data';
@@ -167,6 +168,30 @@ describe('AppLayout offline banner (M7.3, FR-8.3)', () => {
       window.dispatchEvent(new Event('offline'));
     });
     expect(screen.getByText(OFFLINE_TEXT).closest('[role="status"]')).not.toBeNull();
+  });
+});
+
+describe('AppLayout unsaved writes (UX-4)', () => {
+  /** A page whose button starts a trip write that never finishes. */
+  function SavingPage() {
+    const save = useMutation({
+      mutationKey: ['trips', 'create'],
+      mutationFn: () => new Promise<never>(() => {}),
+    });
+    return <Button onClick={() => save.mutate()}>שמירה</Button>;
+  }
+
+  function unloadIsBlocked() {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+
+  it('asks before leaving the page while a write is pending', async () => {
+    renderLayout(<SavingPage />);
+    expect(unloadIsBlocked()).toBe(false);
+    fireEvent.click(await screen.findByRole('button', { name: 'שמירה' }));
+    await waitFor(() => expect(unloadIsBlocked()).toBe(true));
   });
 });
 

@@ -39,6 +39,10 @@ export function useCreateTrip() {
         trip,
         activities: [],
       });
+    },
+    // Also after an error: a timed-out create may have been saved (UX-3, DEC-032); the refetch
+    // shows it in the trips list, so trying again doesn't silently add a second trip.
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: tripKeys.list() });
     },
   });

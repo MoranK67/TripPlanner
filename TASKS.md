@@ -16,7 +16,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M5 Timetable | in progress | M5.2 done; M5.3 in progress (DEC-029: device check moves to the real drag after M5.4) |
 | M6 Import/export/backup | done | M6.1–M6.6 done; owner demo pending |
 | M7 Phone & offline | done — awaiting owner demo | M7.1–M7.4, M7.3b, A11Y-1, SCHED-OFF-1 done |
-| M8 web release | todo | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
+| M8 web release | in progress | Web-only MVP (DEC-027): M8.3 PWA, M8.4 Cloudflare Pages, M8.5 iPhone check. Needs SEC-1 first |
 | M11 Hardening & release | todo | M11.4 = web checklist (DEC-027) |
 | M8.1–M8.2 Windows app, M9 Android app | deferred | DEC-027: after the web release |
 | M10 iOS native | deferred | iPhone covered by PWA (M8.3–M8.5) |
@@ -44,10 +44,13 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M7.3 | Offline read cache: persisted query cache (per user, cleared on sign-out), offline banner, editing disabled offline | frontend-engineer | M5.4 | done | DEC-037. All 7 review items fixed 2026-11-15 (generation token, onlineManager tests, bank × aria-disabled via new ActivityBlock `deleteDisabledReason`); 66 files / 1359 tests, build OK. Commit with M7.2 + A11Y-1 after QA E2E (M7.4) is green. Follow-up for scheduler: pass `deleteDisabledReason={useCanEdit().reason}` in TimetableGrid/PhonePlanner |
 | M7.3b | Offline reload after token expiry: `stored_offline` read-only state, resume on reconnect | core-engineer + frontend-engineer | M7.3 | done | DEC-038. Reviewed APPROVE; should-fixes applied. Nit left: tripsRepo test for refresh refused during hasSession → auth_expired; skip anon refetches while stored_offline |
 | M7.4 | E2E: tap-to-place (phone + keyboard), offline cache, bank.spec phone edit via placing bar "עריכה", a11y spec | qa-engineer | M7.2, M7.3 | done | Started 2026-11-15 |
-| TEST-1 | Unit tests time out under machine load (TripHeaderControls lazy-calendar beforeAll, TripsRoute findBy, TripsPage hook) | frontend-engineer / Orchestrator (vitest config) | — | todo | from M7.3 review |
-| UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | todo | from DATA-1 review |
-| UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | todo | from DATA-1 report |
-| M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | todo | batch with next UI task |
+| M8.3 | PWA: manifest, icons, iOS meta/safe areas, SW precache (no Supabase caching), update prompt | platform-engineer | M7 | done | DEC-039 |
+| TEST-1 | Unit tests time out under machine load (TripHeaderControls lazy-calendar beforeAll, TripsRoute findBy, TripsPage hook) | frontend-engineer / Orchestrator (vitest config) | — | done | from M7.3 review |
+| TEST-2 | TripDialog.test beforeAll (lazy calendar, 60 s) still times out under heavy load → 120 s like TripHeaderControls | frontend-engineer | — | todo | seen 2026-11-16 in a full run; passes alone |
+| M8.4 | Cloudflare Pages deploy from main (+ PR previews), `_headers` with `/sw.js` no-cache, Supabase auth redirect URLs | Orchestrator + owner + platform-engineer | M8.3 | todo | needs owner's Cloudflare account; ask before deploying |
+| UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | done | from DATA-1 review |
+| UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | done | from DATA-1 report |
+| M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | done | batch with next UI task |
 | QA-1 | E2E fake-backend fidelity + flaky tests | qa-engineer | M4.5 | done | host guard fixture, PGRST303/301, update_activity fit rule, 2 flaky network tests fixed (148/148 × 2). Note: run vitest from upper-case `C:\` cwd |
 
 ## Earlier waves — M1 ‖ M2 ‖ M3
@@ -84,7 +87,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | UX-1 | Collapse stacked read retries (postgrest 3× + TanStack 2× ≈ 25 s offline before an error): keep one layer, fail fast when offline | core-engineer + frontend-engineer | — | todo | Then shrink `skipRetryBackoff` in E2E |
 | A11Y-1 | Axe check in E2E (NFR-7): tests/e2e/a11y.spec.ts + support/axe.ts written, NOT committed (would turn CI red) | qa-engineer + frontend-engineer | M4.5 | done | ActivityBlock name fix reviewed APPROVE. QA: openBank on phone before the bank check | First finding: `label-content-name-mismatch` on activity-block buttons (aria-labelledby name+meta vs visible text) → fix in ActivityBlock (frontend), then run the spec, commit both. Phone trip-page step must open the bank sheet (M7.1) |
 | QA-2/QA-3 | CI fixes: lazy-calendar wait; E2E for HHMM fields + phone bank sheet | frontend / qa | — | done | Lesson: run test:e2e before UI commits |
-| UX-2 | Focus target after deleting a timetable block (via `onDeleteStart`); label the timetable region by the sr-only h2 (`aria-labelledby`) to avoid a double announcement | scheduler-engineer + frontend-engineer | M5.2 | todo | |
+| UX-2 | Focus target after deleting a timetable block (via `onDeleteStart`); label the timetable region by the sr-only h2 (`aria-labelledby`) to avoid a double announcement | scheduler-engineer + frontend-engineer | M5.2 | done | |
 
 ## Done
 

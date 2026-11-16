@@ -41,14 +41,14 @@ One owner per path. An agent that needs a change in a path it does not own **ask
 
 | Path | Owner |
 |---|---|
-| `CLAUDE.md`, `AGENT_WORKFLOW.md`, `DEVELOPMENT_GUIDELINES.md`, `DECISIONS.md`, `TASKS.md`, `PROJECT_PLAN*.md`, `docs/decisions/`, `README.md`, `.claude/` | Orchestrator |
+| `CLAUDE.md`, `AGENT_WORKFLOW.md`, `DEVELOPMENT_GUIDELINES.md`, `DECISIONS.md`, `TASKS.md`, `PROJECT_PLAN*.md`, `docs/decisions/`, `README.md`, `.claude/`, `scripts/` | Orchestrator |
 | `package.json`, `package-lock.json` (all dependency changes) | Orchestrator |
 | Root configs: `vite.config.ts`, `tsconfig.json`, `eslint.config.js`, `.prettierrc.json`, `.github/workflows/ci.yml`, `src/test/setup.ts` | Orchestrator |
 | `supabase/**`, `src/data/database.types.ts` (generated) | `db-engineer` |
 | `src/domain/**`, `src/data/**` (except `database.types.ts`) | `core-engineer` |
 | `src/app/**`, `src/components/ui/**`, `src/styles/**`, `src/i18n/**`, `src/features/{auth,trips,bank,import,export,backup}/**` | `frontend-engineer` |
 | `src/features/schedule/**` | `scheduler-engineer` |
-| `src/platform/**`, `src-tauri/**`, `android/**`, `ios/**`, `public/**`, `pwa.config.ts`, `.github/workflows/` other than `ci.yml` | `platform-engineer` |
+| `src/platform/**`, `index.html` (meta/link tags), `src-tauri/**`, `android/**`, `ios/**`, `public/**`, `pwa.config.ts`, `.github/workflows/` other than `ci.yml` | `platform-engineer` |
 | `tests/e2e/**`, `tests/fixtures/**`, `playwright.config.ts` | `qa-engineer` |
 | — (read-only) | `code-reviewer` |
 

@@ -4,3 +4,4 @@ export { TimetableDragRoot, type TimetableDragRootProps } from './drag/Timetable
 export { dragSourceProps, useBankDropZone } from './drag/dragContext';
 export { usePlacementActions, type PlacementActions } from './hooks';
 export { PlannerLayout, type PlannerLayoutProps } from './phone/PlannerLayout';
+export { findPlacedActivityButton, PLACED_ACTIVITY_ATTR } from './placedActivity';

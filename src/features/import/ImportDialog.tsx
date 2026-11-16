@@ -1,5 +1,13 @@
 import { useIsMutating } from '@tanstack/react-query';
-import { useDeferredValue, useId, useMemo, useState, type FormEvent } from 'react';
+import {
+  useDeferredValue,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   Button,
@@ -21,7 +29,7 @@ import {
   type ImportParseResult,
   type Trip,
 } from '@/domain';
-import { errorMessage, isAbortedError } from '@/i18n/errors';
+import { errorMessage, isAbortedError, isTimeoutError } from '@/i18n/errors';
 import { importMutationKeys, useImportActivities } from './hooks';
 import { IMPORT_REASON_KEYS } from './importReasons';
 import { useDebouncedValue } from './useDebouncedValue';
@@ -45,8 +53,11 @@ export function ImportDialog({ open, onClose, trip }: ImportDialogProps) {
   const { t } = useTranslation();
   // While saving, the dialog cannot be closed: its toast and error report need it.
   const saving = useIsMutating({ mutationKey: importMutationKeys.import(trip.id) }) > 0;
+  // The paste box is what the user came for, so it gets focus on open (M6.1 nit).
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   return (
     <Modal
+      initialFocusRef={textareaRef}
       open={open}
       onClose={saving ? noop : onClose}
       closeOnBackdrop={!saving}
@@ -60,7 +71,7 @@ export function ImportDialog({ open, onClose, trip }: ImportDialogProps) {
         />
       }
     >
-      {open && <ImportForm trip={trip} onDone={onClose} />}
+      {open && <ImportForm trip={trip} onDone={onClose} textareaRef={textareaRef} />}
     </Modal>
   );
 }
@@ -76,9 +87,11 @@ function validItems(result: ImportParseResult): ActivityInput[] {
 function ImportForm({
   trip,
   onDone,
+  textareaRef,
 }: {
   trip: Pick<Trip, 'id' | 'colorCursor'>;
   onDone: () => void;
+  textareaRef: RefObject<HTMLTextAreaElement>;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -99,25 +112,35 @@ function ImportForm({
     return rows.map((row) => (row.ok ? paletteColorAt(trip.colorCursor + next++) : null));
   }, [rows, trip.colorCursor]);
 
-  const summaryParts: string[] = [];
+  // Separators come from the translation, not from code (M6.1 nit).
+  let summary = '';
   if (rows.length > 0) {
-    summaryParts.push(
-      validCount > 0 ? t('import.summary.valid', { count: validCount }) : t('import.summary.none'),
-    );
-    if (invalidCount > 0) summaryParts.push(t('import.summary.invalid', { count: invalidCount }));
+    const valid =
+      validCount > 0 ? t('import.summary.valid', { count: validCount }) : t('import.summary.none');
+    summary =
+      invalidCount > 0
+        ? t('import.summary.withInvalid', {
+            valid,
+            invalid: t('import.summary.invalid', { count: invalidCount }),
+          })
+        : valid;
   }
-  const summary = summaryParts.join(' · ');
   const limitMessage = exceedsLimit
     ? t('import.tooMany', { count: validCount, max: MAX_IMPORT_ROWS })
     : '';
   const announcement = useDebouncedValue(
-    [summary, limitMessage].filter(Boolean).join('. '),
+    summary && limitMessage
+      ? t('import.announceWithLimit', { summary, limit: limitMessage })
+      : summary || limitMessage,
     ANNOUNCE_DELAY_MS,
   );
 
+  // A timed-out import may have been committed anyway (UX-3): say so instead of "nothing added".
   const generalError =
     importActivities.isError && !isAbortedError(importActivities.error)
-      ? t('import.failed', { reason: errorMessage(importActivities.error, t) })
+      ? isTimeoutError(importActivities.error)
+        ? t('import.uncertain')
+        : t('import.failed', { reason: errorMessage(importActivities.error, t) })
       : null;
 
   function handleSubmit(e: FormEvent) {
@@ -142,6 +165,7 @@ function ImportForm({
       {generalError && <FormError>{generalError}</FormError>}
       <Field label={t('import.textLabel')}>
         <Textarea
+          ref={textareaRef}
           value={text}
           readOnly={saving}
           spellCheck={false}

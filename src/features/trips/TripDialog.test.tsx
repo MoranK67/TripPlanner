@@ -146,6 +146,19 @@ describe('TripDialog — new trip (FR-2.2–2.5)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('אין חיבור לשרת');
     expect(screen.getByLabelText('שם הטיול')).toHaveValue('יפן');
   });
+
+  it('after a timeout says the trip may have been saved and refetches the list (UX-3)', async () => {
+    repo.create.mockRejectedValue(new AppError('network', { reason: 'timeout', retryable: true }));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { queryClient } = await renderDialog();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    save('יצירת הטיול');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'ייתכן שהפעולה בכל זאת נשמרה: לפני שמנסים שוב, כדאי לסגור את החלון ולבדוק ברשימה.',
+    );
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['trips', 'list'] });
+  });
+
   it('cannot be closed while saving, so its result is not lost', async () => {
     let resolve: (trip: Trip) => void = () => {};
     repo.create.mockImplementation(() => new Promise<Trip>((r) => (resolve = r)));

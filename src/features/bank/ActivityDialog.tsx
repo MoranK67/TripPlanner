@@ -24,7 +24,7 @@ import {
   type Activity,
   type ActivityPatch,
 } from '@/domain';
-import { errorMessage, isAbortedError } from '@/i18n/errors';
+import { createErrorMessage, errorMessage, isAbortedError } from '@/i18n/errors';
 import { activityMutationKeys, useCreateActivity, useUpdateActivity } from './hooks';
 
 /** Default duration of a new activity (prototype: one hour). */
@@ -133,7 +133,10 @@ function ActivityForm({
   // Field problems are shown at the field; anything else (network, not found, …) above the form.
   const generalError =
     mutation.isError && !isAbortedError(mutation.error) && serverReason !== 'name'
-      ? errorMessage(mutation.error, t)
+      ? // A timed-out create may have been saved: ask to check the bank first (UX-3).
+        activity
+        ? errorMessage(mutation.error, t)
+        : createErrorMessage(mutation.error, t)
       : null;
 
   function handleSubmit(e: FormEvent) {

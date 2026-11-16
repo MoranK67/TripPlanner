@@ -1,12 +1,13 @@
-import { useMemo } from 'react';
+import { useEffect, useId, useMemo, useRef, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { Button, Card, LoadingState } from '@/components/ui';
 import { isAppError } from '@/data';
 import { isInBank, type Activity, type Trip } from '@/domain';
-import { BankPanel, useActivityDialogs } from '@/features/bank';
+import { BankPanel, useActivityDialogs, type ActivityDialogsOptions } from '@/features/bank';
 import { ExportButton } from '@/features/export';
 import {
+  findPlacedActivityButton,
   PlannerLayout,
   Timetable,
   TimetableDragRoot,
@@ -67,8 +68,11 @@ export function TripPage() {
 /** The loaded trip: header controls, bank and timetable sharing one set of activity dialogs. */
 function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] }) {
   const { t } = useTranslation();
+  const headingId = useId();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const focusAfterDelete = useFocusAfterTimetableDelete(activities, headingRef);
   // Placed blocks open the same edit / delete dialogs as the bank (FR-3.4, FR-3.5).
-  const timetableDialogs = useActivityDialogs(trip);
+  const timetableDialogs = useActivityDialogs(trip, focusAfterDelete);
   const placement = usePlacementActions(trip.id);
   const bankCount = useMemo(() => activities.filter(isInBank).length, [activities]);
   return (
@@ -91,11 +95,15 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
           bankCount={bankCount}
           bank={<BankPanel trip={trip} activities={activities} />}
         >
-          {/* Outline: h1 app title > h2 trip / bank / timetable > h3 day headers (in Timetable). */}
-          <h2 className="sr-only">{t('planner.timetable')}</h2>
+          {/* Outline: h1 app title > h2 trip / bank / timetable > h3 day headers (in Timetable).
+              The timetable region is named by this heading, so it is announced once (UX-2). */}
+          <h2 id={headingId} ref={headingRef} tabIndex={-1} className="sr-only">
+            {t('planner.timetable')}
+          </h2>
           <Timetable
             trip={trip}
             activities={activities}
+            labelledBy={headingId}
             onOpenActivity={timetableDialogs.openEdit}
             onDeleteActivity={timetableDialogs.openDelete}
           />
@@ -104,4 +112,67 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
       {timetableDialogs.dialogs}
     </>
   );
+}
+
+/**
+ * The placed activity to focus after `deleted` is gone: the next one on the same day (by start
+ * time), else the previous one; `null` if the day has no other block.
+ */
+function neighborOnSameDay(activities: readonly Activity[], deleted: Activity): Activity | null {
+  const date = deleted.placement?.date;
+  if (!date) return null;
+  const sameDay = activities
+    .filter((a) => a.id !== deleted.id && a.placement?.date === date)
+    .sort((a, b) => (a.placement?.startMinute ?? 0) - (b.placement?.startMinute ?? 0));
+  const start = deleted.placement?.startMinute ?? 0;
+  return sameDay.find((a) => (a.placement?.startMinute ?? 0) > start) ?? sameDay.at(-1) ?? null;
+}
+
+/** What to focus once a deleted block has left the timetable. */
+interface PendingDelete {
+  deletedId: string;
+  /** Next (else previous) block of the same day; `null` = no other block that day. */
+  targetId: string | null;
+}
+
+/**
+ * A confirmed delete removes the block at once (optimistic), taking its × button (where the
+ * confirm dialog returned focus) with it, so keyboard focus would fall to <body>. When that
+ * happens, focus moves to the next block of the same day (else the previous one); if none is
+ * drawn (no other block that day, or another day on the phone), to the timetable region; else to
+ * the timetable heading (UX-2). Focus the user already moved elsewhere is left alone. If the
+ * server then refuses the delete, the block comes back and focus stays where it was moved; a
+ * failure before the block was removed just clears the pending delete. Returns the delete
+ * callbacks for useActivityDialogs.
+ */
+function useFocusAfterTimetableDelete(
+  activities: readonly Activity[],
+  headingRef: RefObject<HTMLHeadingElement | null>,
+): ActivityDialogsOptions {
+  const pendingRef = useRef<PendingDelete | null>(null);
+  useEffect(() => {
+    const pending = pendingRef.current;
+    if (pending === null || activities.some((a) => a.id === pending.deletedId)) return;
+    pendingRef.current = null;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const heading = headingRef.current;
+    const block = pending.targetId === null ? null : findPlacedActivityButton(pending.targetId);
+    // The region is the element labelled by the heading (Timetable's `labelledBy`).
+    const region = heading?.id
+      ? document.querySelector<HTMLElement>(`[aria-labelledby="${heading.id}"]`)
+      : null;
+    (block ?? region ?? heading)?.focus();
+  }, [activities, headingRef]);
+  return {
+    onDeleteStart: (activity) => {
+      pendingRef.current = {
+        deletedId: activity.id,
+        targetId: neighborOnSameDay(activities, activity)?.id ?? null,
+      };
+    },
+    onDeleteError: () => {
+      pendingRef.current = null;
+    },
+  };
 }

@@ -44,6 +44,10 @@ export function useCreateActivity(tripId: string) {
             }
           : old,
       );
+    },
+    // Also after an error: a timed-out create may have been saved (UX-3, DEC-032); the refetch
+    // shows it in the bank, so trying again doesn't silently add a second copy.
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: key });
     },
   });

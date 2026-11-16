@@ -5,6 +5,7 @@ import { HeaderSlotProvider } from '@/components/ui';
 import { SignOutButton } from '@/features/auth';
 import { OfflineBanner } from './OfflineBanner';
 import { ServerStatus } from './ServerStatus';
+import { useUnsavedWritesGuard } from './useUnsavedWritesGuard';
 
 export const MAIN_CONTENT_ID = 'main-content';
 
@@ -17,6 +18,8 @@ export const MAIN_CONTENT_ID = 'main-content';
 export function AppLayout() {
   const { t } = useTranslation();
   const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null);
+  // Closing the tab mid-save would drop the write (UX-4).
+  useUnsavedWritesGuard();
 
   return (
     <div className="flex h-full flex-col">

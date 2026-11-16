@@ -269,6 +269,44 @@ describe('import', () => {
     expect(screen.getByLabelText('הרשימה')).toHaveValue('קפה; 1');
     expect(screen.getByRole('button', { name: 'הוספת אטרקציה אחת למאגר' })).toBeEnabled();
   });
+
+  it('after a timeout says the import may have been saved, and refetches the bank (UX-3)', async () => {
+    repo.importMany.mockRejectedValue(
+      new AppError('network', { reason: 'timeout', retryable: true }),
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { queryClient } = setup();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    paste('קפה; 1');
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת אטרקציה אחת למאגר' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('import.uncertain'));
+    expect(screen.getByRole('alert')).not.toHaveTextContent('ושום אטרקציה לא נוספה');
+    // Rows the server did commit show up in the bank behind the dialog.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: tripKeys.detail('trip-1') });
+  });
+});
+
+describe('translations (M6.1 nits)', () => {
+  // Current CLDR gives Hebrew one / two / other only, so `_many` keys were never used. A runtime
+  // with older ICU data may still say "many" (e.g. for 20); i18next then falls back to `_other`.
+  it('has no `_many` plural forms anywhere, and counts like 20 still read correctly', () => {
+    const json = JSON.stringify(i18n.getResourceBundle('he', 'translation'));
+    expect(json).not.toMatch(/[A-Za-z]_many"/);
+    expect(i18n.t('import.submit', { count: 20 })).toBe('הוספת 20 אטרקציות למאגר');
+    expect(i18n.t('trips.days', { count: 20 })).toBe('20 ימים');
+  });
+
+  it('joins the summary and the limit message through translations', async () => {
+    setup();
+    paste(`${lines(201)}\nשבור`);
+    expect(screen.getByText('זוהו 201 אטרקציות · שורה אחת עם בעיה לא תיכנס')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(screen.getByRole('dialog')).getByRole('status')).toHaveTextContent(
+        'זוהו 201 אטרקציות · שורה אחת עם בעיה לא תיכנס. ברשימה יש 201 אטרקציות',
+      ),
+    );
+  });
 });
 
 describe('from the bank panel', () => {

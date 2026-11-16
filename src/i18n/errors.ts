@@ -34,3 +34,20 @@ export function errorMessage(error: unknown, t: TFunction): string {
   if (reasonKey) return t(reasonKey);
   return t(`errors.kinds.${appError.kind satisfies AppErrorKind}`);
 }
+
+/**
+ * True when a write hit the request deadline (AppError `network` / reason `timeout`, DEC-032):
+ * the server may still have committed it, so the outcome is unknown (UX-3).
+ */
+export function isTimeoutError(error: unknown): boolean {
+  return isAppError(error) && error.kind === 'network' && error.reason === 'timeout';
+}
+
+/**
+ * Hebrew message for a failed **create** (new trip / new activity). After a timeout the item may
+ * have been saved anyway, so the message asks the user to check the list before trying again;
+ * the create hooks refetch that list even on error, so a saved item shows up (UX-3).
+ */
+export function createErrorMessage(error: unknown, t: TFunction): string {
+  return isTimeoutError(error) ? t('errors.createUncertain') : errorMessage(error, t);
+}

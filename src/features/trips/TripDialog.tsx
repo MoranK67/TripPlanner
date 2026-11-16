@@ -27,7 +27,7 @@ import {
   type Minute,
   type Trip,
 } from '@/domain';
-import { errorMessage, isAbortedError } from '@/i18n/errors';
+import { createErrorMessage, errorMessage, isAbortedError } from '@/i18n/errors';
 import { tripMutationKeys, useCreateTrip, useUpdateTripWindow } from './hooks';
 import {
   DEFAULT_END_MINUTE,
@@ -147,7 +147,10 @@ function TripForm({
     !isAbortedError(mutation.error) &&
     serverWindowError === null &&
     serverReason !== 'name'
-      ? errorMessage(mutation.error, t)
+      ? // A timed-out create may have been saved: ask to check the list first (UX-3).
+        trip
+        ? errorMessage(mutation.error, t)
+        : createErrorMessage(mutation.error, t)
       : null;
 
   const errorTarget = windowErrorTarget(shownWindowError);

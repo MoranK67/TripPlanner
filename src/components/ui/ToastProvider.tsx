@@ -56,7 +56,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-atomic="true"
         className={cx(
           // inset-x-4 + mx-auto + w-fit centers without physical left/right (RTL-safe).
-          'pointer-events-none fixed inset-x-4 bottom-6 z-[3000] mx-auto w-fit max-w-[min(480px,100%)] rounded-full px-[18px] py-2.5 text-center text-sm transition duration-200 motion-reduce:transition-none',
+          'pointer-events-none fixed inset-x-4 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-[3000] mx-auto w-fit max-w-[min(480px,100%)] rounded-full px-[18px] py-2.5 text-center text-sm transition duration-200 motion-reduce:transition-none',
           toast ? toneClass[toast.tone] : toneClass.info,
           visible ? 'translate-y-0 opacity-100' : 'translate-y-5 opacity-0',
         )}

@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { APP_ERROR_KINDS, AppError } from '@/data';
 import he from './he.json';
-import { errorMessage, isAbortedError } from './errors';
+import { createErrorMessage, errorMessage, isAbortedError, isTimeoutError } from './errors';
 
 const t = i18n.t.bind(i18n);
 
@@ -40,5 +40,22 @@ describe('isAbortedError', () => {
     expect(isAbortedError(new AppError('network', { reason: 'aborted' }))).toBe(true);
     expect(isAbortedError(new AppError('network', { retryable: true }))).toBe(false);
     expect(isAbortedError(new Error('aborted'))).toBe(false);
+  });
+});
+
+describe('createErrorMessage (UX-3)', () => {
+  const timeout = new AppError('network', { reason: 'timeout', retryable: true });
+
+  it('says a timed-out create may have been saved and asks to check before retrying', () => {
+    expect(isTimeoutError(timeout)).toBe(true);
+    expect(createErrorMessage(timeout, t)).toBe(he.errors.createUncertain);
+    expect(he.errors.createUncertain).toContain('ייתכן');
+  });
+
+  it('uses the normal message for other errors', () => {
+    const offline = new AppError('network', { retryable: true });
+    expect(isTimeoutError(offline)).toBe(false);
+    expect(createErrorMessage(offline, t)).toBe(he.errors.kinds.network);
+    expect(createErrorMessage(new AppError('validation'), t)).toBe(he.errors.kinds.validation);
   });
 });

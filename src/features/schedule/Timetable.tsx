@@ -29,6 +29,12 @@ export interface TimetableProps {
    * side. Defaults to the surrounding `PlannerLayout`'s choice (by screen width).
    */
   singleDay?: boolean;
+  /**
+   * Id of an element (e.g. the page's sr-only heading) that names the timetable region. When set
+   * it is the region's only name (`aria-labelledby`); otherwise the region has a built-in
+   * `aria-label`. Applies to the all-days and the phone single-day view.
+   */
+  labelledBy?: string;
   className?: string;
 }
 
@@ -48,6 +54,7 @@ export function Timetable({
   onOpenActivity,
   onDeleteActivity,
   singleDay,
+  labelledBy,
   className,
 }: TimetableProps) {
   const { t } = useTranslation();
@@ -65,6 +72,7 @@ export function Timetable({
     columnsRef: drag?.columnsRef,
     blockClassName: drag ? DRAG_SOURCE_CLASS : undefined,
     describedBy: drag ? hintId : undefined,
+    labelledBy,
     className,
   };
   const grid = oneDay ? (

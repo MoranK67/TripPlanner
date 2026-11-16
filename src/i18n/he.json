@@ -1,4 +1,10 @@
 {
+  "pwa": {
+    "updateAvailable": "גרסה חדשה זמינה",
+    "reload": "רענון",
+    "later": "לא עכשיו",
+    "waitingForSave": "ממתין לסיום השמירה ואז מרענן…"
+  },
   "app": {
     "title": "מתכנן הטיולים",
     "skipToContent": "דילוג לתוכן הראשי",
@@ -61,7 +67,6 @@
     "range": "{{startDate}} {{startTime}} עד {{endDate}} {{endTime}}",
     "days_one": "יום אחד",
     "days_two": "יומיים",
-    "days_many": "{{count}} ימים",
     "days_other": "{{count}} ימים",
     "loadError": "לא הצלחנו לטעון את הטיולים. {{reason}}",
     "empty": {
@@ -97,7 +102,6 @@
     },
     "movedToBank_one": "אטרקציה אחת יצאה מטווח הטיול וחזרה למאגר",
     "movedToBank_two": "שתי אטרקציות יצאו מטווח הטיול וחזרו למאגר",
-    "movedToBank_many": "{{count}} אטרקציות יצאו מטווח הטיול וחזרו למאגר",
     "movedToBank_other": "{{count}} אטרקציות יצאו מטווח הטיול וחזרו למאגר",
     "deleteConfirm": {
       "title": "מחיקת טיול",
@@ -150,14 +154,14 @@
     "summary": {
       "valid_one": "זוהתה אטרקציה אחת",
       "valid_two": "זוהו שתי אטרקציות",
-      "valid_many": "זוהו {{count}} אטרקציות",
       "valid_other": "זוהו {{count}} אטרקציות",
       "none": "לא זוהו אטרקציות תקינות",
       "invalid_one": "שורה אחת עם בעיה לא תיכנס",
       "invalid_two": "שתי שורות עם בעיה לא ייכנסו",
-      "invalid_many": "{{count}} שורות עם בעיה לא ייכנסו",
-      "invalid_other": "{{count}} שורות עם בעיה לא ייכנסו"
+      "invalid_other": "{{count}} שורות עם בעיה לא ייכנסו",
+      "withInvalid": "{{valid}} · {{invalid}}"
     },
+    "announceWithLimit": "{{summary}}. {{limit}}",
     "tooMany": "ברשימה יש {{count}} אטרקציות, ואפשר לייבא עד {{max}} בכל פעם. כדאי לפצל את הרשימה לכמה חלקים ולייבא כל חלק בנפרד.",
     "rounded": "(עוגל)",
     "invalidRow": "שורה עם בעיה:",
@@ -172,13 +176,12 @@
     "submitNone": "הוספה למאגר",
     "submit_one": "הוספת אטרקציה אחת למאגר",
     "submit_two": "הוספת שתי אטרקציות למאגר",
-    "submit_many": "הוספת {{count}} אטרקציות למאגר",
     "submit_other": "הוספת {{count}} אטרקציות למאגר",
     "success_one": "נוספה אטרקציה אחת למאגר",
     "success_two": "נוספו שתי אטרקציות למאגר",
-    "success_many": "נוספו {{count}} אטרקציות למאגר",
     "success_other": "נוספו {{count}} אטרקציות למאגר",
-    "failed": "הייבוא לא הצליח, ושום אטרקציה לא נוספה. {{reason}}"
+    "failed": "הייבוא לא הצליח, ושום אטרקציה לא נוספה. {{reason}}",
+    "uncertain": "לא ברור אם הייבוא הסתיים: השרת לא ענה בזמן. ייתכן שהאטרקציות בכל זאת נוספו. לפני שמנסים שוב, כדאי לסגור את החלון ולבדוק במאגר, כי ייבוא חוזר של אותה רשימה יוסיף אותן פעמיים."
   },
   "export": {
     "open": "ייצוא",
@@ -205,11 +208,9 @@
     "count": {
       "trips_one": "טיול אחד",
       "trips_two": "שני טיולים",
-      "trips_many": "{{count}} טיולים",
       "trips_other": "{{count}} טיולים",
       "activities_one": "אטרקציה אחת",
       "activities_two": "שתי אטרקציות",
-      "activities_many": "{{count}} אטרקציות",
       "activities_other": "{{count}} אטרקציות",
       "noActivities": "בלי אטרקציות"
     },
@@ -238,7 +239,6 @@
       "submitNone": "הוספת הטיולים",
       "submit_one": "הוספת טיול אחד",
       "submit_two": "הוספת שני טיולים",
-      "submit_many": "הוספת {{count}} טיולים",
       "submit_other": "הוספת {{count}} טיולים",
       "saving": "שומר את הטיולים…",
       "success": "הגיבוי שוחזר: נוספו {{trips}}, {{activities}}",
@@ -255,7 +255,6 @@
       "placement": "{{placed}} בלוח · {{bank}} במאגר",
       "warningsTitle_one": "הערה אחת על הקובץ:",
       "warningsTitle_two": "שתי הערות על הקובץ:",
-      "warningsTitle_many": "{{count}} הערות על הקובץ:",
       "warningsTitle_other": "{{count}} הערות על הקובץ:"
     },
     "formats": {
@@ -376,6 +375,7 @@
       "not_found": "הפריט לא נמצא. ייתכן שהוא נמחק.",
       "unknown": "משהו השתבש. אפשר לנסות שוב."
     },
+    "createUncertain": "השרת לא ענה בזמן, ולא ברור אם השמירה הצליחה. ייתכן שהפעולה בכל זאת נשמרה: לפני שמנסים שוב, כדאי לסגור את החלון ולבדוק ברשימה.",
     "reasons": {
       "email_not_confirmed": "החשבון עדיין לא אושר. צריך ללחוץ על קישור האישור שנשלח באימייל.",
       "user_banned": "החשבון הזה חסום כרגע.",

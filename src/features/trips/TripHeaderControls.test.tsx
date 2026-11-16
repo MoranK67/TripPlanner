@@ -1,11 +1,7 @@
-import { configure, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { AppError } from '@/data';
 import { makeSummary, makeTrip, renderRoute } from './testUtils';
 import { TripHeaderControls } from './TripHeaderControls';
-
-// Under load (parallel workers, a busy machine) data and lazy chunks can take longer than
-// Testing Library's 1 s default; give findBy / waitFor more room in this file.
-configure({ asyncUtilTimeout: 5_000 });
 
 const repo = vi.hoisted(() => ({
   list: vi.fn(),

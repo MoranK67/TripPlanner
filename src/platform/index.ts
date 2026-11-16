@@ -6,3 +6,5 @@ export type { OnlineListener, Platform, PlatformKind, SaveResult } from './types
 export { PlatformNotImplementedError } from './types';
 export { platform } from './platform';
 export { useOnlineStatus } from './useOnlineStatus';
+export { pwaUpdater, type PwaUpdateState, type PwaUpdater } from './pwa';
+export { PwaUpdatePrompt, type PwaUpdatePromptProps } from './PwaUpdatePrompt';

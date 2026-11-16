@@ -34,6 +34,10 @@ export function useImportActivities(tripId: string) {
             }
           : old,
       );
+    },
+    // Also after an error: a timed-out import may have been committed (UX-3, DEC-032), and the
+    // refetched bank shows it before the user tries again.
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: key });
     },
   });

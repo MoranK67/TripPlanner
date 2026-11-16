@@ -47,7 +47,11 @@ describe('TripPage', () => {
     renderPage();
     const bank = await screen.findByRole('complementary', { name: 'מאגר אטרקציות' });
     expect(within(bank).getByRole('heading', { name: 'מאגר אטרקציות' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'לוח הזמנים' })).toBeInTheDocument();
+    // Named by the sr-only h2 (aria-labelledby), so the name is announced once (UX-2).
+    const region = screen.getByRole('region', { name: 'לוח הזמנים' });
+    const heading = screen.getByRole('heading', { level: 2, name: 'לוח הזמנים' });
+    expect(region).toHaveAttribute('aria-labelledby', heading.id);
+    expect(region).not.toHaveAttribute('aria-label');
     expect(trips.get).toHaveBeenCalledWith('trip-1');
     // Heading outline: trip, bank and timetable are h2; the timetable's day headers are h3.
     const h2 = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
@@ -117,6 +121,95 @@ describe('TripPage', () => {
       expect(activities.delete).not.toHaveBeenCalled();
       fireEvent.click(within(confirm).getByRole('button', { name: 'כן, למחוק' }));
       await waitFor(() => expect(activities.delete).toHaveBeenCalledWith('placed-1'));
+    });
+
+    it('moves focus to the timetable after a block is deleted (UX-2)', async () => {
+      trips.get.mockResolvedValue(data);
+      activities.delete.mockResolvedValue(undefined);
+      renderPage();
+      const timetable = await screen.findByRole('region', { name: 'לוח הזמנים' });
+      const remove = within(timetable).getByRole('button', { name: 'מחיקת מוזיאון' });
+      remove.focus();
+      fireEvent.click(remove);
+      const confirm = screen.getByRole('alertdialog', { name: 'מחיקת אטרקציה' });
+      // The refetch after the delete returns the trip without the block.
+      trips.get.mockResolvedValue({ ...data, activities: [] });
+      fireEvent.click(within(confirm).getByRole('button', { name: 'כן, למחוק' }));
+
+      await waitFor(() =>
+        expect(within(timetable).queryByRole('button', { name: /מוזיאון/ })).toBeNull(),
+      );
+      await waitFor(() => expect(timetable).toHaveFocus());
+    });
+
+    it('moves focus to the next block of the same day, else the previous one (UX-2)', async () => {
+      const block = (id: string, name: string, startMinute: number, date = '2026-05-02') => ({
+        ...data.activities[0],
+        id,
+        name,
+        durationMinutes: 60,
+        placement: { date, startMinute },
+      });
+      const all = [
+        block('a', 'בוקר', 540),
+        block('b', 'צהריים', 720),
+        block('c', 'ערב', 1020),
+        block('other', 'יום אחר', 600, '2026-05-01'),
+      ];
+      trips.get.mockResolvedValue({ ...data, activities: all });
+      activities.delete.mockResolvedValue(undefined);
+      renderPage();
+      const timetable = await screen.findByRole('region', { name: 'לוח הזמנים' });
+
+      async function deleteBlock(name: string) {
+        const remove = within(timetable).getByRole('button', { name: `מחיקת ${name}` });
+        remove.focus();
+        fireEvent.click(remove);
+        fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
+        await waitFor(() =>
+          expect(within(timetable).queryByRole('button', { name: `מחיקת ${name}` })).toBeNull(),
+        );
+      }
+
+      // The middle block: focus goes to the later one that day, not to the other day.
+      trips.get.mockResolvedValue({ ...data, activities: all.filter((a) => a.id !== 'b') });
+      await deleteBlock('צהריים');
+      await waitFor(() =>
+        expect(within(timetable).getByRole('button', { name: /^ערב / })).toHaveFocus(),
+      );
+
+      // The last block of the day: focus goes to the previous one.
+      trips.get.mockResolvedValue({ ...data, activities: [all[0], all[3]] });
+      await deleteBlock('ערב');
+      await waitFor(() =>
+        expect(within(timetable).getByRole('button', { name: /^בוקר / })).toHaveFocus(),
+      );
+    });
+
+    it('keeps focus on the timetable when the delete fails and the block comes back', async () => {
+      trips.get.mockResolvedValue(data);
+      // The test decides when the server answers, so the optimistic removal is seen first.
+      let fail: (error: unknown) => void = () => {};
+      activities.delete.mockReturnValue(new Promise<void>((_, reject) => (fail = reject)));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      renderPage();
+      const timetable = await screen.findByRole('region', { name: 'לוח הזמנים' });
+      const remove = within(timetable).getByRole('button', { name: 'מחיקת מוזיאון' });
+      remove.focus();
+      fireEvent.click(remove);
+      fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
+
+      await waitFor(() =>
+        expect(within(timetable).queryByRole('button', { name: /מוזיאון/ })).toBeNull(),
+      );
+      await waitFor(() => expect(timetable).toHaveFocus());
+
+      act(() => fail(new AppError('network', { retryable: true })));
+      expect(await screen.findByText(/המחיקה לא הצליחה/)).toBeInTheDocument();
+      expect(
+        await within(timetable).findByRole('button', { name: 'מוזיאון 11:00–12:30' }),
+      ).toBeInTheDocument();
+      expect(timetable).toHaveFocus();
     });
   });
 });

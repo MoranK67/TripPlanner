@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { addDays, PALETTE, type Activity, type Placement, type Trip } from '@/domain';
+import { findPlacedActivityButton } from './placedActivity';
 import { Timetable } from './Timetable';
 
 // Connectivity the test can switch while the timetable is mounted (M7.3).
@@ -316,6 +317,95 @@ describe('Timetable', () => {
         makeActivity('מוזיאון', 90, { date: '2026-12-01', startMinute: 15 * 60 }),
       ]);
       expect(screen.queryByRole('button', { name: 'מחיקת מוזיאון' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('UX-2: naming and focus targets', () => {
+    function renderNamed(singleDay: boolean, activities: Activity[] = []) {
+      return render(
+        <div dir="rtl">
+          <h2 id="page-timetable-heading" className="sr-only">
+            לוח זמנים של הטיול
+          </h2>
+          <Timetable
+            trip={makeTrip()}
+            activities={activities}
+            onOpenActivity={vi.fn()}
+            singleDay={singleDay}
+            labelledBy="page-timetable-heading"
+          />
+        </div>,
+      );
+    }
+
+    it.each([false, true])(
+      'labelledBy makes the given heading the only name (singleDay=%s)',
+      (singleDay) => {
+        renderNamed(singleDay);
+        const region = screen.getByTestId('timetable-scroller');
+        expect(region).toHaveAttribute('aria-labelledby', 'page-timetable-heading');
+        expect(region).not.toHaveAttribute('aria-label');
+        expect(screen.getByRole('region', { name: 'לוח זמנים של הטיול' })).toBe(region);
+      },
+    );
+
+    it.each([false, true])(
+      'keeps the built-in label without labelledBy (singleDay=%s)',
+      (singleDay) => {
+        render(
+          <Timetable
+            trip={makeTrip()}
+            activities={[]}
+            onOpenActivity={vi.fn()}
+            singleDay={singleDay}
+          />,
+        );
+        const region = screen.getByRole('region', { name: 'לוח הזמנים' });
+        expect(region).not.toHaveAttribute('aria-labelledby');
+      },
+    );
+
+    it.each([false, true])(
+      'marks each placed block with data-activity-id and finds its open button (singleDay=%s)',
+      (singleDay) => {
+        const museum = makeActivity('מוזיאון', 90, { date: '2026-12-01', startMinute: 15 * 60 });
+        const coffee = makeActivity('קפה', 30, { date: '2026-12-01', startMinute: 17 * 60 });
+        const later = makeActivity('שוק', 60, { date: '2026-12-02', startMinute: 9 * 60 });
+        const banked = makeActivity('במאגר', 60, null);
+        renderNamed(singleDay, [museum, coffee, later, banked]);
+
+        const roots = Array.from(document.querySelectorAll<HTMLElement>('[data-activity-id]'));
+        // Phone view draws only the first day.
+        expect(roots.map((r) => r.dataset.activityId)).toEqual(
+          singleDay ? [museum.id, coffee.id] : [museum.id, coffee.id, later.id],
+        );
+
+        const button = findPlacedActivityButton(coffee.id);
+        expect(button).toBe(screen.getByRole('button', { name: /^קפה/ }));
+        button?.focus();
+        expect(button).toHaveFocus();
+        // Scoped search, and nothing for activities that are not drawn in the grid.
+        expect(findPlacedActivityButton(museum.id, screen.getByTestId('timetable-scroller'))).toBe(
+          screen.getByRole('button', { name: /^מוזיאון/ }),
+        );
+        expect(findPlacedActivityButton(banked.id)).toBeNull();
+        if (singleDay) expect(findPlacedActivityButton(later.id)).toBeNull();
+      },
+    );
+
+    it('never returns the × button', () => {
+      const museum = makeActivity('מוזיאון', 90, { date: '2026-12-01', startMinute: 15 * 60 });
+      render(
+        <Timetable
+          trip={makeTrip()}
+          activities={[museum]}
+          onOpenActivity={vi.fn()}
+          onDeleteActivity={vi.fn()}
+        />,
+      );
+      const button = findPlacedActivityButton(museum.id);
+      expect(button).not.toHaveAttribute('data-no-drag');
+      expect(button).toHaveAccessibleName(/^מוזיאון/);
     });
   });
 });

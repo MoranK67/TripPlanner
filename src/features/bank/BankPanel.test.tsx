@@ -168,6 +168,26 @@ describe('add activity (FR-3.1, FR-3.2)', () => {
     expect(repo.create).not.toHaveBeenCalled();
   });
 
+  it('after a timeout says it may have been saved and refetches the bank (UX-3)', async () => {
+    repo.create.mockRejectedValue(new AppError('network', { reason: 'timeout', retryable: true }));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderBank();
+    // The server did commit it: the refetch after the error brings it in.
+    const saved = activity({ id: 'saved', name: 'גלידה', bankPosition: 4 });
+    trips.get.mockResolvedValue({ trip, activities: [...ACTIVITIES, saved] });
+    fireEvent.click(screen.getByRole('button', { name: '+ הוספה' }));
+    fireEvent.change(screen.getByLabelText('שם האטרקציה'), { target: { value: 'גלידה' } });
+    fireEvent.click(screen.getByRole('button', { name: 'הוספה למאגר' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'ייתכן שהפעולה בכל זאת נשמרה: לפני שמנסים שוב, כדאי לסגור את החלון ולבדוק ברשימה.',
+    );
+    await waitFor(() => expect(trips.get).toHaveBeenCalled());
+    expect(
+      await within(screen.getByRole('list', { name: 'אטרקציות במאגר' })).findByText('גלידה'),
+    ).toBeInTheDocument();
+  });
+
   it('requires a name', () => {
     renderBank();
     fireEvent.click(screen.getByRole('button', { name: '+ הוספה' }));

@@ -65,6 +65,8 @@ export interface TimetableGridProps {
   gestureHandlers?: GestureHandlers;
   /** Id of a description of the timetable region (how to place without dragging). */
   describedBy?: string;
+  /** Id of the element that names the timetable region; replaces the default `aria-label`. */
+  labelledBy?: string;
   className?: string;
 }
 
@@ -116,6 +118,7 @@ export const TimetableGrid = memo(function TimetableGrid({
   renderDayHeader,
   gestureHandlers,
   describedBy,
+  labelledBy,
   className,
 }: TimetableGridProps) {
   const { t } = useTranslation();
@@ -162,7 +165,9 @@ export const TimetableGrid = memo(function TimetableGrid({
     <div
       ref={scroller}
       role="region"
-      aria-label={t('schedule.timetable.label')}
+      // One name only: a caller's visible / sr-only heading, else the built-in label.
+      aria-labelledby={labelledBy}
+      aria-label={labelledBy ? undefined : t('schedule.timetable.label')}
       aria-describedby={describedBy}
       // Focusable so keyboard users can scroll to empty days and hours (WCAG 2.1.1).
       tabIndex={0}
@@ -337,6 +342,9 @@ const DayColumn = memo(function DayColumn({
             key={a.id}
             // The drag engine finds blocks by this attribute (event delegation).
             data-drag-id={a.id}
+            // Grid-only marker (bank blocks have data-drag-id too), for `findPlacedActivityButton`.
+            // ActivityBlock puts extra props on its outer div, not on the inner open button.
+            data-activity-id={a.id}
             className={cx('inset-x-1 z-[2]', blockClassName)}
             // Inline, because ActivityBlock's own `relative` class beats an `absolute` class.
             style={{ position: 'absolute', top: blockTop(start) }}
