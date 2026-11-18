@@ -50,6 +50,9 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | M8.4 | Cloudflare Pages deploy from main (+ PR previews), `_headers` with `/sw.js` no-cache, Supabase auth redirect URLs | Orchestrator + owner + platform-engineer | M8.3 | todo | needs owner's Cloudflare account; ask before deploying |
 | UX-3 | A timed-out create may have succeeded on the server: invalidate on settle for create mutations (trips, bank, import) to avoid duplicates on retry | frontend-engineer | DATA-1 | done | from DATA-1 review |
 | UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | done | from DATA-1 report |
+| UX-6 | Phone planner header: the trip selector is squeezed by the action buttons and truncates even "רומא" to "רו…" (390px). Give the selector its own row or move actions into a menu | frontend-engineer | M7.1 | todo | from README-SHOTS QA; see docs/screenshots/planner-phone.png |
+| UX-7 | Phone bank sheet shows the title "מאגר אטרקציות (N)" twice (sheet handle + panel header); hide one when the sheet is open | frontend-engineer + scheduler-engineer | M7.1 | todo | from README-SHOTS QA; see docs/screenshots/bank-phone.png |
+| DOC-1 | Public-facing README (pitch, screenshots, how-it-was-built), MIT LICENSE, screenshots in docs/screenshots | Orchestrator + qa-engineer | — | done | before making the repo public |
 | M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | done | batch with next UI task |
 | QA-1 | E2E fake-backend fidelity + flaky tests | qa-engineer | M4.5 | done | host guard fixture, PGRST303/301, update_activity fit rule, 2 flaky network tests fixed (148/148 × 2). Note: run vitest from upper-case `C:\` cwd |
 
