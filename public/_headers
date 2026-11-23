@@ -1,0 +1,39 @@
+# Cloudflare Pages response headers (M8.4). Copied to dist/ by Vite; Pages reads it and never
+# serves it. Docs: https://developers.cloudflare.com/pages/configuration/headers/
+#
+# Rules run in file order and a request gets the headers of EVERY rule it matches; a header set
+# twice is joined with a comma, so `/assets/*` first detaches Cache-Control ("! Cache-Control").
+#
+# Caching:
+# - Everything defaults to `no-cache` (the browser must revalidate with the ETag each time):
+#   `/`, `/index.html`, every SPA route (Pages serves index.html for them), `/sw.js`, the
+#   `/workbox-*.js` runtime, `/manifest.webmanifest` and the icons. A stale sw.js or index.html
+#   would pin users to an old version; the service worker (DEC-039) gives the offline copy.
+# - `/assets/*` holds only content-hashed Vite output (JS, CSS, fonts): cached for a year.
+#
+# Content-Security-Policy (one line, Pages has no line continuation):
+# - script-src 'self': the build has no inline script (vite-plugin-pwa uses injectRegister:false,
+#   registration is bundled in src/platform/pwa.ts); no eval.
+# - style-src 'self': Tailwind/day-picker CSS are files; React `style` props use CSSOM (allowed).
+# - img-src 'self': only /icon.svg and the PWA icons; export images are drawn on a canvas.
+# - font-src 'self': Rubik woff2/woff from /assets.
+# - connect-src 'self' https://*.supabase.co: the Supabase REST + Auth API ('self' for the
+#   service worker's precache and update check). No wss: the app opens no Realtime channel; add
+#   wss://*.supabase.co here if Realtime is ever used.
+# - worker-src / manifest-src 'self': the service worker and the web app manifest.
+# - X-Robots-Tag noindex: a private app (sign-ups closed), keep it out of search results.
+# - frame-ancestors 'none' (with X-Frame-Options DENY for old browsers): no clickjacking.
+
+/*
+  Cache-Control: no-cache
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self' https://*.supabase.co; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Cross-Origin-Opener-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()
+  X-Robots-Tag: noindex, nofollow
+
+/assets/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
