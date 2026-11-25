@@ -160,8 +160,11 @@ async function runWrite(vars: PlacementVariables): Promise<ActivityUpdateResult>
 }
 
 /**
- * Overlay the queue's positions on refetched trip data. Only placement and bank position are
- * taken from the queue; other fields (e.g. a rename saved meanwhile) come from the fetch.
+ * Overlay the queue's values on refetched trip data: a pending write shows its optimistic value;
+ * a settled one shows the whole row the server confirmed (`base`). Dialog saves (FEAT-1) change
+ * name, duration, colour and tag too, so a fetch that started before such a save must not bring
+ * the old values back. The flip side, accepted: another device's edit of that activity meanwhile
+ * shows only after the refetch that follows the queue (see `PendingEntry`).
  */
 function applyQueue(data: TripWithActivities, queue: TripQueue): TripWithActivities {
   let next = data;
@@ -170,10 +173,8 @@ function applyQueue(data: TripWithActivities, queue: TripQueue): TripWithActivit
     if (entry.pending > 0) {
       value = applyOptimistic(next, entry.latest);
     } else {
-      const fetched = next.activities.find((a) => a.id === id);
-      value = fetched
-        ? { ...fetched, placement: entry.base.placement, bankPosition: entry.base.bankPosition }
-        : null;
+      // Only while the fetch still has the activity (it may have been deleted meanwhile).
+      value = next.activities.some((a) => a.id === id) ? entry.base : null;
     }
     if (value) next = replaceActivity(next, value);
   }

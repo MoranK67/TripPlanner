@@ -153,7 +153,7 @@
         "legend": "שיבוץ בלוח",
         "day": "יום",
         "unplaced": "לא משובץ (במאגר)",
-        "dayOption": "{{weekday}} {{date}} · יום {{n}}",
+        "dayOption": "יום {{n}} · {{weekday}} {{date}}",
         "from": "משעה",
         "to": "עד שעה",
         "errors": {

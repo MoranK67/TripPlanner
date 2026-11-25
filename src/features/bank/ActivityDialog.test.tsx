@@ -122,7 +122,7 @@ describe('placement section (FEAT-1)', () => {
     const dialog = screen.getByRole('dialog', { name: 'עריכת אטרקציה' });
     expect(within(dialog).getByRole('group', { name: 'שיבוץ בלוח' })).toBeInTheDocument();
     expect(day().value).toBe('2026-05-02');
-    expect(day().selectedOptions[0]).toHaveTextContent('יום שבת 2.5 · יום 2');
+    expect(day().selectedOptions[0]).toHaveTextContent('יום 2 · שבת 2.5');
     expect(from()).toHaveValue('10:00');
     expect(to()).toHaveValue('12:00');
     expect(from()).toBeEnabled();
@@ -190,6 +190,17 @@ describe('placement section (FEAT-1)', () => {
     expect(from()).toBeDisabled();
     expect(from()).not.toHaveAttribute('aria-invalid');
     expect(save).toBeEnabled();
+  });
+
+  it('always shows why Save is disabled, also for a cleared time not yet left', () => {
+    setup('museum');
+    type(from(), '');
+    expect(from()).toHaveAccessibleDescription('צריך להקליד שעה, למשל 0800');
+    expect(screen.getByRole('button', { name: 'שמירה' })).toBeDisabled();
+    type(from(), '1000');
+    type(duration(), '');
+    expect(duration()).toHaveAccessibleDescription(/צריך להקליד משך זמן/);
+    expect(screen.getByRole('button', { name: 'שמירה' })).toBeDisabled();
   });
 
   it('flags a duration that would end after midnight', () => {
@@ -327,6 +338,10 @@ describe('tag field (FEAT-2)', () => {
     fireEvent.click(chip);
     expect(input).toHaveValue('מרכז העיר');
     expect(chip).toHaveAttribute('aria-pressed', 'true');
+    // A toggle: pressing it again clears the tag.
+    fireEvent.click(chip);
+    expect(input).toHaveValue('');
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
     // The native suggestion list too.
     expect(input).toHaveAttribute('list');
   });

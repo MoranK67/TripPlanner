@@ -133,6 +133,14 @@ function firstFreeStart(
   return bounds.startMinute;
 }
 
+/**
+ * Weekday without the leading "יום" that `Intl` adds in Hebrew ("יום רביעי" → "רביעי"), so the
+ * option reads "יום 2 · רביעי 11.3" (spec) instead of repeating "יום".
+ */
+function shortWeekday(date: IsoDate): string {
+  return formatWeekday(date).replace(/^יום\s+/u, '');
+}
+
 function samePlacement(a: Placement | null, b: Placement | null): boolean {
   if (a === null || b === null) return a === b;
   return a.date === b.date && a.startMinute === b.startMinute;
@@ -180,9 +188,6 @@ function ActivityForm({
   const nameRef = useRef<HTMLInputElement>(null);
   const tagRef = useRef<HTMLInputElement>(null);
   const durationRef = useRef<HTMLInputElement>(null);
-  const dayRef = useRef<HTMLSelectElement>(null);
-  const startRef = useRef<HTMLInputElement>(null);
-  const endRef = useRef<HTMLInputElement>(null);
   const durationMessages = {
     empty: t('bank.dialog.errors.durationEmpty'),
     format: t('bank.dialog.errors.durationFormat'),
@@ -345,10 +350,8 @@ function ActivityForm({
       durationRef.current?.focus();
       return;
     }
-    if (placementInvalid) {
-      (dayError ? dayRef : start === null || startError ? startRef : endRef).current?.focus();
-      return;
-    }
+    // Save is disabled then (implicit submission is blocked too); each reason is shown at its field.
+    if (placementInvalid) return;
     // Offline the save button is disabled; Enter in a field must not start a write either (M7.3).
     if (!canEdit) return;
     const placement: Placement | null =
@@ -468,7 +471,8 @@ function ActivityForm({
                   key={item.key}
                   type="button"
                   aria-pressed={pressed}
-                  onClick={() => setTagText(item.tag)}
+                  // A toggle, like the bank's tag chips: pressing the chosen tag again clears it.
+                  onClick={() => setTagText(pressed ? '' : item.tag)}
                   className={cx(
                     'inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[12.5px]',
                     'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent-ink',
@@ -498,7 +502,8 @@ function ActivityForm({
         min={MIN_ACTIVITY_MINUTES}
         max={MAX_ACTIVITY_MINUTES}
         onChange={changeDuration}
-        showErrors={submitted}
+        // While placed, an invalid duration also disables Save: say why at once.
+        showErrors={submitted || placed}
         messages={durationMessages}
         error={pastMidnight ? t('bank.dialog.placement.errors.pastMidnight') : undefined}
       />
@@ -508,12 +513,12 @@ function ActivityForm({
           {t('bank.dialog.placement.legend')}
         </legend>
         <Field label={t('bank.dialog.placement.day')} error={dayError}>
-          <Select ref={dayRef} value={day} onChange={(e) => changeDay(e.target.value)}>
+          <Select value={day} onChange={(e) => changeDay(e.target.value)}>
             <option value={UNPLACED}>{t('bank.dialog.placement.unplaced')}</option>
             {days.map((date, i) => (
               <option key={date} value={date}>
                 {t('bank.dialog.placement.dayOption', {
-                  weekday: formatWeekday(date),
+                  weekday: shortWeekday(date),
                   date: formatShortDate(date),
                   n: i + 1,
                 })}
@@ -523,25 +528,25 @@ function ActivityForm({
         </Field>
         <div className="grid grid-cols-2 gap-x-3">
           <TimeInput
-            ref={startRef}
             label={t('bank.dialog.placement.from')}
             value={start}
             min={0}
             max={MAX_START_MINUTE}
             onChange={changeStart}
-            showErrors={submitted}
+            // Save is disabled while these are not valid times: always show why.
+            showErrors
             error={startError}
             disabled={!placed}
             className="min-w-0"
           />
           <TimeInput
-            ref={endRef}
             label={t('bank.dialog.placement.to')}
             value={end}
             min={MIN_END_MINUTE}
             max={MAX_END_MINUTE}
             onChange={changeEnd}
-            showErrors={submitted}
+            // Save is disabled while these are not valid times: always show why.
+            showErrors
             error={endError}
             disabled={!placed}
             className="min-w-0"

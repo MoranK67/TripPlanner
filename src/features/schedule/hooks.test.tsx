@@ -615,6 +615,45 @@ describe('useQueuedActivityUpdate (FEAT-1 dialog saves)', () => {
     expect(toastShown).not.toHaveBeenCalled();
   });
 
+  it('a saved edit survives a stale refetch while the queue still drains', async () => {
+    const drop = deferred<Activity>();
+    const later = deferred<Activity>();
+    repo.place.mockReturnValueOnce(drop.promise).mockReturnValueOnce(later.promise);
+    const saved = {
+      ...activity,
+      name: 'שוק הפשפשים',
+      durationMinutes: 120,
+      tag: 'נמל',
+      color: PALETTE[6],
+    };
+    repo.update.mockResolvedValue({ activity: saved, returnedToBank: false });
+    const { result, find, queryClient } = setupEdit();
+    // Queue: a drop of a-2, the dialog save of a-1, another drop of a-2.
+    act(() => result.current.placement.place('a-2', '2026-12-02', 600));
+    act(() =>
+      result.current.edit.mutate({
+        id: 'a-1',
+        patch: { name: 'שוק הפשפשים', durationMinutes: 120, tag: 'נמל' },
+      }),
+    );
+    act(() => result.current.placement.place('a-2', '2026-12-03', 600));
+    await act(async () => drop.resolve(placed(museum, '2026-12-02', 600)));
+    await waitFor(() => expect(repo.update).toHaveBeenCalled());
+    await waitFor(() => expect(find('a-1')).toEqual(saved));
+
+    // The save is confirmed, the last drop is not: a refetch that started before the save
+    // returns the old row, and the saved values stay.
+    await act(async () => {
+      await queryClient.fetchQuery({
+        queryKey: tripKeys.detail('trip-1'),
+        queryFn: () => Promise.resolve(data),
+        staleTime: 0,
+      });
+    });
+    expect(find('a-1')).toEqual(saved);
+    expect(find('a-2')?.placement).toEqual({ date: '2026-12-03', startMinute: 600 });
+  });
+
   it('waits for an earlier drop of the same trip (one queue, DEC-031)', async () => {
     const drop = deferred<Activity>();
     repo.place.mockReturnValue(drop.promise);

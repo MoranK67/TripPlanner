@@ -480,6 +480,16 @@ describe('tag filter chips (FEAT-2)', () => {
     expect(names()).toEqual(['נמל · Port']);
   });
 
+  it('forgets the selection when the trip data is cleared (sign-out, user switch)', () => {
+    const queryClient = renderBank(TAGGED);
+    fireEvent.click(screen.getByRole('button', { name: 'Port (1)' }));
+    cleanup();
+    act(() => queryClient.clear());
+    renderBank(TAGGED);
+    expect(screen.getByRole('button', { name: 'הכול' })).toHaveAttribute('aria-pressed', 'true');
+    expect(names()).toHaveLength(4);
+  });
+
   it('scrolls sideways in the phone sheet instead of wrapping', () => {
     renderBank(TAGGED, 'sheet');
     expect(screen.getByRole('group', { name: 'סינון לפי תגית' })).toHaveClass(
