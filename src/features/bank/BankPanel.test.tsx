@@ -4,7 +4,7 @@ import { AppError } from '@/data';
 import { PALETTE, type Activity, type Trip, type TripWithActivities } from '@/domain';
 import { ToastProvider } from '@/components/ui';
 import { tripKeys, useTripQuery } from '@/features/trips';
-import { BankPanel } from './BankPanel';
+import { BankPanel, type BankPanelProps } from './BankPanel';
 
 const repo = vi.hoisted(() => ({
   create: vi.fn(),
@@ -45,14 +45,14 @@ const ACTIVITIES = [
 ];
 
 /** Renders the bank from the trip cache, as the trip page does. */
-function CachedBank() {
+function CachedBank({ variant }: { variant?: BankPanelProps['variant'] }) {
   const query = useTripQuery('trip-1');
   return query.data ? (
-    <BankPanel trip={query.data.trip} activities={query.data.activities} />
+    <BankPanel trip={query.data.trip} activities={query.data.activities} variant={variant} />
   ) : null;
 }
 
-function renderBank(activities: Activity[] = ACTIVITIES) {
+function renderBank(activities: Activity[] = ACTIVITIES, variant?: BankPanelProps['variant']) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity },
@@ -66,7 +66,7 @@ function renderBank(activities: Activity[] = ACTIVITIES) {
   render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <CachedBank />
+        <CachedBank variant={variant} />
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -92,6 +92,38 @@ describe('BankPanel list', () => {
     renderBank([]);
     expect(screen.getByText(/המאגר ריק/)).toBeInTheDocument();
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
+  });
+});
+
+describe('inside the phone bottom sheet (UX-7)', () => {
+  it('keeps the title for screen readers only and drops its own card', () => {
+    renderBank(ACTIVITIES, 'sheet');
+    // The sheet handle already shows "מאגר אטרקציות (N)"; the heading stays in the outline.
+    const heading = screen.getByRole('heading', { name: 'מאגר אטרקציות (2)' });
+    expect(heading).toHaveClass('sr-only');
+    const panel = heading.closest('[data-variant]');
+    expect(panel).toHaveAttribute('data-variant', 'sheet');
+    expect(panel).not.toHaveClass('border');
+    expect(panel?.className).not.toMatch(/shadow/);
+    expect(screen.getByRole('button', { name: '+ הוספה' })).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('shows the visible title and card by default (side panel)', () => {
+    renderBank();
+    const heading = screen.getByRole('heading', { name: 'מאגר אטרקציות (2)' });
+    expect(heading).not.toHaveClass('sr-only');
+    expect(heading.closest('[data-variant]')).toHaveClass('border');
+  });
+
+  it('moves focus to the (screen-reader) bank heading when the bank becomes empty', async () => {
+    repo.delete.mockResolvedValue(undefined);
+    renderBank([activity({ id: 'only', name: 'קפה' })], 'sheet');
+    fireEvent.click(screen.getByRole('button', { name: 'מחיקת קפה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'כן, למחוק' }));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'מאגר אטרקציות' })).toHaveFocus(),
+    );
   });
 });
 

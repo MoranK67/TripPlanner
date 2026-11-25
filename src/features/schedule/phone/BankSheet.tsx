@@ -116,6 +116,7 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
         hidden={!shown}
         data-testid="bank-sheet-panel"
         className={cx(
+          // The sheet is the card; the bank panel inside drops its own card and title (UX-7).
           'flex min-h-0 flex-col px-2',
           dragging ? 'h-0 overflow-hidden' : 'h-[45dvh] pb-2',
         )}

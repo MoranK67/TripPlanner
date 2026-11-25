@@ -3,9 +3,15 @@ import { SidebarLayout, useBreakpoint } from '@/components/ui';
 import { BankSheet } from './BankSheet';
 import { PlannerModeContext } from './plannerMode';
 
+/** Where the bank is shown: the side panel (tablet / desktop) or the phone's bottom sheet. */
+export type BankPlacement = 'panel' | 'sheet';
+
 export interface PlannerLayoutProps {
-  /** The bank panel (bank feature). */
-  bank: ReactNode;
+  /**
+   * The bank panel (bank feature). A function gets where it is shown, so the panel can adapt
+   * (UX-7: inside the sheet, whose handle already shows the title, it drops its own title / card).
+   */
+  bank: ReactNode | ((placement: BankPlacement) => ReactNode);
   /** Accessible name of the bank region, e.g. "מאגר אטרקציות". */
   bankLabel: string;
   /** Number of activities in the bank (shown on the phone's collapsed sheet). */
@@ -23,10 +29,12 @@ export interface PlannerLayoutProps {
  */
 export function PlannerLayout({ bank, bankLabel, bankCount, children }: PlannerLayoutProps) {
   const phone = useBreakpoint() === 'phone';
+  const renderBank = (placement: BankPlacement) =>
+    typeof bank === 'function' ? bank(placement) : bank;
   if (!phone) {
     return (
       <PlannerModeContext.Provider value="grid">
-        <SidebarLayout sidebarLabel={bankLabel} sidebar={bank}>
+        <SidebarLayout sidebarLabel={bankLabel} sidebar={renderBank('panel')}>
           {children}
         </SidebarLayout>
       </PlannerModeContext.Provider>
@@ -37,7 +45,7 @@ export function PlannerLayout({ bank, bankLabel, bankCount, children }: PlannerL
       <div data-testid="planner-phone" className="flex h-full min-h-0 flex-col gap-2">
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         <BankSheet label={bankLabel} count={bankCount}>
-          {bank}
+          {renderBank('sheet')}
         </BankSheet>
       </div>
     </PlannerModeContext.Provider>

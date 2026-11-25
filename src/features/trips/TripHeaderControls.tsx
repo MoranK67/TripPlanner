@@ -56,12 +56,14 @@ export function TripHeaderControls({
       <label htmlFor={selectId} className="sr-only">
         {t('trips.switch')}
       </label>
-      {/* Native select: switching trips navigates; styled like the prototype's `.trip-sel`. */}
+      {/* Native select: switching trips navigates; styled like the prototype's `.trip-sel`.
+          Phones (UX-6): the selector takes a full row, then the trip's range, then the actions, so
+          the trip name is not squeezed by the buttons. From tablet up everything sits in one row. */}
       <select
         id={selectId}
         value={trip.id}
         onChange={(e) => navigate(`/trips/${e.target.value}`)}
-        className="min-h-9 min-w-0 flex-1 cursor-pointer truncate rounded-[var(--radius-field)] border border-line-strong bg-bg px-3 py-1.5 font-medium text-ink outline-none focus-visible:border-accent-ink focus-visible:ring-2 focus-visible:ring-accent-soft tablet:max-w-60 tablet:min-w-40 tablet:flex-none pointer-coarse:min-h-10"
+        className="min-h-9 w-full min-w-0 cursor-pointer truncate rounded-[var(--radius-field)] border border-line-strong bg-bg px-3 py-1.5 font-medium text-ink outline-none focus-visible:border-accent-ink focus-visible:ring-2 focus-visible:ring-accent-soft tablet:w-auto tablet:max-w-60 tablet:min-w-40 tablet:flex-none pointer-coarse:min-h-10"
       >
         {options.map((option) => (
           <option key={option.id} value={option.id}>
@@ -69,7 +71,7 @@ export function TripHeaderControls({
           </option>
         ))}
       </select>
-      <span className="order-last w-full text-[13px] text-ink-soft tablet:order-none tablet:w-auto tablet:px-1">
+      <span className="w-full text-[13px] text-ink-soft tablet:w-auto tablet:px-1">
         {tripRangeLabel(trip.window, t, 'short')} · {tripDaysLabel(trip.window, t)}
       </span>
       {exportAction}

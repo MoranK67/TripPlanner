@@ -93,7 +93,9 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
         <PlannerLayout
           bankLabel={t('bank.title')}
           bankCount={bankCount}
-          bank={<BankPanel trip={trip} activities={activities} />}
+          bank={(placement) => (
+            <BankPanel trip={trip} activities={activities} variant={placement} />
+          )}
         >
           {/* Outline: h1 app title > h2 trip / bank / timetable > h3 day headers (in Timetable).
               The timetable region is named by this heading, so it is announced once (UX-2). */}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityBlock, Button, useCanEdit } from '@/components/ui';
+import { ActivityBlock, Button, cx, useCanEdit } from '@/components/ui';
 import { isInBank, type Activity, type Trip } from '@/domain';
 import { ImportDialog } from '@/features/import';
 import { dragSourceProps, useBankDropZone } from '@/features/schedule';
@@ -10,6 +10,13 @@ export interface BankPanelProps {
   trip: Trip;
   /** All of the trip's activities; the panel shows the unplaced ones in bank order. */
   activities: readonly Activity[];
+  /**
+   * `panel` (default): a card with its own title, for the side panel (tablet / desktop).
+   * `sheet`: inside the phone's bottom sheet (UX-7), whose handle already shows the title and
+   * count, and which is itself the card. The title is kept for screen readers only (the sheet's
+   * `aside` is named by its own label) and the panel drops its border and shadow.
+   */
+  variant?: 'panel' | 'sheet';
 }
 
 /** After a delete: which block gets focus once the deleted one has left the list. */
@@ -24,7 +31,8 @@ interface FocusAfterDelete {
  * `bankPosition`, add / edit dialog, delete with confirmation. Blocks use the shared height scale
  * (FR-3.3). Phones show two blocks per row, as in the prototype.
  */
-export function BankPanel({ trip, activities }: BankPanelProps) {
+export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProps) {
+  const sheet = variant === 'sheet';
   const { t } = useTranslation();
   const focusAfterDelete = useRef<FocusAfterDelete | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -60,16 +68,30 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
       pending.targetId === null
         ? null
         : blockRefs.current.get(pending.targetId)?.querySelector('button');
+    // In the sheet the heading is visually hidden but still announced by screen readers.
     (target ?? headingRef.current)?.focus();
   }, [bank]);
 
   return (
     <div
       ref={setDropZone}
-      className="flex min-h-0 flex-1 flex-col rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-card)]"
+      data-variant={variant}
+      className={cx(
+        'flex min-h-0 flex-1 flex-col bg-panel',
+        !sheet && 'rounded-[var(--radius-card)] border border-line shadow-[var(--shadow-card)]',
+      )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 pt-3.5 pb-2.5">
-        <h2 ref={headingRef} tabIndex={-1} className="m-0 text-base font-semibold outline-none">
+      <div
+        className={cx(
+          'flex flex-wrap items-center gap-2 border-b border-line',
+          sheet ? 'justify-center px-2 pt-1 pb-2' : 'justify-between px-4 pt-3.5 pb-2.5',
+        )}
+      >
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className={cx('m-0 text-base font-semibold outline-none', sheet && 'sr-only')}
+        >
           {t('bank.title')}
           {bank.length > 0 && ' '}
           {bank.length > 0 && (
@@ -102,7 +124,10 @@ export function BankPanel({ trip, activities }: BankPanelProps) {
       ) : (
         <ul
           aria-label={t('bank.listLabel')}
-          className="m-0 flex min-h-0 flex-1 list-none flex-row flex-wrap content-start items-start gap-2 overflow-auto p-3 tablet:flex-col tablet:flex-nowrap tablet:items-stretch"
+          className={cx(
+            'm-0 flex min-h-0 flex-1 list-none flex-row flex-wrap content-start items-start gap-2 overflow-auto tablet:flex-col tablet:flex-nowrap tablet:items-stretch',
+            sheet ? 'px-1 py-2' : 'p-3',
+          )}
         >
           {bank.map((activity) => (
             <li key={activity.id} className="w-[calc(50%-4px)] shrink-0 tablet:w-auto">

@@ -47,6 +47,8 @@ describe('TripPage', () => {
     renderPage();
     const bank = await screen.findByRole('complementary', { name: 'מאגר אטרקציות' });
     expect(within(bank).getByRole('heading', { name: 'מאגר אטרקציות' })).toBeInTheDocument();
+    // Side panel: the bank keeps its own visible title and card (UX-7 only changes the phone).
+    expect(bank.querySelector('[data-variant]')).toHaveAttribute('data-variant', 'panel');
     // Named by the sr-only h2 (aria-labelledby), so the name is announced once (UX-2).
     const region = screen.getByRole('region', { name: 'לוח הזמנים' });
     const heading = screen.getByRole('heading', { level: 2, name: 'לוח הזמנים' });
@@ -56,6 +58,45 @@ describe('TripPage', () => {
     // Heading outline: trip, bank and timetable are h2; the timetable's day headers are h3.
     const h2 = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     expect(h2).toEqual(expect.arrayContaining(['רומא', 'מאגר אטרקציות', 'לוח הזמנים']));
+  });
+
+  it('on a phone shows the bank in the bottom sheet without a second title (UX-7)', async () => {
+    // A phone-width screen: no min-width media query matches.
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      })),
+    );
+    try {
+      trips.get.mockResolvedValue({
+        trip: {
+          id: 'trip-1',
+          name: 'רומא',
+          window: {
+            startDate: '2026-05-01',
+            startMinute: 600,
+            endDate: '2026-05-03',
+            endMinute: 1080,
+          },
+          colorCursor: 0,
+        },
+        activities: [],
+      });
+      renderPage();
+      const sheet = await screen.findByRole('complementary', { name: 'מאגר אטרקציות' });
+      expect(sheet).toHaveAttribute('data-testid', 'bank-sheet');
+      expect(sheet.querySelector('[data-variant]')).toHaveAttribute('data-variant', 'sheet');
+      // The heading stays in the outline for screen readers, but only the handle shows the title.
+      expect(
+        within(sheet).getByRole('heading', { name: 'מאגר אטרקציות', hidden: true }),
+      ).toHaveClass('sr-only');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('explains when the trip does not exist', async () => {
