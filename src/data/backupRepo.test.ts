@@ -23,8 +23,9 @@ function backupTrip(overrides: Partial<BackupTrip> = {}): BackupTrip {
         durationMinutes: 120,
         color: '#ffd6e0',
         placement: { date: '2026-05-02', startMinute: 0 },
+        tag: 'Centre',
       },
-      { name: 'Pantheon', durationMinutes: 60, color: '#C1E1C1', placement: null },
+      { name: 'Pantheon', durationMinutes: 60, color: '#C1E1C1', placement: null, tag: null },
     ],
     ...overrides,
   };
@@ -95,6 +96,8 @@ describe('backupRepo.exportAll', () => {
             color: '#FFD6E0',
             placement: null,
             bankPosition: 1,
+            tag: null,
+            createdAt: '2026-04-01T10:00:00Z',
           },
           expect.objectContaining({
             id: 'a-2',
@@ -167,6 +170,7 @@ describe('backupRepo.importAll — request', () => {
               color: '#FFD6E0',
               scheduled_date: '2026-05-02',
               start_minute: 0,
+              tag: 'Centre',
             },
             {
               name: 'Pantheon',
@@ -174,6 +178,7 @@ describe('backupRepo.importAll — request', () => {
               color: '#C1E1C1',
               scheduled_date: null,
               start_minute: null,
+              tag: null,
             },
           ],
         },
@@ -269,6 +274,12 @@ describe('backupRepo.importAll — client pre-check (no request)', () => {
       { tripIndex: 0, activityIndex: 0 },
     ],
     [
+      'activity tag',
+      [backupTrip({ activities: [activity, { ...activity, tag: 'x'.repeat(31) }] })],
+      'tag',
+      { tripIndex: 0, activityIndex: 1 },
+    ],
+    [
       'placement date',
       [
         backupTrip(),
@@ -326,6 +337,7 @@ describe('backupRepo.importAll — server errors', () => {
     ['trip:2:item:5', 'item', { tripIndex: 1, activityIndex: 4 }],
     ['trip:2:item:5:duration_minutes', 'duration_minutes', { tripIndex: 1, activityIndex: 4 }],
     ['trip:1:item:1:scheduled_date', 'scheduled_date', { tripIndex: 0, activityIndex: 0 }],
+    ['trip:1:item:2:tag', 'tag', { tripIndex: 0, activityIndex: 1 }],
   ])('TP_VALIDATION %s → reason %s with location', async (details, reason, location) => {
     mock.fail({ message: 'TP_VALIDATION', details, hint: '…', code: 'P0001' });
     const error = await rejection(repo.importAll([backupTrip()]));

@@ -7,7 +7,7 @@ returns setof text
 language plpgsql
 as $fn$
 declare
-  v_fn text := 'public.update_activity(uuid, text, integer, text)';
+  v_fn text := 'public.update_activity(uuid, text, integer, text, text, date, integer, boolean)';
   v_anon text;
 begin
   return next ok(has_function_privilege('authenticated', v_fn, 'EXECUTE'), 'authenticated can execute update_activity');

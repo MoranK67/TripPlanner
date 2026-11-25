@@ -1,12 +1,18 @@
-import { MAX_IMPORT_ROWS } from './constants';
+import { MAX_IMPORT_ROWS, TAG_MAX } from './constants';
 import { parseImport, parseImportRow } from './importParser';
 import type { ImportRow } from './types';
 
-const ok = (name: string, durationMinutes: number, rounded = false): ImportRow => ({
+const ok = (
+  name: string,
+  durationMinutes: number,
+  rounded = false,
+  tag: string | null = null,
+): ImportRow => ({
   ok: true,
   name,
   durationMinutes,
   rounded,
+  tag,
 });
 const bad = (raw: string, reason: Extract<ImportRow, { ok: false }>['reason']): ImportRow => ({
   ok: false,
@@ -131,6 +137,85 @@ describe('parseImport — names', () => {
 
   it('accepts the Arabic semicolon', () => {
     expect(parseImportRow(`Louvre${String.fromCodePoint(0x61b)} 3`)).toEqual(ok('Louvre', 180));
+  });
+});
+
+describe('parseImport — tags (FEAT-2)', () => {
+  it('reads an optional third field in the line format', () => {
+    expect(parseImport("מוזיאון הוותיקן;3;יום ב'\nקפה; 1").rows).toEqual([
+      ok('מוזיאון הוותיקן', 180, false, "יום ב'"),
+      ok('קפה', 60),
+    ]);
+  });
+
+  it('reads `{name;duration;tag}` groups', () => {
+    expect(parseImport('{Louvre;3;מרכז},{Seine;1,5},{Orsay; 2 ; מרכז }').rows).toEqual([
+      ok('Louvre', 180, false, 'מרכז'),
+      ok('Seine', 90),
+      ok('Orsay', 120, false, 'מרכז'),
+    ]);
+  });
+
+  it('reads a third tab-separated Excel column, with Excel quoting', () => {
+    expect(parseImport('Louvre\t3\tCentre\r\nOrsay\t2:30\t"Left ""bank"""\r\n').rows).toEqual([
+      ok('Louvre', 180, false, 'Centre'),
+      ok('Orsay', 150, false, 'Left "bank"'),
+    ]);
+  });
+
+  it('keeps the `;` of a name when the tab separates the columns', () => {
+    expect(parseImportRow('Rock; Roll\t2\tמוזיקה')).toEqual(ok('Rock; Roll', 120, false, 'מוזיקה'));
+  });
+
+  it('normalizes the tag: trims, collapses spaces, removes bidi marks', () => {
+    expect(parseImportRow('a; 1;   יום    3  ')).toEqual(ok('a', 60, false, 'יום 3'));
+    expect(parseImportRow('a; 1; \u200Fמרכז\u200E')).toEqual(ok('a', 60, false, 'מרכז'));
+  });
+
+  it('treats an empty or blank third field as no tag', () => {
+    expect(parseImportRow('a; 1;')).toEqual(ok('a', 60));
+    expect(parseImportRow('a; 1;   ')).toEqual(ok('a', 60));
+    expect(parseImport('{a;1;}').rows).toEqual([ok('a', 60)]);
+  });
+
+  it('marks rounding also for three-field rows', () => {
+    expect(parseImportRow('a; 40 דקות; x')).toEqual(ok('a', 30, true, 'x'));
+  });
+
+  it('accepts a tag of exactly TAG_MAX characters (code points)', () => {
+    const tag = '🎨'.repeat(TAG_MAX);
+    expect(parseImportRow(`a; 1; ${tag}`)).toEqual(ok('a', 60, false, tag));
+  });
+
+  it('rejects a tag longer than TAG_MAX characters', () => {
+    const line = `a; 1; ${'א'.repeat(TAG_MAX + 1)}`;
+    expect(parseImportRow(line)).toEqual(bad(line, 'tag_too_long'));
+  });
+
+  it('rejects a tag with control characters', () => {
+    const line = 'a; 1; מרכז\u0007';
+    expect(parseImportRow(line)).toEqual(bad(line, 'tag_invalid'));
+  });
+
+  it('checks the name and the duration before the tag', () => {
+    expect(parseImportRow(`; 1; ${'א'.repeat(40)}`)).toMatchObject({ reason: 'missing_name' });
+    expect(parseImportRow('a; 25; x')).toMatchObject({ reason: 'duration_out_of_range' });
+  });
+
+  it('falls back to `name;duration` when the middle field is not a duration', () => {
+    // A name with `;` keeps working; the last field is the duration.
+    expect(parseImportRow('Rock; Roll; 2')).toEqual(ok('Rock; Roll', 120));
+    expect(parseImportRow('a;;tag')).toMatchObject({ ok: false, reason: 'invalid_duration' });
+    expect(parseImportRow('a; b; c')).toMatchObject({ ok: false, reason: 'invalid_duration' });
+  });
+
+  it('with more fields, splits on the last two separators', () => {
+    expect(parseImportRow('Rock; Roll; 2; מוזיקה')).toEqual(ok('Rock; Roll', 120, false, 'מוזיקה'));
+  });
+
+  it('counts a row with a bad tag as invalid', () => {
+    const result = parseImport(`a; 1; ok\nb; 1; ${'x'.repeat(TAG_MAX + 1)}`);
+    expect(result).toMatchObject({ validCount: 1, invalidCount: 1 });
   });
 });
 

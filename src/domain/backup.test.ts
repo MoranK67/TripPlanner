@@ -99,15 +99,28 @@ describe('parseBackup — file level', () => {
     expect(parseBackup(text)).toMatchObject({ ok: false, error: 'unknown_format' });
   });
 
-  it.each([2, 0, '1', null, undefined, 1.5])('rejects version %s as unsupported_version', (v) => {
-    expect(parseBackup(appFile([appTrip()], { version: v }))).toMatchObject({
-      ok: false,
-      error: 'unsupported_version',
-    });
-    expect(parseBackup(protoFile([protoTrip()], { version: v }))).toMatchObject({
-      ok: false,
-      error: 'unsupported_version',
-    });
+  it.each([3, 0, '1', '2', null, undefined, 1.5])(
+    'rejects app version %s as unsupported_version',
+    (v) => {
+      expect(parseBackup(appFile([appTrip()], { version: v }))).toMatchObject({
+        ok: false,
+        error: 'unsupported_version',
+      });
+    },
+  );
+
+  it.each([2, 0, '1', null, undefined, 1.5])(
+    'rejects prototype version %s as unsupported_version',
+    (v) => {
+      expect(parseBackup(protoFile([protoTrip()], { version: v }))).toMatchObject({
+        ok: false,
+        error: 'unsupported_version',
+      });
+    },
+  );
+
+  it.each([1, 2])('reads app version %s and reports it', (v) => {
+    expect(expectOk(parseBackup(appFile([appTrip()], { version: v }))).version).toBe(v);
   });
 
   it('rejects a file whose trips is not an array', () => {
@@ -212,15 +225,17 @@ describe('parseBackup — prototype format', () => {
             durationMinutes: 180,
             color: '#FFD6E0',
             placement: { date: '2027-03-01', startMinute: 600 },
+            tag: null,
           },
-          { name: 'שייט', durationMinutes: 90, color: '#CDE5FF', placement: null },
+          { name: 'שייט', durationMinutes: 90, color: '#CDE5FF', placement: null, tag: null },
           {
             name: 'ארוחה',
             durationMinutes: 60,
             color: '#DAD4FA',
             placement: { date: '2027-03-03', startMinute: 1140 },
+            tag: null,
           },
-          { name: 'גלידה', durationMinutes: 30, color: '#FFD6E0', placement: null },
+          { name: 'גלידה', durationMinutes: 30, color: '#FFD6E0', placement: null, tag: null },
         ],
       },
     ]);
@@ -307,10 +322,72 @@ describe('parseBackup — app format', () => {
           durationMinutes: 120,
           color: '#C8EBE3',
           placement: { date: '2027-05-10', startMinute: 600 },
+          tag: null,
         },
-        { name: 'לובר', durationMinutes: 240, color: '#FFF1B5', placement: null },
-        { name: 'קרואסון', durationMinutes: 30, color: '#FFE3C2', placement: null },
+        { name: 'לובר', durationMinutes: 240, color: '#FFF1B5', placement: null, tag: null },
+        { name: 'קרואסון', durationMinutes: 30, color: '#FFE3C2', placement: null, tag: null },
       ],
+    });
+  });
+
+  describe('tags (FEAT-2, version 2)', () => {
+    const tagged = (tag: unknown) => ({
+      name: 'לובר',
+      durationMinutes: 60,
+      color: '#FFF1B5',
+      placement: null,
+      tag,
+    });
+
+    it('reads and normalizes tags', () => {
+      const result = expectOk(
+        parseBackup(
+          appFile(
+            [appTrip({ activities: [tagged('מרכז'), tagged('  Old   Town '), tagged(null)] })],
+            { version: 2 },
+          ),
+        ),
+      );
+      expect(result.warnings).toEqual([]);
+      expect(result.trips[0]?.activities.map((a) => a.tag)).toEqual(['מרכז', 'Old Town', null]);
+    });
+
+    it('treats a missing or blank tag as no tag, without a warning', () => {
+      const noTag = { name: 'לובר', durationMinutes: 60, color: '#FFF1B5', placement: null };
+      const result = expectOk(
+        parseBackup(appFile([appTrip({ activities: [noTag, tagged('   ')] })], { version: 2 })),
+      );
+      expect(result.warnings).toEqual([]);
+      expect(result.trips[0]?.activities.map((a) => a.tag)).toEqual([null, null]);
+    });
+
+    it('keeps the activity but drops an invalid tag, with a warning', () => {
+      const activities = [
+        tagged('x'.repeat(31)),
+        tagged('a\u0007b'),
+        tagged(7),
+        tagged({ tag: 'x' }),
+        tagged('ok'),
+      ];
+      const result = expectOk(parseBackup(appFile([appTrip({ activities })], { version: 2 })));
+      expect(result.trips[0]?.activities.map((a) => a.tag)).toEqual([null, null, null, null, 'ok']);
+      expect(result.warnings).toEqual(
+        [0, 1, 2, 3].map((activityIndex) => ({
+          code: 'activity_tag_dropped',
+          tripIndex: 0,
+          tripName: 'פריז',
+          activityIndex,
+          activityName: 'לובר',
+        })),
+      );
+    });
+
+    it('still reads version 1 files (no tags)', () => {
+      const result = expectOk(
+        parseBackup(appFile([appTrip({ activities: [tagged(undefined)] })], { version: 1 })),
+      );
+      expect(result.version).toBe(1);
+      expect(result.trips[0]?.activities[0]?.tag).toBeNull();
     });
   });
 
@@ -571,8 +648,21 @@ describe('toBackupTrip', () => {
       durationMinutes: 60,
       color: '#CDE5FF',
       placement: null,
+      tag: null,
     });
     expect(Object.keys(trip.activities[0] ?? {})).not.toContain('id');
+  });
+
+  it('includes the tag (normalized; missing → null)', () => {
+    const trip = toBackupTrip({
+      trip: stored.trip,
+      activities: [
+        activity({ id: 'a', bankPosition: 1, tag: ' Old  Town ' }),
+        activity({ id: 'b', bankPosition: 2, tag: null }),
+        activity({ id: 'c', bankPosition: 3 }),
+      ],
+    });
+    expect(trip.activities.map((a) => a.tag)).toEqual(['Old Town', null, null]);
   });
 
   it('does not share objects with the input', () => {
@@ -589,7 +679,7 @@ describe('createBackupFile / serializeBackup', () => {
     const file = createBackupFile([stored], now);
     expect(file).toMatchObject({
       format: 'trip-planner-backup',
-      version: 1,
+      version: 2,
       exportedAt: '2026-11-14T08:30:00.000Z',
     });
     expect(file.trips).toHaveLength(1);
@@ -606,6 +696,17 @@ describe('createBackupFile / serializeBackup', () => {
       toBackupTrip(stored),
       toBackupTrip({ ...stored, activities: [] }),
     ]);
+  });
+
+  it('round-trips tags', () => {
+    const withTags: TripWithActivities = {
+      ...stored,
+      activities: stored.activities.map((a, i) => ({ ...a, tag: i % 2 === 0 ? 'מרכז' : null })),
+    };
+    const result = expectOk(parseBackup(serializeBackup([withTags], now)));
+    expect(result.version).toBe(2);
+    expect(result.trips).toEqual([toBackupTrip(withTags)]);
+    expect(result.trips[0]?.activities.filter((a) => a.tag === 'מרכז')).toHaveLength(3);
   });
 
   it('serialises an empty account (which parseBackup then reports as no_trips)', () => {

@@ -142,7 +142,7 @@ describe('preview (FR-8.1, FR-8.2)', () => {
 describe('rejected files', () => {
   it.each([
     ['not json at all', 'זה לא קובץ גיבוי: התוכן שלו לא בפורמט JSON תקין.'],
-    ['{"format":"trip-planner-backup","version":2,"trips":[]}', 'קובץ הגיבוי נוצר בגרסה חדשה יותר'],
+    ['{"format":"trip-planner-backup","version":3,"trips":[]}', 'קובץ הגיבוי נוצר בגרסה חדשה יותר'],
     ['{"format":"trip-planner-backup","version":1,"trips":[]}', 'אין טיולים בקובץ הגיבוי.'],
   ])('rejects %s with a Hebrew message', async (content, message) => {
     setup();

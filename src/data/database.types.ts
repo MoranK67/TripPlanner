@@ -49,6 +49,7 @@ export type Database = {
           name: string
           scheduled_date: string | null
           start_minute: number | null
+          tag: string | null
           trip_id: string
           updated_at: string
         }
@@ -61,6 +62,7 @@ export type Database = {
           name: string
           scheduled_date?: string | null
           start_minute?: number | null
+          tag?: string | null
           trip_id: string
           updated_at?: string
         }
@@ -73,6 +75,7 @@ export type Database = {
           name?: string
           scheduled_date?: string | null
           start_minute?: number | null
+          tag?: string | null
           trip_id?: string
           updated_at?: string
         }
@@ -173,6 +176,7 @@ export type Database = {
           name: string
           scheduled_date: string | null
           start_minute: number | null
+          tag: string | null
           trip_id: string
           updated_at: string
         }[]
@@ -199,6 +203,7 @@ export type Database = {
           name: string
           scheduled_date: string | null
           start_minute: number | null
+          tag: string | null
           trip_id: string
           updated_at: string
         }
@@ -220,6 +225,7 @@ export type Database = {
           name: string
           scheduled_date: string | null
           start_minute: number | null
+          tag: string | null
           trip_id: string
           updated_at: string
         }
@@ -236,6 +242,10 @@ export type Database = {
           color?: string
           duration_minutes?: number
           name?: string
+          scheduled_date?: string
+          start_minute?: number
+          tag?: string
+          to_bank?: boolean
         }
         Returns: Json
       }

@@ -47,6 +47,8 @@ describe('activitiesRepo.create', () => {
       color: '#FFE3C2',
       placement: null,
       bankPosition: 4,
+      tag: null,
+      createdAt: '2026-04-01T10:00:00Z',
     });
     const [request] = mock.requests;
     expect(request?.target).toBe('activities');
@@ -54,6 +56,28 @@ describe('activitiesRepo.create', () => {
       { trip_id: 'trip-1', name: 'Colosseum', duration_minutes: 120 },
     ]);
     expect(methods(request)).toEqual(['insert', 'select', 'single']);
+  });
+
+  it('sends a normalized tag; the returned (group) colour is used', async () => {
+    mock.ok(activityRow({ tag: 'יום 2', color: '#DAD4FA' }));
+    const activity = await repo.create('trip-1', {
+      name: 'A',
+      durationMinutes: 60,
+      color: '#FFD6E0',
+      tag: ' יום  2 ',
+    });
+    expect(argsOf(mock.requests[0], 'insert')).toEqual([
+      { trip_id: 'trip-1', name: 'A', duration_minutes: 60, color: '#FFD6E0', tag: 'יום 2' },
+    ]);
+    expect(activity).toMatchObject({ tag: 'יום 2', color: '#DAD4FA' });
+  });
+
+  it('rejects an invalid tag locally', async () => {
+    const error = await rejection(
+      repo.create('trip-1', { name: 'A', durationMinutes: 60, tag: 'x'.repeat(31) }),
+    );
+    expect(error).toMatchObject({ kind: 'validation', reason: 'tag' });
+    expect(mock.requests).toHaveLength(0);
   });
 
   it('sends an explicit color', async () => {
@@ -155,15 +179,21 @@ describe('activitiesRepo.update (RPC update_activity, DEC-022)', () => {
     expect(mock.requests).toHaveLength(1);
   });
 
-  it.each(['activity_id', 'name', 'duration_minutes', 'color'])(
-    'TP_VALIDATION (%s) → validation with that reason',
-    async (details) => {
-      mock.fail({ message: 'TP_VALIDATION', code: 'P0001', details, hint: '' });
-      const error = await rejection(repo.update('act-1', { name: 'x' }));
-      expect(error.kind).toBe('validation');
-      expect(error.reason).toBe(details);
-    },
-  );
+  it.each([
+    'activity_id',
+    'name',
+    'duration_minutes',
+    'color',
+    'tag',
+    'placement',
+    'scheduled_date',
+    'start_minute',
+  ])('TP_VALIDATION (%s) → validation with that reason', async (details) => {
+    mock.fail({ message: 'TP_VALIDATION', code: 'P0001', details, hint: '' });
+    const error = await rejection(repo.update('act-1', { name: 'x' }));
+    expect(error.kind).toBe('validation');
+    expect(error.reason).toBe(details);
+  });
 
   it('TP_NOT_FOUND → not_found / activity', async () => {
     mock.fail({ message: 'TP_NOT_FOUND', code: 'P0001', details: 'activity', hint: '' });
@@ -194,10 +224,85 @@ describe('activitiesRepo.update (RPC update_activity, DEC-022)', () => {
     [{ name: ' ' }, 'name'],
     [{ durationMinutes: 0 }, 'duration_minutes'],
     [{ color: '#12345' }, 'color'],
+    [{ tag: 'x'.repeat(31) }, 'tag'],
+    [{ tag: 'a\u0007b' }, 'tag'],
+    [{ placement: { date: '2026-13-01', startMinute: 600 } }, 'scheduled_date'],
+    [{ placement: { date: '2026-05-02', startMinute: 615 } }, 'start_minute'],
   ])('rejects an invalid patch locally (%#)', async (patch, reason) => {
     const error = await rejection(repo.update('act-1', patch));
     expect(error.reason).toBe(reason);
     expect(mock.requests).toHaveLength(0);
+  });
+});
+
+describe('activitiesRepo.update — tag and placement in one request (FEAT-1, FEAT-2)', () => {
+  it('saves name, duration, colour, tag and placement in one update_activity call', async () => {
+    mock.ok({
+      activity: activityRow({
+        scheduled_date: '2026-05-03',
+        start_minute: 660,
+        duration_minutes: 90,
+        tag: 'Centre',
+        color: '#C8EBE3',
+      }),
+      returned_to_bank: false,
+    });
+    const result = await repo.update('act-1', {
+      name: 'A',
+      durationMinutes: 90,
+      color: '#ffd6e0',
+      tag: ' Centre ',
+      placement: { date: '2026-05-03', startMinute: 660 },
+    });
+    expect(mock.requests).toHaveLength(1);
+    expect(mock.requests[0]?.target).toBe('update_activity');
+    expect(mock.requests[0]?.rpcArgs).toEqual({
+      activity_id: 'act-1',
+      name: 'A',
+      duration_minutes: 90,
+      color: '#FFD6E0',
+      tag: 'Centre',
+      scheduled_date: '2026-05-03',
+      start_minute: 660,
+    });
+    // The server's group colour wins over the colour that was sent.
+    expect(result.activity).toMatchObject({
+      tag: 'Centre',
+      color: '#C8EBE3',
+      placement: { date: '2026-05-03', startMinute: 660 },
+    });
+    expect(result.returnedToBank).toBe(false);
+  });
+
+  it('placement: null returns it to the bank (to_bank), not reported as FR-3.6', async () => {
+    mock.ok({ activity: activityRow({ bank_position: 7 }), returned_to_bank: false });
+    const result = await repo.update('act-1', { placement: null });
+    expect(mock.requests[0]?.rpcArgs).toEqual({ activity_id: 'act-1', to_bank: true });
+    expect(result).toMatchObject({ activity: { placement: null }, returnedToBank: false });
+  });
+
+  it('clears the tag with an empty string', async () => {
+    mock.ok({ activity: activityRow(), returned_to_bank: false });
+    await repo.update('act-1', { tag: null });
+    expect(mock.requests[0]?.rpcArgs).toEqual({ activity_id: 'act-1', tag: '' });
+  });
+
+  it.each([
+    [overlap, 'conflict_overlap', 'overlap'],
+    [outOfRange, 'out_of_range', 'outside_trip_window'],
+  ])('maps a placement rejection %o', async (failure, kind, reason) => {
+    mock.fail(failure);
+    const error = await rejection(
+      repo.update('act-1', { placement: { date: '2026-05-02', startMinute: 600 } }),
+    );
+    expect(error.kind).toBe(kind);
+    expect(error.reason).toBe(reason);
+  });
+
+  it('rejects a malformed tag in the result', async () => {
+    mock.ok({ activity: { ...activityRow(), tag: 5 }, returned_to_bank: false });
+    const error = await rejection(repo.update('act-1', { tag: 'x' }));
+    expect(error.reason).toBe('invalid_response');
   });
 });
 
@@ -343,6 +448,25 @@ describe('activitiesRepo.importMany', () => {
     );
     expect(error.reason).toBe('item:2:duration_minutes');
     expect(mock.requests).toHaveLength(0);
+  });
+
+  it('sends tags and reports a bad tag as item:<n>:tag, like the RPC', async () => {
+    mock.ok([activityRow({ tag: 'מרכז' })]);
+    const [activity] = await repo.importMany('trip-1', [
+      { name: 'A', durationMinutes: 30, tag: 'מרכז' },
+    ]);
+    expect(activity?.tag).toBe('מרכז');
+    expect(mock.requests[0]?.rpcArgs).toEqual({
+      trip_id: 'trip-1',
+      items: [{ name: 'A', duration_minutes: 30, tag: 'מרכז' }],
+    });
+    const error = await rejection(
+      repo.importMany('trip-1', [
+        { name: 'A', durationMinutes: 30 },
+        { name: 'B', durationMinutes: 30, tag: 'x'.repeat(31) },
+      ]),
+    );
+    expect(error.reason).toBe('item:2:tag');
   });
 
   it.each([

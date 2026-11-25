@@ -1,7 +1,7 @@
 // Client-side pre-checks before a write (PROJECT_PLAN §4.6: inputs validated client-side and by
 // the DB). They use the domain rules, so a bad input fails fast with the same `reason` codes the
-// DB reports in TP_VALIDATION details ('name', 'duration_minutes', 'color', TripWindowError,
-// 'item:<n>:<field>', 'too_many_items', 'scheduled_date', 'start_minute').
+// DB reports in TP_VALIDATION details ('name', 'duration_minutes', 'color', 'tag',
+// TripWindowError, 'item:<n>:<field>', 'too_many_items', 'scheduled_date', 'start_minute').
 // Backup import (assertBackupTrips) uses the import_trips contract instead: the bare reason plus
 // an AppError `location` (see backupRepo.ts).
 
@@ -15,6 +15,8 @@ import {
   isValidDuration,
   isValidStartMinute,
   isValidTripName,
+  normalizeTag,
+  validateTag,
   validateTripWindow,
   type ActivityInput,
   type ActivityPatch,
@@ -40,16 +42,21 @@ function activityFieldError(fields: ActivityPatch): string | null {
     return 'duration_minutes';
   }
   if (fields.color !== undefined && !isHexColor(fields.color)) return 'color';
+  // The tag is checked as it will be sent (normalized); blank means "no tag" and is fine.
+  const tag = normalizeTag(fields.tag);
+  if (tag !== null && validateTag(tag) !== null) return 'tag';
   return null;
 }
 
 export function assertActivityPatch(patch: ActivityPatch): void {
   const error = activityFieldError(patch);
   if (error !== null) fail(error);
+  if (patch.placement) assertPlacementTarget(patch.placement);
 }
 
 export function assertActivityInput(input: ActivityInput): void {
-  assertActivityPatch(input);
+  const error = activityFieldError(input);
+  if (error !== null) fail(error);
 }
 
 /** FR-6.5: at most 200 items; every item valid. Reasons use the RPC's 1-based `item:<n>:…`. */

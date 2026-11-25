@@ -18,15 +18,18 @@
 //
 // --- App backup (serializeBackup) -------------------------------------------------------------
 // {
-//   "format": "trip-planner-backup", "version": 1, "exportedAt": "<ISO timestamp>",
+//   "format": "trip-planner-backup", "version": 2, "exportedAt": "<ISO timestamp>",
 //   "trips": [{
 //     "name": string,
 //     "window": { "startDate", "startMinute", "endDate", "endMinute" },
 //     "colorCursor": 0..9,
 //     "activities": [{ "name": string, "durationMinutes": number, "color": "#RRGGBB",
-//                      "placement": { "date": "YYYY-MM-DD", "startMinute": number } | null }]
+//                      "placement": { "date": "YYYY-MM-DD", "startMinute": number } | null,
+//                      "tag": string | null }]
 //   }]
 // }
+// Version 2 (FEAT-2) added `tag`. Version 1 files (no tags) are still read; their activities get
+// `tag: null`. A version-2 activity without the `tag` key also gets `null`.
 // No ids: an import always creates new rows. Placed activities come first (timetable order),
 // then the bank in bank order; bank order is the order of the unplaced entries.
 //
@@ -36,6 +39,7 @@
 //   - a trip that cannot be stored (not an object, bad name, bad window) is skipped;
 //   - an activity that cannot be stored (bad name / duration) is skipped;
 //   - an invalid colour is replaced by a palette colour;
+//   - an invalid tag (not text, too long, control characters) is dropped (the activity is kept);
 //   - a placement that is malformed, outside the trip window or overlaps an earlier activity
 //     sends the activity to the bank (the same thing the app does when a window edit or a longer
 //     duration no longer fits, FR-2.6 / FR-3.6), so no activity is lost to a placement problem.
@@ -59,6 +63,7 @@ import {
   paletteColorAt,
 } from './guards';
 import { canPlace, validateTripWindow } from './placement';
+import { normalizeTag, validateTag } from './tags';
 import { compareDates } from './time';
 import type {
   Activity,
@@ -70,7 +75,10 @@ import type {
 } from './types';
 
 export const APP_BACKUP_FORMAT = 'trip-planner-backup';
-export const APP_BACKUP_VERSION = 1;
+/** Version written by `createBackupFile`. 2 = with tags (FEAT-2). */
+export const APP_BACKUP_VERSION = 2;
+/** App backup versions `parseBackup` reads (1 = before tags). */
+export const APP_BACKUP_READABLE_VERSIONS: readonly number[] = [1, 2];
 export const PROTOTYPE_BACKUP_FORMAT = 'trip-planner-prototype-backup';
 export const PROTOTYPE_BACKUP_VERSION = 1;
 
@@ -82,6 +90,8 @@ export interface BackupActivity {
   durationMinutes: number;
   color: HexColor;
   placement: Placement | null;
+  /** Normalized tag (FEAT-2) or `null`. */
+  tag: string | null;
 }
 
 /** A trip in a backup, ready for import. Activities keep file order (bank order = their order). */
@@ -137,6 +147,8 @@ export type BackupWarningCode =
   | 'activity_duration_invalid'
   /** Activity kept with a palette colour instead of its invalid colour. */
   | 'activity_color_replaced'
+  /** Activity kept without its tag: the tag was not text, too long or had control characters. */
+  | 'activity_tag_dropped'
   /** Activity kept in the bank: its placement was malformed. */
   | 'placement_invalid'
   /** Activity kept in the bank: its placement is outside the trip window. */
@@ -199,6 +211,8 @@ interface ActivityCandidate {
   name: unknown;
   durationMinutes: unknown;
   color: unknown;
+  /** `undefined`/`null` = no tag. */
+  tag: unknown;
   /** `null` = in the bank; `'malformed'` = present but unusable. */
   placement: null | 'malformed' | { date: unknown; startMinute: unknown };
 }
@@ -216,6 +230,7 @@ function readPrototypeActivity(raw: unknown): ActivityCandidate | null {
     name: raw.name,
     durationMinutes: raw.duration,
     color: raw.color,
+    tag: null,
     placement: inBank ? null : { date: raw.day, startMinute: slotToMinute(raw.slot) },
   };
 }
@@ -240,6 +255,7 @@ function readAppActivity(raw: unknown): ActivityCandidate | null {
     name: raw.name,
     durationMinutes: raw.durationMinutes,
     color: raw.color,
+    tag: raw.tag,
     placement:
       placement === null || placement === undefined
         ? null
@@ -353,6 +369,17 @@ function validateTrip(
       warn('activity_color_replaced', activityIndex, name);
     }
 
+    let tag: string | null = null;
+    if (activity.tag !== null && activity.tag !== undefined) {
+      const normalized = typeof activity.tag === 'string' ? normalizeTag(activity.tag) : null;
+      if (normalized !== null && validateTag(normalized) === null) {
+        tag = normalized;
+      } else if (normalized !== null || typeof activity.tag !== 'string') {
+        // A blank string is just "no tag"; anything else unusable is reported.
+        warn('activity_tag_dropped', activityIndex, name);
+      }
+    }
+
     let placement: Placement | null = null;
     const target = activity.placement;
     if (target === 'malformed') {
@@ -366,14 +393,14 @@ function validateTrip(
         const check = canPlace({ window, activities: placed }, subject, at);
         if (check.ok) {
           placement = at;
-          placed.push({ ...subject, name, color, placement: at, bankPosition: 0 });
+          placed.push({ ...subject, name, color, placement: at, bankPosition: 0, tag });
         } else {
           warn(PLACEMENT_WARNING[check.reason], activityIndex, name);
         }
       }
     }
 
-    activities.push({ name, durationMinutes, color, placement });
+    activities.push({ name, durationMinutes, color, placement, tag });
   });
 
   return {
@@ -405,20 +432,23 @@ export function parseBackup(text: string): BackupParseResult {
   if (!isRecord(data)) return failure('unknown_format');
 
   let format: BackupFormat;
-  let supportedVersion: number;
+  let supportedVersions: readonly number[];
   let readTrip: (raw: JsonRecord) => TripCandidate;
   if (data.format === APP_BACKUP_FORMAT) {
     format = 'app';
-    supportedVersion = APP_BACKUP_VERSION;
+    supportedVersions = APP_BACKUP_READABLE_VERSIONS;
     readTrip = readAppTrip;
   } else if (data.format === PROTOTYPE_BACKUP_FORMAT) {
     format = 'prototype';
-    supportedVersion = PROTOTYPE_BACKUP_VERSION;
+    supportedVersions = [PROTOTYPE_BACKUP_VERSION];
     readTrip = readPrototypeTrip;
   } else {
     return failure('unknown_format');
   }
-  if (data.version !== supportedVersion) return failure('unsupported_version');
+  const version = data.version;
+  if (typeof version !== 'number' || !supportedVersions.includes(version)) {
+    return failure('unsupported_version');
+  }
 
   const rawTrips = data.trips;
   if (!Array.isArray(rawTrips)) return failure('invalid_structure');
@@ -449,7 +479,7 @@ export function parseBackup(text: string): BackupParseResult {
   return {
     ok: true,
     format,
-    version: supportedVersion,
+    version,
     exportedAt: textOrNull(data.exportedAt),
     trips,
     activityCount,
@@ -483,6 +513,7 @@ export function toBackupTrip({ trip, activities }: TripWithActivities): BackupTr
       placement: a.placement
         ? { date: a.placement.date, startMinute: a.placement.startMinute }
         : null,
+      tag: normalizeTag(a.tag),
     })),
   };
 }

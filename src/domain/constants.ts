@@ -32,6 +32,13 @@ export const ACTIVITY_NAME_MAX = 60;
 export const MIN_ACTIVITY_MINUTES = SLOT_MINUTES;
 export const MAX_ACTIVITY_MINUTES = MINUTES_PER_DAY;
 
+/**
+ * Activity tag length (FEAT-2), in code points like Postgres `char_length`. DB: `activities.tag`
+ * is null or trimmed, 1–30 characters, no control characters.
+ */
+export const TAG_MIN = 1;
+export const TAG_MAX = 30;
+
 // --- Import (FR-6.5) ---------------------------------------------------------------------
 
 export const MAX_IMPORT_ROWS = 200;

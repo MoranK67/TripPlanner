@@ -1,6 +1,7 @@
 // Pasted-text import parser (FR-6.1–FR-6.5). Ported from the prototype's `parseImport` and
 // hardened: Excel quoting, tab preferred over `;` for Excel rows, stray/unclosed braces,
-// names validated (not silently truncated) and the 200-row limit.
+// names validated (not silently truncated) and the 200-row limit. FEAT-2 adds an optional third
+// field, the tag.
 
 import {
   ACTIVITY_NAME_MAX,
@@ -10,7 +11,8 @@ import {
 } from './constants';
 import { parseDuration, roundToSlot } from './duration';
 import { nameLength } from './guards';
-import type { ImportRow } from './types';
+import { normalizeTag, validateTag, type TagError } from './tags';
+import type { ImportRow, ImportRowError } from './types';
 
 export interface ImportParseResult {
   /** One entry per non-empty line / `{…}` group, in input order. Empty lines are skipped. */
@@ -68,14 +70,45 @@ function splitEntries(text: string): string[] {
   return entries;
 }
 
-/** Index of the name/duration separator: the last tab (Excel), else the last `;`. */
-function separatorIndex(entry: string): number {
-  const tab = entry.lastIndexOf('\t');
-  if (tab >= 0) return tab;
-  let index = -1;
-  for (const m of entry.matchAll(SEMICOLONS)) index = m.index;
-  return index;
+/** Field separator positions: every tab (Excel) if the entry has one, else every `;`. */
+function separatorPositions(entry: string): number[] {
+  if (entry.includes('\t')) return [...entry.matchAll(/\t/g)].map((m) => m.index);
+  return [...entry.matchAll(SEMICOLONS)].map((m) => m.index);
 }
+
+interface RowFields {
+  name: string;
+  durationText: string;
+  /** Raw third field; `null` for a two-field row. */
+  tagText: string | null;
+}
+
+/**
+ * Splits an entry into name, duration and optional tag (FEAT-2). With two or more separators the
+ * row is `name;duration;tag` when the field before the last separator is a duration; otherwise
+ * (including two-field rows) the last separator splits name and duration, so names may contain
+ * `;` as before (`Show; VIP; 2`). `null` when there is no separator at all.
+ */
+function splitFields(raw: string): RowFields | null {
+  const seps = separatorPositions(raw);
+  const last = seps.at(-1);
+  if (last === undefined) return null;
+  const before = seps.at(-2);
+  if (before !== undefined) {
+    const middle = raw.slice(before + 1, last).trim();
+    if (middle !== '' && parseDuration(middle) !== null) {
+      return { name: raw.slice(0, before), durationText: middle, tagText: raw.slice(last + 1) };
+    }
+  }
+  return { name: raw.slice(0, last), durationText: raw.slice(last + 1).trim(), tagText: null };
+}
+
+const TAG_ERROR = {
+  empty: null,
+  not_trimmed: null,
+  too_long: 'tag_too_long',
+  control_char: 'tag_invalid',
+} as const satisfies Record<TagError, ImportRowError | null>;
 
 /**
  * Removes Excel's cell quoting (`"a ""b"""` → `a "b"`). This also strips the quotes from a
@@ -92,11 +125,11 @@ function cleanName(name: string): string {
 /** Parses one non-empty entry into a valid or invalid import row (FR-6.4). */
 export function parseImportRow(entry: string): ImportRow {
   const raw = entry.trim();
-  const sep = separatorIndex(raw);
-  if (sep < 0) return { ok: false, raw, reason: 'missing_separator' };
+  const fields = splitFields(raw);
+  if (fields === null) return { ok: false, raw, reason: 'missing_separator' };
 
-  const name = cleanName(raw.slice(0, sep));
-  const durationText = raw.slice(sep + 1).trim();
+  const name = cleanName(fields.name);
+  const { durationText } = fields;
   if (name === '') return { ok: false, raw, reason: 'missing_name' };
   if (durationText === '') return { ok: false, raw, reason: 'missing_duration' };
   // Rejected rather than truncated (the prototype cut at 60) so no name changes silently.
@@ -110,12 +143,20 @@ export function parseImportRow(entry: string): ImportRow {
   if (durationMinutes < MIN_ACTIVITY_MINUTES || durationMinutes > MAX_ACTIVITY_MINUTES) {
     return { ok: false, raw, reason: 'duration_out_of_range' };
   }
-  return { ok: true, name, durationMinutes, rounded: durationMinutes !== minutes };
+
+  // An empty third field (`name;2;`) means no tag. The tag is cleaned like a name (Excel quoting)
+  // and then normalized; an invalid one rejects the row rather than being dropped silently.
+  const tag = fields.tagText === null ? null : normalizeTag(cleanName(fields.tagText));
+  const tagError = tag === null ? null : validateTag(tag);
+  const tagReason = tagError === null ? null : TAG_ERROR[tagError];
+  if (tagReason !== null) return { ok: false, raw, reason: tagReason };
+  return { ok: true, name, durationMinutes, rounded: durationMinutes !== minutes, tag };
 }
 
 /**
  * Parses pasted text (FR-6.2): one `name; duration` per line, `{name;duration},{name;duration}`,
- * or two tab-separated columns pasted from Excel. Empty lines are ignored; a header row such as
+ * or two tab-separated columns pasted from Excel. Each format takes an optional third field, the
+ * tag (FEAT-2): `name;duration;tag`, `{name;duration;tag}`, or a third Excel column. Empty lines are ignored; a header row such as
  * `שם; זמן` comes out as an invalid row (its duration does not parse).
  */
 export function parseImport(text: string): ImportParseResult {

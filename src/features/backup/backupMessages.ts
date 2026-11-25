@@ -53,6 +53,7 @@ export const BACKUP_WARNING_KEYS: Readonly<Record<BackupWarningCode, string>> = 
   activity_name_invalid: 'backup.warnings.activity_name_invalid',
   activity_duration_invalid: 'backup.warnings.activity_duration_invalid',
   activity_color_replaced: 'backup.warnings.activity_color_replaced',
+  activity_tag_dropped: 'backup.warnings.activity_tag_dropped',
   placement_invalid: 'backup.warnings.placement_invalid',
   placement_out_of_range: 'backup.warnings.placement_out_of_range',
   placement_overlap: 'backup.warnings.placement_overlap',

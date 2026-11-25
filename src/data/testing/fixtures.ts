@@ -28,6 +28,7 @@ export function activityRow(overrides: Partial<ActivityRow> = {}): ActivityRow {
     scheduled_date: null,
     start_minute: null,
     bank_position: 1,
+    tag: null,
     created_at: '2026-04-01T10:00:00Z',
     updated_at: '2026-04-01T10:00:00Z',
     ...overrides,

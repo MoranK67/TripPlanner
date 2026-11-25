@@ -68,6 +68,18 @@ export interface Activity {
   placement: Placement | null;
   /** Order within the bank (fractional). Meaningful only while unplaced. */
   bankPosition: number;
+  /**
+   * Group label (FEAT-2), e.g. `מרכז העיר` or `יום 3`: normalized (see `normalizeTag`), 1..30
+   * characters; activities of a trip with the same tag (case-insensitive) share a colour.
+   * `null` or missing = no tag. DB: `activities.tag`.
+   * Always set by the data layer; optional so hand-made fixtures and optimistic objects may omit it.
+   */
+  tag?: string | null;
+  /**
+   * Creation time as returned by the DB (ISO timestamp, UTC). Used only to find a tag group's
+   * oldest member (its colour is the group colour). Missing on optimistic objects. DB: `created_at`.
+   */
+  createdAt?: string;
 }
 
 /** An activity known to be in the timetable. */
@@ -93,6 +105,8 @@ export interface ActivityInput {
   name: string;
   durationMinutes: number;
   color?: HexColor;
+  /** FEAT-2. `null`/missing = no tag. Pass it through `normalizeTag` first. */
+  tag?: string | null;
 }
 
 /** Editable activity fields (`activitiesRepo.update`, FR-3.5). */
@@ -100,6 +114,15 @@ export interface ActivityPatch {
   name?: string;
   durationMinutes?: number;
   color?: HexColor;
+  /** FEAT-2. `null` (or a blank string) clears the tag; missing leaves it unchanged. */
+  tag?: string | null;
+  /**
+   * FEAT-1, saved in the same atomic request: a placement places / moves the activity there
+   * (validated with the new duration; never falls back to the bank), `null` returns it to the end
+   * of the bank, missing keeps it (a placed activity whose new duration no longer fits then goes
+   * to the bank, FR-3.6).
+   */
+  placement?: Placement | null;
 }
 
 /** One parsed line of a text import (FR-6.4). */
@@ -110,6 +133,8 @@ export type ImportRow =
       durationMinutes: number;
       /** The source duration was rounded to the nearest slot (FR-6.3). */
       rounded: boolean;
+      /** Optional third field (FEAT-2), normalized; `null` when absent or empty. */
+      tag: string | null;
     }
   | {
       ok: false;
@@ -129,4 +154,8 @@ export type ImportRowError =
   | 'name_too_long'
   | 'missing_duration'
   | 'invalid_duration'
-  | 'duration_out_of_range';
+  | 'duration_out_of_range'
+  /** The third field (tag) is longer than TAG_MAX characters. Added in FEAT-2. */
+  | 'tag_too_long'
+  /** The third field (tag) contains control characters. Added in FEAT-2. */
+  | 'tag_invalid';

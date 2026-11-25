@@ -2,10 +2,13 @@
 // domain types; nothing outside src/data sees a DB row.
 //
 // Writes only ever contain columns the `authenticated` role may write (column-level UPDATE
-// grants, DEC-019): activities name/duration_minutes/color; placement goes through the RPCs.
+// grants, DEC-019): activities name/duration_minutes/color/tag; placement goes through the RPCs.
+// Tags are always sent as `normalizeTag` output (FEAT-2): the DB only trims, so a client that
+// sent other spellings would group differently from what the UI previews.
 
 import {
   normalizeHexColor,
+  normalizeTag,
   tripDayCount,
   type Activity,
   type ActivityInput,
@@ -51,6 +54,7 @@ export interface ImportTripActivityJson {
   color: string;
   scheduled_date: string | null;
   start_minute: number | null;
+  tag: string | null;
 }
 
 /** One trip of the `import_trips` payload (see the header of the M6 import migration). */
@@ -125,6 +129,8 @@ export function activityFromRow(row: ActivityRow): Activity {
     color: normalizeHexColor(row.color),
     placement: placementFromRow(row),
     bankPosition: row.bank_position,
+    tag: row.tag ?? null,
+    createdAt: row.created_at,
   };
 }
 
@@ -165,18 +171,29 @@ export function activityInsertFromInput(tripId: string, input: ActivityInput): A
     duration_minutes: input.durationMinutes,
   };
   if (input.color !== undefined) insert.color = normalizeHexColor(input.color);
+  const tag = normalizeTag(input.tag);
+  if (tag !== null) insert.tag = tag;
   return insert;
 }
 
 /**
- * RPC `update_activity` arguments (FR-3.5, DEC-022). Absent fields are omitted, so the RPC's
- * NULL default keeps the current value; an empty patch sends only `activity_id`.
+ * RPC `update_activity` arguments (FR-3.5, DEC-022, FEAT-1/2). Absent fields are omitted, so the
+ * RPC's NULL default keeps the current value; an empty patch sends only `activity_id`.
+ * `tag: null` (or blank) clears the tag, which the RPC expects as `''`. `placement` sends
+ * `scheduled_date` + `start_minute`; `placement: null` sends `to_bank: true`.
  */
 export function updateActivityArgs(id: string, patch: ActivityPatch): UpdateActivityArgs {
   const args: UpdateActivityArgs = { activity_id: id };
   if (patch.name !== undefined) args.name = patch.name;
   if (patch.durationMinutes !== undefined) args.duration_minutes = patch.durationMinutes;
   if (patch.color !== undefined) args.color = normalizeHexColor(patch.color);
+  if (patch.tag !== undefined) args.tag = normalizeTag(patch.tag) ?? '';
+  if (patch.placement === null) {
+    args.to_bank = true;
+  } else if (patch.placement !== undefined) {
+    args.scheduled_date = patch.placement.date;
+    args.start_minute = patch.placement.startMinute;
+  }
   return args;
 }
 
@@ -184,6 +201,8 @@ export function importItemsFromInputs(items: readonly ActivityInput[]): ImportIt
   return items.map((item) => {
     const json: ImportItemJson = { name: item.name, duration_minutes: item.durationMinutes };
     if (item.color !== undefined) json.color = normalizeHexColor(item.color);
+    const tag = normalizeTag(item.tag);
+    if (tag !== null) json.tag = tag;
     return json;
   });
 }
@@ -206,6 +225,7 @@ export function importTripsFromBackup(trips: readonly BackupTrip[]): ImportTripJ
       color: normalizeHexColor(activity.color),
       scheduled_date: activity.placement?.date ?? null,
       start_minute: activity.placement?.startMinute ?? null,
+      tag: normalizeTag(activity.tag),
     })),
   }));
 }
@@ -244,13 +264,15 @@ function isActivityRowJson(value: unknown): value is ActivityRow {
     (value.scheduled_date === null || typeof value.scheduled_date === 'string') &&
     (value.start_minute === null || isInteger(value.start_minute)) &&
     typeof value.bank_position === 'number' &&
-    Number.isFinite(value.bank_position)
+    Number.isFinite(value.bank_position) &&
+    (value.tag === undefined || value.tag === null || typeof value.tag === 'string')
   );
 }
 
 /**
  * `update_activity` returns jsonb `{ activity: <activities row>, returned_to_bank: <bool> }`
- * (DEC-022). `returnedToBank` = the new duration no longer fitted, so the RPC moved it (FR-3.6).
+ * (DEC-022). `returnedToBank` = the new duration no longer fitted, so the RPC moved it (FR-3.6);
+ * never true for an explicit placement or `placement: null`.
  */
 export function activityUpdateFromJson(json: Json | null): {
   activity: Activity;

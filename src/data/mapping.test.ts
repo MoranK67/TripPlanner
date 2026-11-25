@@ -92,7 +92,13 @@ describe('activity mapping', () => {
       color: '#FFD6E0',
       placement: null,
       bankPosition: 1,
+      tag: null,
+      createdAt: '2026-04-01T10:00:00Z',
     });
+  });
+
+  it('maps the tag', () => {
+    expect(activityFromRow(activityRow({ tag: 'מרכז' })).tag).toBe('מרכז');
   });
 
   it('placed activity → placement { date, startMinute }, including minute 0', () => {
@@ -150,6 +156,58 @@ describe('activity mapping', () => {
     expect(
       updateActivityArgs('act-1', { name: 'B', durationMinutes: 60, color: '#DAD4FA' }),
     ).toEqual({ activity_id: 'act-1', name: 'B', duration_minutes: 60, color: '#DAD4FA' });
+  });
+
+  it('activityInsertFromInput sends a normalized tag, and none when blank or null', () => {
+    expect(
+      activityInsertFromInput('trip-1', { name: 'A', durationMinutes: 30, tag: '  יום   2 ' }),
+    ).toEqual({ trip_id: 'trip-1', name: 'A', duration_minutes: 30, tag: 'יום 2' });
+    for (const tag of ['  ', null, undefined]) {
+      expect('tag' in activityInsertFromInput('t', { name: 'A', durationMinutes: 30, tag })).toBe(
+        false,
+      );
+    }
+  });
+
+  it('updateActivityArgs sends a normalized tag, and an empty string to clear it', () => {
+    expect(updateActivityArgs('act-1', { tag: ' Old  Town ' })).toEqual({
+      activity_id: 'act-1',
+      tag: 'Old Town',
+    });
+    expect(updateActivityArgs('act-1', { tag: null })).toEqual({ activity_id: 'act-1', tag: '' });
+    expect(updateActivityArgs('act-1', { tag: '   ' })).toEqual({ activity_id: 'act-1', tag: '' });
+  });
+
+  it('updateActivityArgs maps placement: target → date + minute, null → to_bank', () => {
+    expect(
+      updateActivityArgs('act-1', {
+        durationMinutes: 90,
+        placement: { date: '2026-05-02', startMinute: 600 },
+      }),
+    ).toEqual({
+      activity_id: 'act-1',
+      duration_minutes: 90,
+      scheduled_date: '2026-05-02',
+      start_minute: 600,
+    });
+    expect(updateActivityArgs('act-1', { placement: null })).toEqual({
+      activity_id: 'act-1',
+      to_bank: true,
+    });
+  });
+
+  it('importItemsFromInputs sends a normalized tag only when present', () => {
+    expect(
+      importItemsFromInputs([
+        { name: 'A', durationMinutes: 30, tag: 'מרכז ' },
+        { name: 'B', durationMinutes: 30, tag: null },
+        { name: 'C', durationMinutes: 30, tag: ' ' },
+      ]),
+    ).toEqual([
+      { name: 'A', duration_minutes: 30, tag: 'מרכז' },
+      { name: 'B', duration_minutes: 30 },
+      { name: 'C', duration_minutes: 30 },
+    ]);
   });
 
   it('importItemsFromInputs builds snake_case items, color only when given', () => {
@@ -269,8 +327,9 @@ describe('backup mapping', () => {
               durationMinutes: 30,
               color: '#abcdef',
               placement: { date: '2026-05-01', startMinute: 0 },
+              tag: ' Old   Town ',
             },
-            { name: 'B', durationMinutes: 1440, color: '#FFD6E0', placement: null },
+            { name: 'B', durationMinutes: 1440, color: '#FFD6E0', placement: null, tag: null },
           ],
         },
       ]),
@@ -289,6 +348,7 @@ describe('backup mapping', () => {
             color: '#ABCDEF',
             scheduled_date: '2026-05-01',
             start_minute: 0,
+            tag: 'Old Town',
           },
           {
             name: 'B',
@@ -296,6 +356,7 @@ describe('backup mapping', () => {
             color: '#FFD6E0',
             scheduled_date: null,
             start_minute: null,
+            tag: null,
           },
         ],
       },

@@ -172,7 +172,9 @@
       "name_too_long": "השם ארוך מ־{{max}} תווים",
       "missing_duration": "חסר זמן",
       "invalid_duration": "לא הבנתי את הזמן",
-      "duration_out_of_range": "הזמן צריך להיות בין חצי שעה ל־24 שעות"
+      "duration_out_of_range": "הזמן צריך להיות בין חצי שעה ל־24 שעות",
+      "tag_too_long": "התגית ארוכה מ־30 תווים",
+      "tag_invalid": "בתגית יש תווים לא חוקיים"
     },
     "submitNone": "הוספה למאגר",
     "submit_one": "הוספת אטרקציה אחת למאגר",
@@ -289,6 +291,7 @@
       "activity_name_invalid": "שם האטרקציה חסר או ארוך מ־{{activityNameMax}} תווים, והיא לא תשוחזר",
       "activity_duration_invalid": "משך הזמן צריך להיות בין חצי שעה ל־24 שעות, בקפיצות של חצי שעה, ולכן האטרקציה לא תשוחזר",
       "activity_color_replaced": "הצבע לא תקין, והוחלף בצבע אחר",
+      "activity_tag_dropped": "התגית לא תקינה, והאטרקציה תשוחזר בלי תגית",
       "placement_invalid": "המקום שלה בלוח לא תקין, ולכן היא תיכנס למאגר",
       "placement_out_of_range": "המקום שלה בלוח מחוץ לזמני הטיול, ולכן היא תיכנס למאגר",
       "placement_overlap": "היא חופפת לאטרקציה אחרת בלוח, ולכן היא תיכנס למאגר"

@@ -162,6 +162,8 @@ describe('row errors (DEC-009, DEC-015)', () => {
     missing_duration: { input: 'קפה;', message: 'חסר זמן' },
     invalid_duration: { input: 'קפה; הרבה', message: 'לא הבנתי את הזמן' },
     duration_out_of_range: { input: 'קפה; 25', message: 'הזמן צריך להיות בין חצי שעה ל־24 שעות' },
+    tag_too_long: { input: `קפה; 1; ${'א'.repeat(31)}`, message: 'התגית ארוכה מ־30 תווים' },
+    tag_invalid: { input: 'קפה; 1; מרכז\u0007', message: 'בתגית יש תווים לא חוקיים' },
   };
 
   it('has a Hebrew message for every reason code', () => {
