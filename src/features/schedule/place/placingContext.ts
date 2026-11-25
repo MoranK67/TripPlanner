@@ -17,6 +17,11 @@ export interface PlacingContextValue {
    * picks blocks up). `openPlaced` is the timetable's opener, used for a placed activity.
    */
   edit: (openPlaced?: (activity: Activity) => void) => void;
+  /**
+   * How many placements tap-to-place has made so far. The phone's bank sheet stays closed after
+   * one (PHONE-2: the user sees the placed block), but comes back after a cancel.
+   */
+  placedCount: number;
 }
 
 export const PlacingContext = createContext<PlacingContextValue | null>(null);

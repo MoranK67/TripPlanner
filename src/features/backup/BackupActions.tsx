@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Modal, useCanEdit, useToast } from '@/components/ui';
+import { Button, HeaderAction, Modal, useCanEdit, useToast } from '@/components/ui';
 import { useTripsQuery } from '@/features/trips';
 import { errorMessage } from '@/i18n/errors';
 import { platform } from '@/platform';
@@ -102,26 +102,25 @@ export function BackupActions() {
 
   return (
     <>
+      {/* On phones both are items of the "⋯" menu (PHONE-1), after "טיול חדש". */}
       {canExport && (
-        <Button
-          size="sm"
+        <HeaderAction
+          label={t('backup.export.open')}
+          order={50}
           loading={busy}
           disabled={!canEdit}
           title={reason}
-          onClick={() => void startExport()}
-        >
-          {t('backup.export.open')}
-        </Button>
+          onSelect={() => void startExport()}
+        />
       )}
-      <Button
-        size="sm"
-        aria-haspopup="dialog"
+      <HeaderAction
+        label={t('backup.import.open')}
+        order={60}
+        opensDialog
         disabled={!canEdit}
         title={reason}
-        onClick={() => setImporting(true)}
-      >
-        {t('backup.import.open')}
-      </Button>
+        onSelect={() => setImporting(true)}
+      />
       <p role="status" className="sr-only">
         {step.kind === 'building' ? t('backup.export.busy') : ''}
       </p>

@@ -1,6 +1,6 @@
 import { memo, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { activityBlockHeight, cx, SLOT_HEIGHT_PX } from '@/components/ui';
+import { activityBlockHeight, cx } from '@/components/ui';
 import {
   formatShortDate,
   formatWeekday,
@@ -11,7 +11,7 @@ import {
   type PlacementCheck,
   type TripWindow,
 } from '@/domain';
-import { timeRangeLabel } from '../timetableLayout';
+import { timeRangeLabel, type TimetableMetrics } from '../timetableLayout';
 import {
   dayChecks,
   isCursorKey,
@@ -20,6 +20,7 @@ import {
   type CursorKey,
   type SlotCursor,
 } from './placingModel';
+import { PlacingPreview } from './PlacingPreview';
 
 /** Ask the layer to focus the cursor's slot button after the next render. */
 export interface FocusRequest {
@@ -31,6 +32,9 @@ export interface FocusRequest {
    */
   dayIndex: number;
 }
+
+/** How a slot was chosen: a tap / click (`pointer`) or Enter / Space on a slot button. */
+export type ChooseVia = 'pointer' | 'keyboard';
 
 export interface PlacingLayerProps {
   /** All trip days. */
@@ -46,9 +50,20 @@ export interface PlacingLayerProps {
   cursor: SlotCursor;
   focusRequest: FocusRequest | null;
   /** A slot was chosen (tap, click, Enter or Space). The caller checks it with `canPlace`. */
-  onChoose: (dayIndex: number, slot: number) => void;
+  onChoose: (dayIndex: number, slot: number, via: ChooseVia) => void;
   onCursorKey: (key: CursorKey) => void;
+  /** The timetable's vertical scale (PHONE-2: denser on phones). */
+  metrics: TimetableMetrics;
+  /** Phone (PHONE-2): the previewed slot on a visible day, or `null`. */
+  preview?: SlotCursor | null;
+  /** A new object asks once for focus on the preview's confirm button. */
+  previewFocus?: object | null;
+  onNudge?: (delta: -1 | 1) => void;
+  onConfirm?: () => void;
+  onCancel?: () => void;
 }
+
+const noop = () => {};
 
 /**
  * The tap-to-place layer (FR-5.5, FR-5.6) inside the timetable's day-columns layer, under the
@@ -57,6 +72,8 @@ export interface PlacingLayerProps {
  * per half hour (a roving tab stop: one Tab stop, arrow keys move) so keyboard and screen-reader
  * users can choose too; invalid slots stay focusable but are `aria-disabled` and say why not.
  * Only one day has buttons, so a 90-day trip adds 48 buttons, not 4,320 (NFR-3).
+ *
+ * The phone's preview (PHONE-2) is drawn above the blocks, so its buttons are never covered.
  */
 export function PlacingLayer({
   days,
@@ -69,6 +86,12 @@ export function PlacingLayer({
   focusRequest,
   onChoose,
   onCursorKey,
+  metrics,
+  preview = null,
+  previewFocus = null,
+  onNudge = noop,
+  onConfirm = noop,
+  onCancel = noop,
 }: PlacingLayerProps) {
   const { t } = useTranslation();
   const layerRef = useRef<HTMLDivElement>(null);
@@ -95,15 +118,21 @@ export function PlacingLayer({
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!isCursorKey(e.key) || e.altKey || e.ctrlKey || e.metaKey) return;
+    // Only the slot buttons move the cursor; the preview's buttons keep their own keys.
+    if (!(e.target instanceof Element) || !e.target.closest('[data-slot]')) return;
     e.preventDefault();
     onCursorKey(e.key);
   };
+
+  const previewColumn = preview ? preview.dayIndex - firstDay : -1;
+  const previewCheck = preview ? checks[previewColumn]?.[preview.slot] : undefined;
 
   return (
     <div
       ref={layerRef}
       data-testid="placing-layer"
-      className="pointer-events-none absolute inset-0 z-[1]"
+      // No z-index here: the day layers sit under the blocks, the preview above them.
+      className="pointer-events-none absolute inset-0"
       onKeyDown={onKeyDown}
     >
       {visible.map((date, column) => {
@@ -125,10 +154,25 @@ export function PlacingLayer({
             checks={dayChecksOf}
             subject={subject}
             cursorSlot={cursor.dayIndex === dayIndex ? cursor.slot : null}
+            slotHeight={metrics.slotHeight}
             onChoose={onChoose}
           />
         );
       })}
+      {preview && previewCheck && (
+        <PlacingPreview
+          column={previewColumn}
+          columnCount={dayCount}
+          slot={preview.slot}
+          subject={subject}
+          check={previewCheck}
+          metrics={metrics}
+          focusRequest={previewFocus}
+          onNudge={onNudge}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />
+      )}
     </div>
   );
 }
@@ -142,7 +186,8 @@ interface PlacingDayProps {
   subject: Activity;
   /** Slot of the keyboard cursor when it is on this day; `null` = no buttons on this day. */
   cursorSlot: number | null;
-  onChoose: (dayIndex: number, slot: number) => void;
+  slotHeight: number;
+  onChoose: (dayIndex: number, slot: number, via: ChooseVia) => void;
 }
 
 const PlacingDay = memo(function PlacingDay({
@@ -153,26 +198,24 @@ const PlacingDay = memo(function PlacingDay({
   checks,
   subject,
   cursorSlot,
+  slotHeight,
   onChoose,
 }: PlacingDayProps) {
   const { t } = useTranslation();
   const runs = useMemo(() => validRuns(checks), [checks]);
-
   // A tap anywhere in the column (outside the slot buttons) chooses the slot under the pointer.
   const onColumnClick = (e: MouseEvent<HTMLDivElement>) => {
     if (e.target instanceof Element && e.target.closest('button')) return;
     const top = e.currentTarget.getBoundingClientRect().top;
-    const slot = Math.floor((e.clientY - top) / SLOT_HEIGHT_PX);
-    if (slot >= 0 && slot < SLOTS_PER_DAY) onChoose(dayIndex, slot);
+    const slot = Math.floor((e.clientY - top) / slotHeight);
+    if (slot >= 0 && slot < SLOTS_PER_DAY) onChoose(dayIndex, slot, 'pointer');
   };
-
   const cursorCheck = cursorSlot === null ? null : checks[cursorSlot];
-
   return (
     <div
       data-testid="placing-day"
       data-day-index={dayIndex}
-      className="group/day pointer-events-auto absolute inset-y-0 cursor-pointer"
+      className="group/day pointer-events-auto absolute inset-y-0 z-[1] cursor-pointer"
       style={{
         insetInlineStart: `calc(${column} * 100% / ${columnCount})`,
         width: `calc(100% / ${columnCount})`,
@@ -186,8 +229,8 @@ const PlacingDay = memo(function PlacingDay({
           data-valid-run=""
           className="absolute inset-x-1 rounded-[var(--radius-block)] border border-dashed border-ok bg-ok/20"
           style={{
-            top: run.start * SLOT_HEIGHT_PX + 1,
-            height: (run.end - run.start) * SLOT_HEIGHT_PX - 2,
+            top: run.start * slotHeight + 1,
+            height: (run.end - run.start) * slotHeight - 2,
           }}
         />
       ))}
@@ -211,12 +254,13 @@ const PlacingDay = memo(function PlacingDay({
                   time,
                   day: dayLabel,
                 })}
-                onClick={() => onChoose(dayIndex, slot)}
+                // Enter / Space on a button is a click with `detail` 0.
+                onClick={(e) => onChoose(dayIndex, slot, e.detail === 0 ? 'keyboard' : 'pointer')}
                 className={cx(
                   'absolute inset-x-0 block cursor-pointer border-0 bg-transparent p-0',
                   'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-ink',
                 )}
-                style={{ top: slot * SLOT_HEIGHT_PX, height: SLOT_HEIGHT_PX }}
+                style={{ top: slot * slotHeight, height: slotHeight }}
               />
             );
           })}
@@ -234,8 +278,8 @@ const PlacingDay = memo(function PlacingDay({
             cursorCheck.ok ? 'border-ok bg-ok/25' : 'border-danger-ink/40 bg-danger/40',
           )}
           style={{
-            top: cursorSlot * SLOT_HEIGHT_PX + 1,
-            height: activityBlockHeight(subject.durationMinutes),
+            top: cursorSlot * slotHeight + 1,
+            height: activityBlockHeight(subject.durationMinutes, slotHeight),
           }}
         />
       )}

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
 import { ActivityBlock } from './ActivityBlock';
+import { SlotHeightContext } from './activityBlockLayout';
 
 function block(container: HTMLElement): HTMLElement {
   const el = container.firstElementChild;
@@ -30,6 +31,42 @@ describe('ActivityBlock', () => {
     expect(block(container).style.height).toBe('165px');
     rerender(<ActivityBlock name="א" durationMinutes={60} color="#FFD6E0" slotHeight={40} />);
     expect(block(container).style.height).toBe('77px');
+  });
+
+  it('takes the slot height from SlotHeightContext unless passed (phone scale, PHONE-2)', () => {
+    const { container, rerender } = render(
+      <SlotHeightContext.Provider value={22}>
+        <ActivityBlock name="א" durationMinutes={60} color="#FFD6E0" />
+      </SlotHeightContext.Provider>,
+    );
+    expect(block(container).style.height).toBe('41px');
+    // Too low to stack name and time: one row, so both stay visible.
+    expect(block(container)).toHaveAttribute('data-short', 'true');
+    rerender(
+      <SlotHeightContext.Provider value={22}>
+        <ActivityBlock name="א" durationMinutes={60} color="#FFD6E0" slotHeight={28} />
+      </SlotHeightContext.Provider>,
+    );
+    expect(block(container).style.height).toBe('53px');
+    expect(block(container)).not.toHaveAttribute('data-short');
+  });
+
+  it('shrinks the × and the time line to fit a one-slot block at the phone scale', () => {
+    const { container, rerender } = render(
+      <ActivityBlock
+        name="קפה"
+        durationMinutes={30}
+        color="#FFD6E0"
+        slotHeight={22}
+        onDelete={() => {}}
+      />,
+    );
+    expect(block(container).style.height).toBe('19px');
+    expect(screen.getByRole('button', { name: 'מחיקת קפה' })).toHaveClass('size-4');
+    expect(screen.getByText('חצי שעה')).toHaveClass('leading-[1.3]');
+    rerender(<ActivityBlock name="קפה" durationMinutes={30} color="#FFD6E0" onDelete={() => {}} />);
+    expect(screen.getByRole('button', { name: 'מחיקת קפה' })).toHaveClass('size-5');
+    expect(screen.getByText('חצי שעה')).toHaveClass('leading-[1.5]');
   });
 
   it('uses the short single-line layout for one slot only', () => {

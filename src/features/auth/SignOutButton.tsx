@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, ConfirmDialog, useToast } from '@/components/ui';
+import { ConfirmDialog, HeaderAction, useToast } from '@/components/ui';
 import { errorMessage } from '@/i18n/errors';
 import { useAuth } from './authContext';
 
@@ -27,14 +27,14 @@ export function SignOutButton() {
 
   return (
     <>
-      <Button
+      {/* Last item of the phone "⋯" menu (PHONE-1). */}
+      <HeaderAction
+        label={t('auth.signOut.button')}
         variant="ghost"
-        size="sm"
+        order={100}
         title={session?.user.email ?? storedUser?.email ?? undefined}
-        onClick={() => setConfirming(true)}
-      >
-        {t('auth.signOut.button')}
-      </Button>
+        onSelect={() => setConfirming(true)}
+      />
       <ConfirmDialog
         open={confirming}
         destructive={false}

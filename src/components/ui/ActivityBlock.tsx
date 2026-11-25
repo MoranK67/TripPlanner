@@ -5,7 +5,7 @@ import {
   activityBlockHeight,
   isShortBlock,
   nameLineLimit,
-  SLOT_HEIGHT_PX,
+  useSlotHeight,
 } from './activityBlockLayout';
 import { cx } from './cx';
 
@@ -33,11 +33,17 @@ export interface ActivityBlockProps extends Omit<
    * is `aria-disabled`, ignores clicks, and offers this reason as its title / description.
    */
   deleteDisabledReason?: string;
-  /** Pixel height of one slot. Keep the default so bank and timetable share one scale. */
+  /**
+   * Pixel height of one slot. Defaults to the surrounding `SlotHeightContext` (the phone planner's
+   * denser scale) so bank and timetable share one scale.
+   */
   slotHeight?: number;
 }
 
 const FALLBACK_COLOR = PALETTE[PALETTE.length - 1];
+
+/** Below this slot height the block uses its compact × and time line. */
+const DENSE_SLOT_HEIGHT_PX = 24;
 
 // Unprefixed only: a variant such as `tablet:absolute` already sorts after a base `relative`.
 const POSITION_CLASS = /(?:^|\s)(?:absolute|fixed|sticky|relative)(?:\s|$)/;
@@ -65,7 +71,7 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
     onOpen,
     onDelete,
     deleteDisabledReason,
-    slotHeight = SLOT_HEIGHT_PX,
+    slotHeight: slotHeightProp,
     className,
     style,
     ...rest
@@ -73,7 +79,12 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
   ref,
 ) {
   const { t } = useTranslation();
-  const short = isShortBlock(durationMinutes);
+  const contextSlotHeight = useSlotHeight();
+  const slotHeight = slotHeightProp ?? contextSlotHeight;
+  const short = isShortBlock(durationMinutes, slotHeight);
+  // The phone's denser scale (PHONE-2): a one-slot block is ~19 px, so the × and the time line
+  // shrink to fit its inner height.
+  const dense = slotHeight < DENSE_SLOT_HEIGHT_PX;
   const blockColor = isHexColor(color) ? normalizeHexColor(color) : FALLBACK_COLOR;
   const subtitle = meta ?? formatDurationHe(durationMinutes);
   const deleteDisabled = deleteDisabledReason !== undefined;
@@ -106,7 +117,8 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
           display. Whitespace-only text between flex items is not rendered, so layout is unchanged. */}{' '}
       <span
         className={cx(
-          'block text-[11.5px] leading-[1.5] text-block-ink-soft',
+          'block text-[11.5px] text-block-ink-soft',
+          short && dense ? 'leading-[1.3]' : 'leading-[1.5]',
           short ? 'shrink-0 whitespace-nowrap' : 'mt-px shrink-0',
         )}
       >
@@ -169,7 +181,9 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
           // The timetable's pointer engine (M5) never starts a drag from elements marked like this.
           data-no-drag=""
           className={cx(
-            'absolute end-1 grid size-5 place-items-center rounded-full border-0 bg-panel/75 p-0',
+            'absolute end-1 grid place-items-center',
+            dense ? 'size-4' : 'size-5',
+            'rounded-full border-0 bg-panel/75 p-0',
             'text-sm leading-none text-ink-soft transition',
             deleteDisabled
               ? 'cursor-not-allowed'

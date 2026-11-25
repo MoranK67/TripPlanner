@@ -14,6 +14,8 @@ import {
   Field,
   FormError,
   Modal,
+  MODAL_FORM_CLASS,
+  ModalActions,
   OfflineNote,
   Textarea,
   useCanEdit,
@@ -160,7 +162,7 @@ function ImportForm({
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit}>
+    <form noValidate onSubmit={handleSubmit} className={MODAL_FORM_CLASS}>
       <OfflineNote />
       {generalError && <FormError>{generalError}</FormError>}
       <Field label={t('import.textLabel')}>
@@ -245,7 +247,7 @@ function ImportForm({
         </ul>
       )}
 
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <ModalActions className="mt-5">
         <Button
           type="submit"
           variant="primary"
@@ -259,7 +261,7 @@ function ImportForm({
         <Button variant="ghost" onClick={onDone} disabled={saving}>
           {t('common.cancel')}
         </Button>
-      </div>
+      </ModalActions>
     </form>
   );
 }

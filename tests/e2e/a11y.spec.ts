@@ -2,10 +2,17 @@
 // dialogs, on both the desktop and the phone project. Fails on serious/critical violations only;
 // see support/axe.ts for the rule set, the report attachments and the exclusion policy.
 
-import { expect, header, test } from './support/fixtures';
+import { expect, test } from './support/fixtures';
 import { expectNoA11yViolations } from './support/axe';
 import { t } from './support/i18n';
-import { activityDialog, bank, isPhone, openBank, tripDialog } from './support/pages';
+import {
+  activityDialog,
+  bank,
+  clickHeaderAction,
+  isPhone,
+  openBank,
+  tripDialog,
+} from './support/pages';
 import { TRIPS } from '../fixtures/testData';
 
 test.describe('signed out', () => {
@@ -45,9 +52,7 @@ test.describe('signed in', () => {
     await dialog.getByRole('button', { name: t('common.cancel') }).click();
     await expect(dialog).toBeHidden();
 
-    await header(page)
-      .getByRole('button', { name: t('backup.import.open') })
-      .click();
+    await clickHeaderAction(page, t('backup.import.open'));
     const restore = page.getByRole('dialog', { name: t('backup.import.title') });
     await expect(restore).toBeVisible();
     await expectNoA11yViolations(page, 'backup restore dialog');
@@ -106,9 +111,7 @@ test.describe('signed in', () => {
     await expect(importDialog).toBeHidden();
 
     // Export dialog.
-    await header(page)
-      .getByRole('button', { name: t('export.open') })
-      .click();
+    await clickHeaderAction(page, t('export.open'));
     const exportDialog = page.getByRole('dialog', { name: t('export.title') });
     await expect(exportDialog).toBeVisible();
     await expectNoA11yViolations(page, 'export dialog');
@@ -116,9 +119,7 @@ test.describe('signed in', () => {
     await expect(exportDialog).toBeHidden();
 
     // Trip dialog (edit).
-    await header(page)
-      .getByRole('button', { name: t('trips.edit') })
-      .click();
+    await clickHeaderAction(page, t('trips.edit'));
     const edit = tripDialog(page, 'edit');
     await expect(edit).toBeVisible();
     await expectNoA11yViolations(page, 'trip dialog (edit)');
@@ -126,9 +127,7 @@ test.describe('signed in', () => {
     await expect(edit).toBeHidden();
 
     // Confirm dialog: delete trip.
-    await header(page)
-      .getByRole('button', { name: t('common.delete') })
-      .click();
+    await clickHeaderAction(page, t('common.delete'));
     const confirm = page.getByRole('alertdialog', { name: t('trips.deleteConfirm.title') });
     await expect(confirm).toBeVisible();
     await expectNoA11yViolations(page, 'confirm dialog (delete trip)');
@@ -155,14 +154,20 @@ test.describe('signed in', () => {
     await expect(page.getByTestId('placing-bar')).toBeVisible();
     // The slot buttons' group (zero-height wrapper; the buttons are positioned inside it).
     await expect(page.getByRole('group', { name: /^שעות התחלה עבור פנתאון/ })).toBeAttached();
+    if (isPhone(page)) {
+      // PHONE-2: a tapped slot is previewed with nudge / confirm / cancel buttons.
+      await page
+        .getByRole('button', { name: /^14:00–15:00, / })
+        .first()
+        .tap();
+      await expect(page.getByRole('group', { name: /^תצוגה מקדימה/ })).toBeVisible();
+    }
     await expectNoA11yViolations(page, 'trip page (placing)');
   });
 
   test('confirm dialog: sign out', async ({ page }) => {
     await page.goto('/trips');
-    await header(page)
-      .getByRole('button', { name: t('auth.signOut.button') })
-      .click();
+    await clickHeaderAction(page, t('auth.signOut.button'));
     const confirm = page.getByRole('alertdialog', { name: t('auth.signOut.title') });
     await expect(confirm).toBeVisible();
     await expectNoA11yViolations(page, 'confirm dialog (sign out)');

@@ -17,8 +17,9 @@ vi.mock('@/data', async (importOriginal) => {
 
 const trip = makeTrip();
 
-function renderControls() {
+function renderControls({ phone = false }: { phone?: boolean } = {}) {
   return renderRoute(<TripHeaderControls trip={trip} />, {
+    phone,
     path: '/trips/trip-1',
     pattern: '/trips/:tripId',
     extraRoutes: [{ path: '/trips', element: <h2>רשימת הטיולים</h2> }],
@@ -131,5 +132,61 @@ describe('TripHeaderControls offline (M7.3, FR-8.3)', () => {
     fireEvent.change(select, { target: { value: 'trip-2' } });
     expect(router.state.location.pathname).toBe('/trips/trip-2');
     expect(repo.delete).not.toHaveBeenCalled();
+  });
+
+  describe('on phones (PHONE-1)', () => {
+    it('keeps only the selector in the header; the actions and the range are in the "⋯" menu', async () => {
+      renderControls({ phone: true });
+      expect(header().getByRole('combobox', { name: 'בחירת טיול' })).toBeInTheDocument();
+      expect(header().queryByRole('button', { name: 'עריכה' })).not.toBeInTheDocument();
+      expect(header().queryByText('1.5 10:00 עד 3.5 18:00 · 3 ימים')).not.toBeInTheDocument();
+
+      fireEvent.click(header().getByRole('button', { name: 'פעולות נוספות' }));
+      const menu = screen.getByRole('menu');
+      expect(menu).toHaveAccessibleDescription('1.5 10:00 עד 3.5 18:00 · 3 ימים');
+      expect(
+        within(menu)
+          .getAllByRole('menuitem')
+          .map((el) => el.textContent),
+      ).toEqual(['עריכה', 'מחיקה', '+ טיול חדש']);
+    });
+
+    it('offline: edit, delete and new trip are disabled items with the reason and do nothing', () => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+      renderControls({ phone: true });
+      const more = header().getByRole('button', { name: 'פעולות נוספות' });
+      for (const name of ['עריכה', 'מחיקה', '+ טיול חדש']) {
+        if (more.getAttribute('aria-expanded') !== 'true') fireEvent.click(more);
+        const item = screen.getByRole('menuitem', { name });
+        expect(item).toHaveAttribute('aria-disabled', 'true');
+        expect(item).toHaveAccessibleDescription(/^אין חיבור לאינטרנט/);
+        fireEvent.click(item);
+        // Nothing opens and the menu stays open.
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+      }
+      expect(repo.delete).not.toHaveBeenCalled();
+    });
+
+    it('edit from the menu opens the dialog and gives focus back to "⋯" when it closes', async () => {
+      renderControls({ phone: true });
+      const more = header().getByRole('button', { name: 'פעולות נוספות' });
+      fireEvent.click(more);
+      fireEvent.click(screen.getByRole('menuitem', { name: 'עריכה' }));
+      const dialog = await screen.findByRole('dialog', { name: 'עריכת טיול' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'ביטול' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(more).toHaveFocus();
+    });
+
+    it('delete from the menu still asks first, with Cancel focused', async () => {
+      renderControls({ phone: true });
+      fireEvent.click(header().getByRole('button', { name: 'פעולות נוספות' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'מחיקה' }));
+      const dialog = screen.getByRole('alertdialog', { name: 'מחיקת טיול' });
+      expect(within(dialog).getByRole('button', { name: 'ביטול' })).toHaveFocus();
+      expect(repo.delete).not.toHaveBeenCalled();
+    });
   });
 });

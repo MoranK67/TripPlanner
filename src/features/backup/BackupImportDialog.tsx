@@ -1,7 +1,16 @@
 import { useIsMutating } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, FormError, Modal, OfflineNote, useCanEdit, useToast } from '@/components/ui';
+import {
+  Button,
+  FormError,
+  Modal,
+  MODAL_FORM_CLASS,
+  ModalActions,
+  OfflineNote,
+  useCanEdit,
+  useToast,
+} from '@/components/ui';
 import {
   MAX_BACKUP_TEXT_LENGTH,
   parseBackup,
@@ -133,7 +142,7 @@ function ImportForm({ onDone }: { onDone: () => void }) {
     importBackup.isError && trips ? importErrorMessage(importBackup.error, trips, t) : null;
 
   return (
-    <div>
+    <div className={MODAL_FORM_CLASS}>
       <OfflineNote />
       <input
         ref={inputRef}
@@ -186,7 +195,7 @@ function ImportForm({ onDone }: { onDone: () => void }) {
 
       {serverError && <FormError className="mt-3">{serverError}</FormError>}
 
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <ModalActions className="mt-5">
         <Button
           variant="primary"
           loading={saving}
@@ -201,7 +210,7 @@ function ImportForm({ onDone }: { onDone: () => void }) {
         <Button variant="ghost" onClick={onDone} disabled={saving}>
           {t('common.cancel')}
         </Button>
-      </div>
+      </ModalActions>
     </div>
   );
 }

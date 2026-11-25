@@ -1,6 +1,7 @@
 // Tap-to-place and keyboard placement (M7.2 / M7.4): FR-5.5, FR-5.6, NFR-7 ("every action without
-// drag"). Phone: tap an activity to pick it up, tap a highlighted start slot to place it, switch
-// day in between, return it to the bank or cancel from the placing bar. Desktop: M on a focused
+// drag"). Phone (PHONE-2): tap an activity to pick it up (the bank sheet gets out of the way), tap
+// a highlighted start slot to preview it, nudge it by half an hour, confirm with "שבץ"; switch day
+// in between, return it to the bank or cancel from the placing bar. Desktop: M on a focused
 // block, arrow keys, Enter.
 
 import type { Locator, Page } from '@playwright/test';
@@ -26,6 +27,18 @@ const DAY2 = { date: '2027-03-11', label: dayLabel('2027-03-11', 2) };
 /** The bar under the timetable while an activity waits for a slot. */
 function placingBar(page: Page): Locator {
   return page.getByTestId('placing-bar');
+}
+
+/** Phone (PHONE-2): the buttons next to the preview ghost (▲ / ▼ / שבץ / ביטול). */
+function previewToolbar(page: Page): Locator {
+  return page.getByRole('group', { name: /^תצוגה מקדימה/ });
+}
+
+/** Phone: confirms the previewed slot ("שבץ"). */
+async function confirmPreview(page: Page): Promise<void> {
+  await previewToolbar(page)
+    .getByRole('button', { name: t('schedule.preview.confirm'), exact: true })
+    .tap();
 }
 
 /** A slot button of the placing layer, e.g. "12:00–13:00, יום רביעי 10.3 · יום 1". */
@@ -58,7 +71,7 @@ test.describe('phone: tap to place', () => {
     test.skip(testInfo.project.name !== 'phone', 'touch layout only');
   });
 
-  test('tap a bank item, then a highlighted slot: placed and saved', async ({
+  test('pick from the bank, the sheet closes, tap a slot, nudge earlier, confirm: placed and saved', async ({
     page,
     backend,
     user,
@@ -68,9 +81,10 @@ test.describe('phone: tap to place', () => {
     await openBank(page);
     await bankBlock(page, 'פנתאון').getByRole('button').first().tap();
 
-    // Placing mode: the bar names the activity, the bank panel makes room, valid runs are tinted.
-    await expect(placingBar(page)).toContainText(t('schedule.place.bar', { name: 'פנתאון' }));
-    await expect(bankBlock(page, 'פנתאון')).toBeHidden();
+    // Placing mode: the sheet gets out of the way, a slim bar names the activity, valid runs are
+    // tinted.
+    await expect(bank(page)).toBeHidden();
+    await expect(placingBar(page)).toContainText(t('schedule.place.barShort', { name: 'פנתאון' }));
     await expect(page.locator('[data-valid-run]').first()).toBeAttached();
     // Before the trip starts (10:00 on day 1) a slot is offered but marked unavailable.
     await expect(
@@ -80,20 +94,81 @@ test.describe('phone: tap to place', () => {
       }),
     ).toHaveAttribute('aria-disabled', 'true');
 
+    // A tap previews the slot; nothing is saved yet.
     await slot(page, '12:00–13:00', DAY1).tap();
+    const ghost = page.getByTestId('placing-preview');
+    await expect(ghost).toBeVisible();
+    await expect(ghost).toHaveAttribute('data-valid', 'true');
+    await expect(ghost).toContainText('12:00–13:00');
+    expect(backend.requestsTo(rest('POST', 'rpc/place_activity'))).toHaveLength(0);
+
+    // Half an hour earlier, then confirm.
+    await previewToolbar(page)
+      .getByRole('button', { name: t('schedule.preview.earlier'), exact: true })
+      .tap();
+    await expect(ghost).toContainText('11:30–12:30');
+    await confirmPreview(page);
 
     await expect(placingBar(page)).toBeHidden();
-    await expect(gridBlock(page, DAY1, 'פנתאון 12:00–13:00')).toBeVisible();
+    await expect(ghost).toBeHidden();
+    await expect(gridBlock(page, DAY1, 'פנתאון 11:30–12:30')).toBeVisible();
     await expect
       .poll(() => row(backend, 'פנתאון'))
       .toMatchObject({
         scheduled_date: DAY1.date,
-        start_minute: 720,
+        start_minute: 690,
       });
     expect(backend.requestsTo(rest('POST', 'rpc/place_activity'))).toHaveLength(1);
     await expect(page.getByTestId('placing-status')).toHaveText(
-      t('schedule.place.placed', { name: 'פנתאון', day: DAY1.label, time: '12:00–13:00' }),
+      t('schedule.place.placed', { name: 'פנתאון', day: DAY1.label, time: '11:30–12:30' }),
     );
+    // The sheet stays closed, so the placed block stays in view.
+    await expect(bank(page)).toBeVisible();
+    await expect(bank(page).locator(':scope > button[aria-expanded]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  test('a slot that is not free previews in red and cannot be confirmed', async ({
+    page,
+    backend,
+    user,
+  }) => {
+    const trip = backend.db.seedTrip(user, TRIPS.rome, [
+      { name: 'קולוסיאום', duration_minutes: 120, scheduled_date: DAY1.date, start_minute: 660 },
+      { name: 'פנתאון', duration_minutes: 60 },
+    ]);
+    await page.goto(`/trips/${trip.id}`);
+    await openBank(page);
+    await bankBlock(page, 'פנתאון').getByRole('button').first().tap();
+    // 10:30–11:30 overlaps the Colosseum (11:00).
+    await page
+      .getByRole('button', {
+        name: t('schedule.place.slotUnavailable', { time: '10:30–11:30', day: DAY1.label }),
+        exact: true,
+      })
+      // aria-disabled: Playwright would wait for it to be enabled; a finger can still tap it.
+      .tap({ force: true });
+    await expect(page.getByTestId('placing-preview')).toHaveAttribute('data-valid', 'false');
+    const confirm = previewToolbar(page).getByRole('button', {
+      name: t('schedule.preview.confirm'),
+      exact: true,
+    });
+    await expect(confirm).toHaveAttribute('aria-disabled', 'true');
+    await expect(previewToolbar(page)).toContainText(t('errors.kinds.conflict_overlap'));
+    await confirm.tap({ force: true });
+    // Earlier by half an hour: 10:00–11:00 is free.
+    await previewToolbar(page)
+      .getByRole('button', { name: t('schedule.preview.earlier'), exact: true })
+      .tap();
+    await expect(page.getByTestId('placing-preview')).toHaveAttribute('data-valid', 'true');
+    await confirmPreview(page);
+    await expect(gridBlock(page, DAY1, 'פנתאון 10:00–11:00')).toBeVisible();
+    await expect
+      .poll(() => row(backend, 'פנתאון'))
+      .toMatchObject({ scheduled_date: DAY1.date, start_minute: 600 });
+    expect(backend.requestsTo(rest('POST', 'rpc/place_activity'))).toHaveLength(1);
   });
 
   test('tap a placed block, switch to the next day, tap a slot: moved to that day', async ({
@@ -106,13 +181,16 @@ test.describe('phone: tap to place', () => {
     ]);
     await page.goto(`/trips/${trip.id}`);
     await gridBlock(page, DAY1, 'קולוסיאום 11:00–13:00').tap();
-    await expect(placingBar(page)).toContainText(t('schedule.place.bar', { name: 'קולוסיאום' }));
+    await expect(placingBar(page)).toContainText(
+      t('schedule.place.barShort', { name: 'קולוסיאום' }),
+    );
 
     await page.getByRole('button', { name: t('schedule.day.next'), exact: true }).tap();
     await expect(page.getByRole('combobox', { name: t('schedule.day.choose') })).toHaveValue('1');
     // Still placing on the new day.
     await expect(placingBar(page)).toBeVisible();
     await slot(page, '09:00–11:00', DAY2).tap();
+    await confirmPreview(page);
 
     await expect(placingBar(page)).toBeHidden();
     await expect(gridBlock(page, DAY2, 'קולוסיאום 09:00–11:00')).toBeVisible();

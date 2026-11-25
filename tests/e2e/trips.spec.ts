@@ -4,7 +4,18 @@
 import { rest } from './fake-backend/server';
 import { expect, header, test, toast } from './support/fixtures';
 import { t } from './support/i18n';
-import { bank, nextMonth, openBank, pickDay, setTripTimes, tripDialog } from './support/pages';
+import {
+  bank,
+  clickHeaderAction,
+  expectTripRange,
+  isPhone,
+  moreActionsButton,
+  nextMonth,
+  openBank,
+  pickDay,
+  setTripTimes,
+  tripDialog,
+} from './support/pages';
 import { TRIPS } from '../fixtures/testData';
 
 test.beforeEach(async ({ signIn }) => {
@@ -40,7 +51,7 @@ test.describe('trips list', () => {
       end_minute: 1080,
     });
     await expect(page).toHaveURL(new RegExp(`/trips/${created.id}$`));
-    await expect(header(page).getByText('15.3 09:00 עד 18.3 18:00 · 4 ימים')).toBeVisible();
+    await expectTripRange(page, '15.3 09:00 עד 18.3 18:00 · 4 ימים');
     await openBank(page);
     await expect(bank(page).getByRole('heading', { name: t('bank.title') })).toBeVisible();
   });
@@ -50,9 +61,7 @@ test.describe('trips list', () => {
     backend,
   }) => {
     await page.goto('/trips');
-    await header(page)
-      .getByRole('button', { name: t('trips.new') })
-      .click();
+    await clickHeaderAction(page, t('trips.new'));
     const dialog = tripDialog(page);
     await pickDay(dialog, '2027-03-20');
     await pickDay(dialog, '2027-03-17');
@@ -68,9 +77,7 @@ test.describe('trips list', () => {
 
   test('one-day trip ending at 24:00 (§9.4)', async ({ page, backend }) => {
     await page.goto('/trips');
-    await header(page)
-      .getByRole('button', { name: t('trips.new') })
-      .click();
+    await clickHeaderAction(page, t('trips.new'));
     const dialog = tripDialog(page);
     await dialog.getByLabel(t('trips.dialog.name')).fill('יום בים');
     await pickDay(dialog, '2027-03-20');
@@ -78,7 +85,7 @@ test.describe('trips list', () => {
     await setTripTimes(dialog, '00:00', '24:00');
     await expect(dialog.getByText('מ־20 במרץ 2027 עד 20 במרץ 2027 · יום אחד')).toBeVisible();
     await dialog.getByRole('button', { name: t('trips.dialog.create') }).click();
-    await expect(header(page).getByText('20.3 00:00 עד 20.3 24:00 · יום אחד')).toBeVisible();
+    await expectTripRange(page, '20.3 00:00 עד 20.3 24:00 · יום אחד');
     expect(backend.db.trips[0]).toMatchObject({ start_minute: 0, end_minute: 1440 });
   });
 
@@ -87,9 +94,7 @@ test.describe('trips list', () => {
     backend,
   }) => {
     await page.goto('/trips');
-    await header(page)
-      .getByRole('button', { name: t('trips.new') })
-      .click();
+    await clickHeaderAction(page, t('trips.new'));
     const dialog = tripDialog(page);
     await pickDay(dialog, '2027-03-20');
     await pickDay(dialog, '2027-03-20');
@@ -104,9 +109,7 @@ test.describe('trips list', () => {
 
   test('only a start day picked asks for the end day', async ({ page, backend }) => {
     await page.goto('/trips');
-    await header(page)
-      .getByRole('button', { name: t('trips.new') })
-      .click();
+    await clickHeaderAction(page, t('trips.new'));
     const dialog = tripDialog(page);
     await pickDay(dialog, '2027-03-25'); // after a complete default range: starts a new range
     await dialog.getByRole('button', { name: t('trips.dialog.create') }).click();
@@ -119,9 +122,7 @@ test.describe('trips list', () => {
     backend,
   }) => {
     await page.goto('/trips');
-    await header(page)
-      .getByRole('button', { name: t('trips.new') })
-      .click();
+    await clickHeaderAction(page, t('trips.new'));
     const dialog = tripDialog(page);
     await dialog.getByLabel(t('trips.dialog.name')).fill('מסע ארוך');
 
@@ -152,9 +153,7 @@ test.describe('trips list', () => {
     backend.db.seedTrip(user, TRIPS.lisbon);
     backend.db.seedTrip(user, TRIPS.athens);
     await page.goto('/trips');
-    await header(page)
-      .getByRole('button', { name: t('trips.new') })
-      .click();
+    await clickHeaderAction(page, t('trips.new'));
     const dialog = tripDialog(page);
     await dialog.getByLabel(t('trips.dialog.name')).fill('רומא');
     await dialog.getByRole('button', { name: t('trips.dialog.create') }).click(); // default range
@@ -184,7 +183,7 @@ test.describe('trip page', () => {
     await expect(switcher).toHaveValue(rome.id);
     await switcher.selectOption({ label: TRIPS.lisbon.name });
     await expect(page).toHaveURL(new RegExp(`/trips/${lisbon.id}$`));
-    await expect(header(page).getByText('2.4 10:00 עד 5.4 20:00 · 4 ימים')).toBeVisible();
+    await expectTripRange(page, '2.4 10:00 עד 5.4 20:00 · 4 ימים');
   });
 
   test('shrinking the window returns placed activities to the bank with a count (FR-2.6)', async ({
@@ -202,9 +201,7 @@ test.describe('trip page', () => {
     await openBank(page);
     await expect(bank(page).getByRole('listitem')).toHaveCount(1);
 
-    await header(page)
-      .getByRole('button', { name: t('trips.edit') })
-      .click();
+    await clickHeaderAction(page, t('trips.edit'));
     const dialog = tripDialog(page, 'edit');
     await expect(dialog.getByLabel(t('trips.dialog.name'))).toHaveValue(TRIPS.rome.name);
     await pickDay(dialog, '2027-03-10');
@@ -213,7 +210,7 @@ test.describe('trip page', () => {
 
     await expect(dialog).toBeHidden();
     await expect(toast(page, t('trips.movedToBank_two'))).toBeVisible();
-    await expect(header(page).getByText('10.3 10:00 עד 11.3 20:00 · יומיים')).toBeVisible();
+    await expectTripRange(page, '10.3 10:00 עד 11.3 20:00 · יומיים');
     // The two moved activities are appended to the bank in timetable order.
     const items = bank(page).getByRole('listitem');
     await expect(items).toHaveCount(3);
@@ -231,9 +228,7 @@ test.describe('trip page', () => {
   }) => {
     const trip = backend.db.seedTrip(user, TRIPS.rome);
     await page.goto(`/trips/${trip.id}`);
-    await header(page)
-      .getByRole('button', { name: t('trips.edit') })
-      .click();
+    await clickHeaderAction(page, t('trips.edit'));
     const dialog = tripDialog(page, 'edit');
     await dialog.getByLabel(t('trips.dialog.name')).fill('רומא והוותיקן');
     // Prefilled in the typed fields' HH:MM display (UX-5).
@@ -242,7 +237,7 @@ test.describe('trip page', () => {
     await setTripTimes(dialog, undefined, '22:00');
     await dialog.getByRole('button', { name: t('common.save') }).click();
     await expect(dialog).toBeHidden();
-    await expect(header(page).getByText('10.3 10:00 עד 13.3 22:00 · 4 ימים')).toBeVisible();
+    await expectTripRange(page, '10.3 10:00 עד 13.3 22:00 · 4 ימים');
     await expect(header(page).getByLabel(t('trips.switch'))).toContainText('רומא והוותיקן');
     await expect(page.getByText(/חזרו למאגר|חזרה למאגר/)).toHaveCount(0);
   });
@@ -259,10 +254,14 @@ test.describe('trip page', () => {
     );
     const other = backend.db.seedTrip(user, TRIPS.lisbon, [{ name: 'טראם 28' }]);
     await page.goto(`/trips/${trip.id}`);
-    const deleteButton = header(page).getByRole('button', { name: t('common.delete') });
+    const deleteTrip = () => clickHeaderAction(page, t('common.delete'));
+    // Focus returns to the opener: the button on desktop, the "⋯" menu button on phones.
+    const opener = isPhone(page)
+      ? moreActionsButton(page)
+      : header(page).getByRole('button', { name: t('common.delete') });
     const confirm = page.getByRole('alertdialog', { name: t('trips.deleteConfirm.title') });
 
-    await deleteButton.click();
+    await deleteTrip();
     await expect(confirm).toBeVisible();
     await expect(confirm).toContainText(
       t('trips.deleteConfirm.message', { name: TRIPS.rome.name }),
@@ -270,14 +269,14 @@ test.describe('trip page', () => {
     await expect(confirm.getByRole('button', { name: t('common.cancel') })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(confirm).toBeHidden();
-    await expect(deleteButton).toBeFocused(); // focus returns to the opener
+    await expect(opener).toBeFocused();
 
-    await deleteButton.click();
+    await deleteTrip();
     await confirm.getByRole('button', { name: t('common.cancel') }).click();
     await expect(confirm).toBeHidden();
     expect(backend.requestsTo(rest('DELETE', 'trips'))).toHaveLength(0);
 
-    await deleteButton.click();
+    await deleteTrip();
     await confirm.getByRole('button', { name: t('common.confirmDelete') }).click();
     await expect(page).toHaveURL(/\/trips$/);
     await expect(toast(page, t('trips.deleted', { name: TRIPS.rome.name }))).toBeVisible();

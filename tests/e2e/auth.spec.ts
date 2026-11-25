@@ -1,9 +1,9 @@
 // FR-1.1, FR-1.2, FR-1.4 and §9.4 "Session expired": sign-in, route guard, sign-out.
 
 import { auth } from './fake-backend/server';
-import { expect, header, test } from './support/fixtures';
+import { expect, test } from './support/fixtures';
 import { t } from './support/i18n';
-import { login } from './support/pages';
+import { clickHeaderAction, headerAction, login } from './support/pages';
 import { TEST_PASSWORD, TEST_USER_EMAIL, TRIPS } from '../fixtures/testData';
 
 test.describe('sign-in', () => {
@@ -13,9 +13,7 @@ test.describe('sign-in', () => {
     await login(page, user.email, TEST_PASSWORD);
     await expect(page).toHaveURL(/\/trips$/);
     await expect(page.getByRole('heading', { name: t('trips.title') })).toBeVisible();
-    await expect(
-      header(page).getByRole('button', { name: t('auth.signOut.button') }),
-    ).toBeVisible();
+    await expect(await headerAction(page, t('auth.signOut.button'))).toBeVisible();
   });
 
   test('wrong password shows a Hebrew error and stays on the login page', async ({
@@ -98,9 +96,9 @@ test.describe('sign-out (FR-1.4)', () => {
   }) => {
     await signIn();
     await page.goto('/trips');
-    const signOut = header(page).getByRole('button', { name: t('auth.signOut.button') });
+    const signOut = () => clickHeaderAction(page, t('auth.signOut.button'));
 
-    await signOut.click();
+    await signOut();
     const dialog = page.getByRole('alertdialog', { name: t('auth.signOut.title') });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: t('common.cancel') })).toBeFocused();
@@ -108,7 +106,7 @@ test.describe('sign-out (FR-1.4)', () => {
     await expect(dialog).toBeHidden();
     await expect(page).toHaveURL(/\/trips$/);
 
-    await signOut.click();
+    await signOut();
     await dialog.getByRole('button', { name: t('auth.signOut.confirm') }).click();
     await expect(page).toHaveURL(/\/login$/);
     expect(backend.requestsTo(auth('logout'))).toHaveLength(1);

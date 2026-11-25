@@ -7,6 +7,7 @@ import { dragSourceProps, useBankDropZone } from '../drag/dragContext';
 import { EDGE_SWITCH_MS, TimetableDragRoot } from '../drag/TimetableDragRoot';
 import { usePlacementActions } from '../hooks';
 import { Timetable } from '../Timetable';
+import { PHONE_HEADER_PX, PHONE_SLOT_HEIGHT_PX } from '../timetableLayout';
 import { PlannerLayout } from './PlannerLayout';
 
 const repo = vi.hoisted(() => ({ place: vi.fn(), unplace: vi.fn() }));
@@ -43,15 +44,16 @@ function resize(next: number) {
 }
 
 // ---- layout rectangles (jsdom has no layout) ---------------------------------------------------
-// Phone, RTL: timetable scroller 360×600 at the origin (56 px header, 64 px time column on the
-// right), one day column 296 px wide scrolled so that slot s starts at y = s × 28 − 344. The bank
-// sheet lies below the timetable. Every draggable block is measured at BLOCK; the grab point
-// (30, 660) is 10 px below its top.
+// Phone, RTL: timetable scroller 360×600 at the origin (40 px day-switcher row, 64 px time column
+// on the right), one day column 296 px wide scrolled so that slot s starts at y = s × 22 − 344
+// (the phone's denser rows, PHONE-2). The bank sheet lies below the timetable. Every draggable
+// block is measured at BLOCK; the grab point (30, 660) is 10 px below its top.
+const SH = PHONE_SLOT_HEIGHT_PX;
 const SCROLLER = { left: 0, top: 0, right: 360, bottom: 600 };
-const COLUMNS = { left: 0, top: -344, right: 296, bottom: -344 + 48 * 28 };
+const COLUMNS = { left: 0, top: -344, right: 296, bottom: -344 + 48 * SH };
 const SHEET = { left: 0, top: 600, right: 360, bottom: 740 };
 const BLOCK = { left: 20, top: 650, right: 170, bottom: 705 };
-const yForSlot = (slot: number) => slot * 28 - 344 + 10;
+const yForSlot = (slot: number) => slot * SH - 344 + 10;
 
 function rect(r: { left: number; top: number; right: number; bottom: number }): DOMRect {
   return {
@@ -262,6 +264,86 @@ describe('PlannerLayout: phone vs tablet/desktop', () => {
   });
 });
 
+describe('Phone scale (PHONE-2)', () => {
+  /** The grid's two rows: the sticky header and the 48 half-hour rows. */
+  const gridRows = () =>
+    (screen.getByTestId('timetable-scroller').firstElementChild as HTMLElement).style
+      .gridTemplateRows;
+
+  it('draws denser rows, a slim header, and blocks on the same scale in grid and sheet', () => {
+    renderPlanner();
+    expect(gridRows()).toBe(`${PHONE_HEADER_PX}px ${48 * SH}px`);
+    fireEvent.click(nextDay()); // the museum: 09:00, 90 minutes
+    const museumBlock = blockOf('placed-1');
+    expect(museumBlock.style.top).toBe(`${18 * SH + 1}px`);
+    expect(museumBlock.style.height).toBe(`${3 * SH - 3}px`);
+    // Hour labels follow the rows.
+    const timeColumn = screen.getByTestId('timetable-columns').previousElementSibling!;
+    expect((timeColumn.firstElementChild as HTMLElement).style.height).toBe(`${2 * SH}px`);
+    // The bank in the sheet uses the same scale (FR-3.3); a one-hour block keeps name and
+    // duration on one row, so both stay readable.
+    const bankBlock = within(screen.getByTestId('fake-bank')).getByTitle('שוק');
+    expect(bankBlock.style.height).toBe(`${2 * SH - 3}px`);
+    expect(bankBlock).toHaveAttribute('data-short', 'true');
+    expect(within(bankBlock).getByText('שעה')).toBeInTheDocument();
+    // The last day is hatched from the trip end (11:00) at the phone scale.
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '6' } });
+    const hatch = document.querySelector<HTMLElement>('[data-disabled-slots]')!;
+    expect(hatch.style.top).toBe(`${22 * SH}px`);
+  });
+
+  it('tablet and desktop keep the 28 px rows and the 56 px header', () => {
+    installMatchMedia(1200);
+    renderPlanner();
+    expect(gridRows()).toBe(`56px ${48 * 28}px`);
+    expect(blockOf('placed-1').style.top).toBe(`${18 * 28 + 1}px`);
+    expect(within(screen.getByTestId('fake-bank')).getByTitle('שוק').style.height).toBe('53px');
+  });
+
+  it('snaps a drop and draws its preview at the phone scale', () => {
+    renderPlanner();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '2' } }); // day 3
+    fireEvent.click(handle());
+    mouseDrag('bank-1', 150, yForSlot(20), { drop: false });
+    runFrame();
+    const preview = screen.getByTestId('drop-preview');
+    expect(preview.style.top).toBe(`${20 * SH + 1}px`);
+    expect(preview.style.height).toBe(`${2 * SH - 3}px`);
+    // The ghost under the finger is a copy at the same scale.
+    expect(within(screen.getByTestId('drag-ghost')).getByTitle('שוק').style.height).toBe(
+      `${2 * SH - 3}px`,
+    );
+    fireEvent.pointerUp(document, { pointerId: 1, clientX: 150, clientY: yForSlot(20) });
+    return waitFor(() => expect(repo.place).toHaveBeenCalledWith('bank-1', '2026-12-03', 600));
+  });
+
+  it('a long press still drags a placed block, and drops on the half hour under it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    renderPlanner();
+    fireEvent.click(nextDay()); // the museum's day
+    touch(blockOf('placed-1'), 'down', 30, 660);
+    act(() => vi.advanceTimersByTime(300)); // long press: the drag starts
+    fireEvent.pointerMove(document, { pointerId: 7, clientX: 150, clientY: yForSlot(26) });
+    runFrame();
+    expect(screen.getByTestId('drop-preview').style.top).toBe(`${26 * SH + 1}px`);
+    fireEvent.pointerUp(document, { pointerId: 7, clientX: 150, clientY: yForSlot(26) });
+    vi.useRealTimers();
+    await waitFor(() => expect(repo.place).toHaveBeenCalledWith('placed-1', '2026-12-02', 13 * 60));
+  });
+
+  it('a header-row pointer is not a drop target (slim header)', () => {
+    renderPlanner();
+    fireEvent.click(handle());
+    mouseDrag('bank-1', 150, PHONE_HEADER_PX - 5, { drop: false });
+    runFrame();
+    expect(screen.queryByTestId('drop-preview')).not.toBeInTheDocument();
+    fireEvent.pointerMove(document, { pointerId: 1, clientX: 150, clientY: PHONE_HEADER_PX + 5 });
+    runFrame();
+    expect(screen.getByTestId('drop-preview')).toBeInTheDocument();
+    fireEvent.pointerCancel(document, { pointerId: 1 });
+  });
+});
+
 describe('Day switcher', () => {
   it('steps through the days with labelled buttons and announces the day', () => {
     renderPlanner();
@@ -298,7 +380,7 @@ describe('Day switcher', () => {
 
   it('keeps the vertical scroll position when the day changes', () => {
     const { scroller } = renderPlanner();
-    expect(scroller.scrollTop).toBe(27 * 28); // trip start, as on desktop (FR-4.4)
+    expect(scroller.scrollTop).toBe(27 * SH); // trip start, as on desktop (FR-4.4)
     scroller.scrollTop = 500;
     fireEvent.click(nextDay());
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '4' } });
@@ -394,7 +476,7 @@ describe('Drag from the sheet onto the visible day', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '2' } }); // day 3
     fireEvent.click(handle());
     const panel = screen.getByTestId('bank-sheet-panel');
-    expect(panel).toHaveClass('h-[45dvh]');
+    expect(panel).toHaveClass('h-[40dvh]');
 
     mouseDrag('bank-1', 150, yForSlot(20), { drop: false });
     expect(panel).toHaveClass('h-0');
@@ -407,7 +489,7 @@ describe('Drag from the sheet onto the visible day', () => {
 
     await waitFor(() => expect(repo.place).toHaveBeenCalledWith('bank-1', '2026-12-03', 600));
     // The sheet comes back as it was.
-    expect(panel).toHaveClass('h-[45dvh]');
+    expect(panel).toHaveClass('h-[40dvh]');
     expect(handle()).toHaveAttribute('aria-expanded', 'true');
   });
 

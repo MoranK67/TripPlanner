@@ -9,9 +9,17 @@
 
 import type { BrowserContext, Page, Route } from '@playwright/test';
 import { FAKE_SUPABASE_URL } from './fake-backend/server';
-import { expect, header, test } from './support/fixtures';
+import { expect, test } from './support/fixtures';
 import { t } from './support/i18n';
-import { activityDialog, bank, bankBlock, openBank } from './support/pages';
+import {
+  activityDialog,
+  bank,
+  bankBlock,
+  clickHeaderAction,
+  closeHeaderMenu,
+  headerAction,
+  openBank,
+} from './support/pages';
 import { TRIPS } from '../fixtures/testData';
 
 /** localStorage key of the persisted query cache (src/app/queryPersistence.ts). */
@@ -85,8 +93,9 @@ test('offline reload: the trips list and a trip render from the cache, read-only
   await expect(page.getByRole('button', { name: 'קולוסיאום 11:00–13:00' })).toBeVisible();
   await openBank(page);
   await expect(bankBlock(page, 'פנתאון')).toBeVisible();
-  await expect(header(page).getByRole('button', { name: t('trips.edit') })).toBeDisabled();
-  await expect(header(page).getByRole('button', { name: t('common.delete') })).toBeDisabled();
+  await expect(await headerAction(page, t('trips.edit'))).toBeDisabled();
+  await expect(await headerAction(page, t('common.delete'))).toBeDisabled();
+  await closeHeaderMenu(page);
   await expect(bank(page).getByRole('button', { name: t('bank.add') })).toBeDisabled();
   await expect(bank(page).getByRole('button', { name: t('import.openLabel') })).toBeDisabled();
   // The bank's × stays in place but is disabled: it says why and opens no confirmation.
@@ -113,7 +122,8 @@ test('offline reload: the trips list and a trip render from the cache, read-only
   await expect(banner).toBeVisible();
   await expect(page.getByRole('link', { name: new RegExp(TRIPS.rome.name) })).toBeVisible();
   await expect(page.getByRole('link', { name: new RegExp(TRIPS.lisbon.name) })).toBeVisible();
-  await expect(page.getByRole('button', { name: t('trips.new'), exact: true })).toBeDisabled();
+  await expect(await headerAction(page, t('trips.new'))).toBeDisabled();
+  await closeHeaderMenu(page);
 
   // Later (the cached data is now stale, so opening the trip tries the API and fails): the
   // cached trip is still shown, not an error.
@@ -131,7 +141,7 @@ test('offline reload: the trips list and a trip render from the cache, read-only
   backend.db.seedTrip(user, TRIPS.athens);
   await goOnline(context, page);
   await expect(page.getByText(t('app.offline'))).toHaveCount(0);
-  await expect(page.getByRole('button', { name: t('trips.new'), exact: true })).toBeEnabled();
+  await expect(await headerAction(page, t('trips.new'))).toBeEnabled();
   await expect(page.getByRole('link', { name: new RegExp(TRIPS.athens.name) })).toBeVisible();
 });
 
@@ -182,13 +192,14 @@ test('losing the connection while a trip is open: banner and read-only at once, 
   });
   await expect(page.getByRole('status').filter({ hasText: t('app.offline') })).toBeVisible();
   await expect(bank(page).getByRole('button', { name: t('bank.add') })).toBeDisabled();
-  await expect(header(page).getByRole('button', { name: t('trips.edit') })).toBeDisabled();
+  await expect(await headerAction(page, t('trips.edit'))).toBeDisabled();
+  await closeHeaderMenu(page);
   await expect(bankBlock(page, 'פנתאון')).toBeVisible();
 
   await goOnline(context, page);
   await expect(page.getByText(t('app.offline'))).toHaveCount(0);
   await expect(bank(page).getByRole('button', { name: t('bank.add') })).toBeEnabled();
-  await expect(header(page).getByRole('button', { name: t('trips.edit') })).toBeEnabled();
+  await expect(await headerAction(page, t('trips.edit'))).toBeEnabled();
 });
 
 test('sign-out deletes the saved cache', async ({ page, backend, user }) => {
@@ -197,9 +208,7 @@ test('sign-out deletes the saved cache', async ({ page, backend, user }) => {
   await expect(page.getByRole('link', { name: new RegExp(TRIPS.rome.name) })).toBeVisible();
   await expect.poll(() => cached(page)).toContain(TRIPS.rome.name);
 
-  await header(page)
-    .getByRole('button', { name: t('auth.signOut.button') })
-    .click();
+  await clickHeaderAction(page, t('auth.signOut.button'));
   await page
     .getByRole('alertdialog', { name: t('auth.signOut.title') })
     .getByRole('button', { name: t('auth.signOut.confirm') })

@@ -5,7 +5,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { useState, type ReactNode } from 'react';
 import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router-dom';
-import { HeaderSlotProvider, ToastProvider } from '@/components/ui';
+import {
+  HeaderMenuButton,
+  HeaderMenuProvider,
+  HeaderSlotProvider,
+  ToastProvider,
+} from '@/components/ui';
 import type { Trip, TripSummary } from '@/domain';
 
 export function makeTrip(overrides: Partial<Trip> = {}): Trip {
@@ -28,14 +33,20 @@ export function makeSummary(overrides: Partial<TripSummary> = {}): TripSummary {
   };
 }
 
-/** Stand-in for the app header so <HeaderActions> content renders. */
-function HeaderHost({ children }: { children: ReactNode }) {
+/**
+ * Stand-in for the app header so <HeaderActions> content renders. `phone`: actions collapse into
+ * the "⋯" menu (PHONE-1), as in the app layout on phones.
+ */
+function HeaderHost({ children, phone }: { children: ReactNode; phone: boolean }) {
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   return (
-    <>
-      <div ref={setSlot} data-testid="header" />
+    <HeaderMenuProvider collapsed={phone}>
+      <div data-testid="header">
+        <div ref={setSlot} />
+        <HeaderMenuButton label="פעולות נוספות" />
+      </div>
       <HeaderSlotProvider target={slot}>{children}</HeaderSlotProvider>
-    </>
+    </HeaderMenuProvider>
   );
 }
 
@@ -46,14 +57,15 @@ export function renderRoute(
     path = '/',
     pattern = path,
     extraRoutes = [],
-  }: { path?: string; pattern?: string; extraRoutes?: RouteObject[] } = {},
+    phone = false,
+  }: { path?: string; pattern?: string; extraRoutes?: RouteObject[]; phone?: boolean } = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const router = createMemoryRouter(
     [
-      { path: pattern, element: <HeaderHost>{element}</HeaderHost> },
+      { path: pattern, element: <HeaderHost phone={phone}>{element}</HeaderHost> },
       ...extraRoutes,
       { path: '*', element: <p>דף אחר</p> },
     ],

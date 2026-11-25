@@ -9,6 +9,7 @@ import {
   type RefCallback,
   type RefObject,
 } from 'react';
+import type { TimetableMetrics } from '../timetableLayout';
 
 /**
  * The trip days the timetable currently shows. The desktop grid shows all of them (no view
@@ -33,6 +34,11 @@ export interface DragRootContextValue {
   bankRef: RefCallback<HTMLElement>;
   /** The timetable reports a partial day view (phone); `null` = all days are visible. */
   setView: (view: DayView | null) => void;
+  /**
+   * The timetable reports its vertical scale (phone: denser rows, PHONE-2), so hit-testing, the
+   * drop preview and the tap-to-place layer use the rows it draws; `null` = the default scale.
+   */
+  setMetrics: (metrics: TimetableMetrics | null) => void;
   /** True while a drag is in progress (not during the touch long-press wait). */
   isDragging: () => boolean;
   /** Called when the drag state changes (start, target change, end). */

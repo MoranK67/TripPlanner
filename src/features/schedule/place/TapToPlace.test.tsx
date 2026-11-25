@@ -9,6 +9,8 @@ import { TimetableDragRoot } from '../drag/TimetableDragRoot';
 import { usePlacementActions } from '../hooks';
 import { PlannerLayout } from '../phone/PlannerLayout';
 import { Timetable } from '../Timetable';
+import { PHONE_SLOT_HEIGHT_PX as SH } from '../timetableLayout';
+import { CONFIRM_TAP_GUARD_MS } from './useTapToPlace';
 
 const repo = vi.hoisted(() => ({ place: vi.fn(), unplace: vi.fn() }));
 vi.mock('@/data', async (importOriginal) => {
@@ -254,6 +256,13 @@ const nextDay = () => screen.getByRole('button', { name: 'היום הבא' });
 const slot = (time: string, day: string, free = true) =>
   screen.getByRole('button', { name: `${time}, ${day}${free ? '' : ', לא פנוי'}` });
 
+const sheet = () => screen.getByTestId('bank-sheet');
+const preview = () => screen.queryByTestId('placing-preview');
+const toolbar = () => screen.getByRole('group', { name: /^תצוגה מקדימה/ });
+const earlier = () => screen.getByRole('button', { name: 'הזזה חצי שעה מוקדם יותר' });
+const later = () => screen.getByRole('button', { name: 'הזזה חצי שעה מאוחר יותר' });
+const confirmButton = () => screen.getByRole('button', { name: 'שבץ' });
+
 /** The open button of an activity's block (bank or grid). */
 function blockButton(name: string, where: 'bank' | 'grid' = 'grid'): HTMLElement {
   const scope =
@@ -276,36 +285,185 @@ function pressM(el: Element) {
 // ---- phone --------------------------------------------------------------------------------------
 
 describe('tap-to-place on a phone (FR-5.5)', () => {
-  it('tap a bank item, then a highlighted slot: placed at once, focus on the placed block', async () => {
+  it('tap a bank item: the sheet closes; tap a slot, nudge, confirm: placed (PHONE-2)', async () => {
     const { cached } = renderPlanner();
     fireEvent.click(handle());
     tap(blockButton('שוק', 'bank'));
 
     expect(onOpenBank).not.toHaveBeenCalled(); // a tap picks it up instead of opening it
-    expect(bar()).toHaveTextContent('שיבוץ: שוק');
+    // A slim bar replaces the sheet at the bottom, so the whole day is in view.
+    expect(bar()).toHaveTextContent('משבצים: שוק');
+    expect(bar()).toHaveAttribute('data-compact');
+    expect(sheet()).not.toBeVisible();
     expect(status()).toHaveTextContent('מצב שיבוץ: שוק');
-    // The sheet gets out of the way; the block shows that it is picked up.
-    expect(screen.getByTestId('bank-sheet-panel')).not.toBeVisible();
-    expect(handle()).toHaveAttribute('aria-expanded', 'false');
     expect(document.querySelector('[data-drag-id="bank-1"]')).toHaveAttribute('data-picked');
 
-    // Day 1 starts at 14:00: one tinted run 14:00–23:00 (start slots 28..46).
+    // Day 1 starts at 14:00: one tinted run 14:00–23:00 (start slots 28..46), at the phone scale.
     const runs = document.querySelectorAll<HTMLElement>('[data-valid-run]');
     expect(runs).toHaveLength(1);
-    expect(runs[0]!.style.top).toBe(`${28 * 28 + 1}px`);
+    expect(runs[0]!.style.top).toBe(`${28 * SH + 1}px`);
     // One button per half hour of the visible day; the first free one in view has focus.
-    expect(within(screen.getByTestId('placing-layer')).getAllByRole('button')).toHaveLength(48);
+    const slotButtons = within(screen.getByTestId('placing-layer'))
+      .getAllByRole('button')
+      .filter((b) => b.hasAttribute('data-slot'));
+    expect(slotButtons).toHaveLength(48);
+    expect(slotButtons[30]!.style.height).toBe(`${SH}px`);
     expect(slot('14:00–15:00', DAY1)).toHaveFocus();
     expect(slot('13:30–14:30', DAY1, false)).toHaveAttribute('aria-disabled', 'true');
 
+    // A tap previews; nothing is saved yet.
     tap(slot('16:00–17:00', DAY1));
-    await waitFor(() => expect(repo.place).toHaveBeenCalledWith('bank-1', '2026-12-01', 16 * 60));
+    expect(repo.place).not.toHaveBeenCalled();
+    expect(preview()).toHaveAttribute('data-valid', 'true');
+    expect(preview()!.style.top).toBe(`${32 * SH + 1}px`);
+    expect(preview()!.style.height).toBe(`${2 * SH - 3}px`);
+    expect(preview()).toHaveTextContent('16:00–17:00');
+    expect(confirmButton()).toHaveFocus();
+    expect(status()).toHaveTextContent('תצוגה מקדימה: שוק, 16:00–17:00. לאישור: שבץ.');
+
+    // Another tap moves it; the arrow buttons nudge it by half an hour.
+    tap(slot('18:00–19:00', DAY1));
+    expect(preview()!.style.top).toBe(`${36 * SH + 1}px`);
+    fireEvent.click(earlier(), { detail: 1 });
+    fireEvent.click(earlier(), { detail: 1 });
+    fireEvent.click(earlier(), { detail: 1 });
+    fireEvent.click(later(), { detail: 1 });
+    expect(preview()!.style.top).toBe(`${34 * SH + 1}px`);
+    expect(preview()).toHaveTextContent('17:00–18:00');
+    expect(status()).toHaveTextContent('תצוגה מקדימה: שוק, 17:00–18:00');
+    expect(repo.place).not.toHaveBeenCalled();
+
+    fireEvent.click(confirmButton(), { detail: 1 });
+    await waitFor(() => expect(repo.place).toHaveBeenCalledWith('bank-1', '2026-12-01', 17 * 60));
+    expect(repo.place).toHaveBeenCalledTimes(1);
     expect(bar()).not.toBeInTheDocument();
+    expect(preview()).not.toBeInTheDocument();
     expect(screen.queryByTestId('placing-layer')).not.toBeInTheDocument();
-    expect(status()).toHaveTextContent(`השיבוץ נשמר: שוק, ${DAY1}, 16:00–17:00`);
+    expect(status()).toHaveTextContent(`השיבוץ נשמר: שוק, ${DAY1}, 17:00–18:00`);
     await waitFor(() => expect(blockButton('שוק')).toHaveFocus());
-    expect(cached()?.activities[0]?.placement).toEqual({ date: '2026-12-01', startMinute: 960 });
+    expect(cached()?.activities[0]?.placement).toEqual({ date: '2026-12-01', startMinute: 1020 });
     expect(document.querySelector('[data-picked]')).toBeNull();
+    // The sheet stays closed after a placement, so the placed block stays in view.
+    expect(sheet()).toBeVisible();
+    expect(handle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('a slot that is not free shows a red preview that cannot be confirmed, and says why', () => {
+    renderPlanner();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '2' } }); // day 3
+    fireEvent.click(handle());
+    tap(blockButton('שוק', 'bank'));
+    tap(slot('09:30–10:30', DAY3, false)); // the café is at 10:00
+    expect(preview()).toHaveAttribute('data-valid', 'false');
+    expect(confirmButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(confirmButton()).toHaveAccessibleDescription(STATUS.overlap);
+    expect(within(toolbar()).getByText(STATUS.overlap)).toBeVisible();
+    expect(status()).toHaveTextContent(`אי אפשר לשבץ כאן: ${STATUS.overlap}`);
+    fireEvent.click(confirmButton(), { detail: 1 });
+    expect(repo.place).not.toHaveBeenCalled();
+    expect(bar()).toBeInTheDocument();
+
+    fireEvent.click(later(), { detail: 1 }); // 10:00: still the café
+    expect(confirmButton()).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(later(), { detail: 1 }); // 10:30: free
+    expect(preview()).toHaveAttribute('data-valid', 'true');
+    expect(confirmButton()).not.toHaveAttribute('aria-disabled');
+    expect(confirmButton()).not.toHaveAccessibleDescription();
+    fireEvent.click(confirmButton(), { detail: 1 });
+    return waitFor(() =>
+      expect(repo.place).toHaveBeenCalledWith('bank-1', '2026-12-03', 10 * 60 + 30),
+    );
+  });
+
+  it('the nudge buttons stop at the day edges; the preview cancel ends the mode', () => {
+    renderPlanner();
+    fireEvent.click(handle());
+    const market = blockButton('שוק', 'bank');
+    tap(market);
+    fireEvent.click(slot('00:00–01:00', DAY1, false), { detail: 1 });
+    expect(earlier()).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(earlier(), { detail: 1 });
+    expect(preview()).toHaveTextContent('00:00–01:00');
+    fireEvent.click(document.querySelector('[data-slot="47"]')!, { detail: 1 }); // 23:30
+    expect(later()).toHaveAttribute('aria-disabled', 'true');
+    expect(earlier()).not.toHaveAttribute('aria-disabled');
+
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'ביטול' }));
+    expect(bar()).not.toBeInTheDocument();
+    expect(preview()).not.toBeInTheDocument();
+    expect(status()).toHaveTextContent(STATUS.cancelled);
+    // The sheet comes back as it was, with focus on the item.
+    expect(screen.getByTestId('bank-sheet-panel')).toBeVisible();
+    expect(market).toHaveFocus();
+    expect(repo.place).not.toHaveBeenCalled();
+  });
+
+  it('on a phone, Enter on a slot button still places at once (keyboard path unchanged)', async () => {
+    renderPlanner();
+    fireEvent.click(handle());
+    tap(blockButton('שוק', 'bank'));
+    fireEvent.click(slot('15:00–16:00', DAY1)); // Enter / Space: a click with detail 0
+    expect(preview()).not.toBeInTheDocument();
+    await waitFor(() => expect(repo.place).toHaveBeenCalledWith('bank-1', '2026-12-01', 15 * 60));
+  });
+
+  it('a preview belongs to its day: any day change drops it', () => {
+    renderPlanner();
+    fireEvent.click(handle());
+    tap(blockButton('שוק', 'bank'));
+    tap(slot('16:00–17:00', DAY1));
+    expect(preview()).toBeInTheDocument();
+    fireEvent.click(nextDay());
+    expect(preview()).not.toBeInTheDocument();
+    expect(bar()).toBeInTheDocument();
+    // Back on the first day: no stale preview, a plain slot choice again.
+    fireEvent.click(screen.getByRole('button', { name: 'היום הקודם' }));
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(DAY1);
+    expect(preview()).not.toBeInTheDocument();
+  });
+
+  it('a double tap on "שבץ" does not pick up the block under the second tap', async () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    renderPlanner();
+    fireEvent.click(handle());
+    tap(blockButton('שוק', 'bank'));
+    fireEvent.click(nextDay()); // the museum's day (09:00–10:30)
+    tap(slot('11:00–12:00', DAY2));
+    fireEvent.click(confirmButton(), { detail: 1 });
+    // The second tap lands on the museum, now under the finger.
+    now.mockReturnValue(1000 + CONFIRM_TAP_GUARD_MS - 50);
+    tap(blockButton('מוזיאון'));
+    expect(bar()).not.toBeInTheDocument();
+    expect(onOpenPlaced).not.toHaveBeenCalled();
+    await waitFor(() => expect(repo.place).toHaveBeenCalledWith('bank-1', '2026-12-02', 11 * 60));
+    expect(repo.place).toHaveBeenCalledTimes(1);
+    // A later tap picks blocks up as usual.
+    now.mockReturnValue(1000 + CONFIRM_TAP_GUARD_MS + 50);
+    tap(blockButton('מוזיאון'));
+    expect(bar()).toHaveTextContent('משבצים: מוזיאון');
+  });
+
+  it('"עריכה" in the slim bar opens a bank item; focus lands on the item, shown again', () => {
+    renderPlanner();
+    fireEvent.click(handle());
+    tap(blockButton('שוק', 'bank'));
+    expect(sheet()).not.toBeVisible();
+    fireEvent.click(within(bar()!).getByRole('button', { name: 'עריכה' }));
+    expect(onOpenBank).toHaveBeenCalledWith(expect.objectContaining({ id: 'bank-1' }));
+    expect(bar()).not.toBeInTheDocument();
+    expect(blockButton('שוק', 'bank')).toBeVisible();
+    expect(blockButton('שוק', 'bank')).toHaveFocus();
+  });
+
+  it('"עריכה" for a bank item that is not shown focuses the timetable instead', () => {
+    renderPlanner();
+    fireEvent.click(handle());
+    tap(blockButton('שוק', 'bank'));
+    // Stand-in for a bank list that stays out of view when the mode ends.
+    screen.getByTestId('fake-bank').setAttribute('hidden', '');
+    fireEvent.click(within(bar()!).getByRole('button', { name: 'עריכה' }));
+    expect(onOpenBank).toHaveBeenCalledWith(expect.objectContaining({ id: 'bank-1' }));
+    expect(screen.getByTestId('timetable-scroller')).toHaveFocus();
   });
 
   it('rolls back when saving fails, as a drag does (FR-5.7)', async () => {
@@ -314,6 +472,7 @@ describe('tap-to-place on a phone (FR-5.5)', () => {
     fireEvent.click(handle());
     tap(blockButton('שוק', 'bank'));
     tap(slot('16:00–17:00', DAY1));
+    fireEvent.click(confirmButton(), { detail: 1 });
     expect(await screen.findByText(STATUS.network)).toBeInTheDocument();
     await waitFor(() => expect(cached()?.activities[0]?.placement).toBeNull());
   });
@@ -322,7 +481,7 @@ describe('tap-to-place on a phone (FR-5.5)', () => {
     renderPlanner();
     fireEvent.click(nextDay()); // the museum's day
     tap(blockButton('מוזיאון'));
-    expect(bar()).toHaveTextContent('שיבוץ: מוזיאון');
+    expect(bar()).toHaveTextContent('משבצים: מוזיאון');
     expect(slot('09:00–10:30', DAY2)).toHaveFocus(); // its own place
 
     fireEvent.click(nextDay()); // the day switcher keeps working while placing
@@ -330,6 +489,7 @@ describe('tap-to-place on a phone (FR-5.5)', () => {
     // The new day's slots: the café at 10:00 blocks 09:00–10:30.
     expect(slot('09:00–10:30', DAY3, false)).toHaveAttribute('aria-disabled', 'true');
     tap(slot('15:00–16:30', DAY3));
+    fireEvent.click(confirmButton(), { detail: 1 });
     await waitFor(() => expect(repo.place).toHaveBeenCalledWith('placed-1', '2026-12-03', 15 * 60));
     await waitFor(() => expect(blockButton('מוזיאון')).toHaveFocus());
   });
@@ -343,17 +503,6 @@ describe('tap-to-place on a phone (FR-5.5)', () => {
     expect(slot('09:00–10:30', DAY3, false)).toHaveFocus();
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
     expect(slot('09:00–10:30', DAY2)).toHaveFocus();
-  });
-
-  it('a tap on a slot that is not free explains why and keeps the mode', () => {
-    renderPlanner();
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '2' } }); // day 3
-    fireEvent.click(handle());
-    tap(blockButton('שוק', 'bank'));
-    tap(slot('09:30–10:30', DAY3, false));
-    expect(repo.place).not.toHaveBeenCalled();
-    expect(screen.getByText(STATUS.overlap)).toBeInTheDocument();
-    expect(bar()).toBeInTheDocument();
   });
 
   it('returns a placed block to the bank from the bar', async () => {
@@ -389,21 +538,7 @@ describe('tap-to-place on a phone (FR-5.5)', () => {
     expect(texts[1]?.trim()).toBe(texts[3]?.trim());
   });
 
-  it('"edit" for a bank item with the sheet collapsed opens it and focuses the timetable', () => {
-    renderPlanner();
-    fireEvent.click(handle());
-    tap(blockButton('שוק', 'bank'));
-    // Swipe the handle down: the sheet is closed while the item still waits for a slot.
-    const init = { pointerId: 5, pointerType: 'touch', isPrimary: true, clientX: 180 };
-    fireEvent.pointerDown(handle(), { ...init, clientY: 560 });
-    fireEvent.pointerUp(handle(), { ...init, clientY: 660 });
-    expect(bar()).toBeInTheDocument();
-    fireEvent.click(within(bar()!).getByRole('button', { name: 'עריכה' }));
-    expect(onOpenBank).toHaveBeenCalledWith(expect.objectContaining({ id: 'bank-1' }));
-    expect(screen.getByTestId('timetable-scroller')).toHaveFocus();
-  });
-
-  it('cancels with the bar button, Escape, the same item again or the bank handle', () => {
+  it('cancels with the bar button, Escape or the same item again', () => {
     renderPlanner();
     fireEvent.click(handle());
     const market = blockButton('שוק', 'bank');
@@ -418,12 +553,10 @@ describe('tap-to-place on a phone (FR-5.5)', () => {
     expect(repo.place).not.toHaveBeenCalled();
 
     tap(market);
+    tap(slot('16:00–17:00', DAY1)); // also with a preview open
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(bar()).not.toBeInTheDocument();
-
-    tap(market);
-    fireEvent.click(handle()); // "show me the bank": leaves the mode, opens the sheet
-    expect(bar()).not.toBeInTheDocument();
+    expect(preview()).not.toBeInTheDocument();
     expect(handle()).toHaveAttribute('aria-expanded', 'true');
 
     fireEvent.click(nextDay());

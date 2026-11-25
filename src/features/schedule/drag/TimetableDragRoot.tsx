@@ -14,7 +14,6 @@ import {
   activityBlockHeight,
   blockSlots,
   cx,
-  SLOT_HEIGHT_PX,
   useCanEdit,
   useToast,
 } from '@/components/ui';
@@ -30,7 +29,12 @@ import {
 } from '@/domain';
 import { PlacingContext } from '../place/placingContext';
 import { useTapToPlace } from '../place/useTapToPlace';
-import { HEADER_PX, TIME_COL_PX, timeRangeLabel } from '../timetableLayout';
+import {
+  GRID_METRICS,
+  TIME_COL_PX,
+  timeRangeLabel,
+  type TimetableMetrics,
+} from '../timetableLayout';
 import {
   BANK_DROP_OVER_CLASSES,
   DragRootContext,
@@ -89,8 +93,8 @@ function clientBox(scroller: HTMLElement) {
 }
 
 /** Visible drop area of the scroll container (client box without the sticky header/time column). */
-function visibleDropArea(scroller: HTMLElement, direction: Direction) {
-  return dropArea(clientBox(scroller), direction, HEADER_PX, TIME_COL_PX);
+function visibleDropArea(scroller: HTMLElement, direction: Direction, headerPx: number) {
+  return dropArea(clientBox(scroller), direction, headerPx, TIME_COL_PX);
 }
 
 /** How long a block must be held at a side edge of the phone's day view to switch the day. */
@@ -138,6 +142,9 @@ export function TimetableDragRoot({
   // Phone single-day view (M7.1): the visible days. State for the preview, ref for the frame loop.
   const [view, setViewState] = useState<DayView | null>(null);
   const viewRef = useRef<DayView | null>(null);
+  // The timetable's vertical scale (PHONE-2). State for rendering, ref for the frame loop.
+  const [metrics, setMetricsState] = useState<TimetableMetrics>(GRID_METRICS);
+  const metricsRef = useRef<TimetableMetrics>(GRID_METRICS);
   const sourceRef = useRef<DragSource | null>(null);
   const edgeRef = useRef<{ delta: -1 | 1; since: number } | null>(null);
 
@@ -156,6 +163,7 @@ export function TimetableDragRoot({
     columnsRef,
     view,
     columnsEl,
+    metrics,
     canEdit,
     readOnlyReason,
     onPlace,
@@ -173,11 +181,11 @@ export function TimetableDragRoot({
     const first = viewRef.current?.start ?? 0;
     const hit = hitTestSlot(
       {
-        viewport: visibleDropArea(scroller, directionRef.current),
+        viewport: visibleDropArea(scroller, directionRef.current, metricsRef.current.headerPx),
         columns: columns.getBoundingClientRect(),
         dayCount: viewRef.current?.count ?? days.length,
         direction: directionRef.current,
-        slotHeight: SLOT_HEIGHT_PX,
+        slotHeight: metricsRef.current.slotHeight,
       },
       pointer,
       grabOffsetY,
@@ -234,7 +242,7 @@ export function TimetableDragRoot({
       return;
     }
     const direction = directionRef.current;
-    const area = visibleDropArea(scroller, direction);
+    const area = visibleDropArea(scroller, direction, metricsRef.current.headerPx);
     const box = clientBox(scroller);
     const side = edgeSide({ ...box, top: area.top, bottom: area.bottom }, pointer);
     // Physical side -> day: in RTL the later days lie to the left.
@@ -261,7 +269,10 @@ export function TimetableDragRoot({
       const scroller = scrollerRef.current;
       if (!scroller) return { dx: 0, dy: 0 };
       edgeSwitch(pointer, scroller);
-      return autoScrollStep(visibleDropArea(scroller, directionRef.current), pointer);
+      return autoScrollStep(
+        visibleDropArea(scroller, directionRef.current, metricsRef.current.headerPx),
+        pointer,
+      );
     },
     resolveTarget: (source, pointer) => resolveTarget(source.id, pointer, source.grabOffset.y),
     sameTarget,
@@ -305,16 +316,21 @@ export function TimetableDragRoot({
     viewRef.current = next;
     setViewState(next);
   }, []);
+  const setMetrics = useCallback((next: TimetableMetrics | null) => {
+    metricsRef.current = next ?? GRID_METRICS;
+    setMetricsState(next ?? GRID_METRICS);
+  }, []);
   const context = useMemo<DragRootContextValue>(
     () => ({
       scrollerRef,
       columnsRef: setColumns,
       bankRef: setBank,
       setView,
+      setMetrics,
       isDragging: () => store.get().source !== null,
       subscribe: store.subscribe,
     }),
-    [setColumns, setBank, setView, store],
+    [setColumns, setBank, setView, setMetrics, store],
   );
 
   return (
@@ -331,10 +347,16 @@ export function TimetableDragRoot({
             store={store}
             firstDay={view?.start ?? 0}
             dayCount={view?.count ?? days.length}
+            slotHeight={metrics.slotHeight}
           />,
           columnsEl,
         )}
-      <DragGhost store={store} ghostRef={drag.ghostRef} byId={byId} />
+      <DragGhost
+        store={store}
+        ghostRef={drag.ghostRef}
+        byId={byId}
+        slotHeight={metrics.slotHeight}
+      />
     </DragRootContext.Provider>
   );
 }
@@ -344,12 +366,14 @@ function DropPreview({
   store,
   firstDay,
   dayCount,
+  slotHeight,
 }: {
   store: DragStore<DropTarget>;
   /** Trip day index of the first visible column. */
   firstDay: number;
   /** Number of visible columns. */
   dayCount: number;
+  slotHeight: number;
 }) {
   const { target } = useDragState(store);
   if (target?.kind !== 'grid') return null;
@@ -369,8 +393,8 @@ function DropPreview({
       style={{
         insetInlineStart: `calc(${column} * 100% / ${dayCount} + 4px)`,
         width: `calc(100% / ${dayCount} - 8px)`,
-        top: target.slot * SLOT_HEIGHT_PX + 1,
-        height: activityBlockHeight(target.durationMinutes),
+        top: target.slot * slotHeight + 1,
+        height: activityBlockHeight(target.durationMinutes, slotHeight),
       }}
     />
   );
@@ -381,10 +405,13 @@ function DragGhost({
   store,
   ghostRef,
   byId,
+  slotHeight,
 }: {
   store: DragStore<DropTarget>;
   ghostRef: RefObject<HTMLDivElement>;
   byId: Map<string, Activity>;
+  /** The scale of the block being dragged (the ghost is a copy of it). */
+  slotHeight: number;
 }) {
   const source = useDragSource(store);
   const activity = source && byId.get(source.id);
@@ -405,6 +432,7 @@ function DragGhost({
         name={activity.name}
         durationMinutes={activity.durationMinutes}
         color={activity.color}
+        slotHeight={slotHeight}
         meta={
           activity.placement
             ? timeRangeLabel(activity.placement.startMinute, activity.durationMinutes)

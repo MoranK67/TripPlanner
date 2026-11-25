@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useRef, useState } from 'react';
 import { Button } from './Button';
-import { Modal, type ModalProps } from './Modal';
+import { Modal, ModalActions, type ModalProps } from './Modal';
 
 type HarnessProps = Partial<ModalProps> & { withInitialFocus?: boolean };
 
@@ -239,5 +239,131 @@ describe('Modal', () => {
     );
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  describe('phone layout (PHONE-1)', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function stubPhone() {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn((query: string) => ({
+          matches: false, // no min-width query matches: phone
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        })),
+      );
+    }
+
+    it('dialogs go full-screen on phones, confirmations stay cards', () => {
+      render(<Harness />);
+      expect(openModal().dialog).toHaveAttribute('data-phone-layout', 'fullscreen');
+    });
+
+    it('an alertdialog keeps the card unless asked otherwise', () => {
+      render(<Harness role="alertdialog" />);
+      fireEvent.click(screen.getByRole('button', { name: 'פתיחה' }));
+      expect(screen.getByRole('alertdialog')).toHaveAttribute('data-phone-layout', 'card');
+    });
+
+    it('can opt out of full screen', () => {
+      render(<Harness phoneLayout="card" />);
+      expect(openModal().dialog).toHaveAttribute('data-phone-layout', 'card');
+    });
+
+    it('the footer and <ModalActions> are action rows inside the dialog', () => {
+      render(
+        <Modal open onClose={() => {}} title="טופס" footer={<Button>אישור</Button>}>
+          <form>
+            <ModalActions>
+              <Button type="submit">שמירה בטופס</Button>
+            </ModalActions>
+          </form>
+        </Modal>,
+      );
+      const dialog = screen.getByRole('dialog', { name: 'טופס' });
+      for (const name of ['אישור', 'שמירה בטופס']) {
+        const button = screen.getByRole('button', { name });
+        expect(dialog).toContainElement(button);
+        expect(button.parentElement).toHaveAttribute('data-modal-actions');
+      }
+    });
+
+    it('on a phone with the keyboard open, it fits the visible part of the screen', () => {
+      stubPhone();
+      const listeners = new Set<() => void>();
+      const viewport = {
+        height: 844,
+        offsetTop: 0,
+        addEventListener: (_: string, l: () => void) => listeners.add(l),
+        removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+      };
+      vi.stubGlobal('visualViewport', viewport);
+      vi.stubGlobal('innerHeight', 844);
+      render(<Harness />);
+      openModal();
+      const backdrop = screen.getByTestId('modal-backdrop');
+      expect(backdrop.style.height).toBe('');
+
+      // The keyboard takes the lower part of the screen and Safari scrolls the page a bit.
+      viewport.height = 500;
+      viewport.offsetTop = 120;
+      act(() => listeners.forEach((l) => l()));
+      expect(backdrop.style.top).toBe('120px');
+      expect(backdrop.style.height).toBe('500px');
+
+      // The keyboard closes: back to the plain full-screen box (inline style removed).
+      viewport.height = 844;
+      viewport.offsetTop = 0;
+      act(() => listeners.forEach((l) => l()));
+      expect(backdrop.style.top).toBe('');
+      expect(backdrop.style.height).toBe('');
+      expect(backdrop.getAttribute('style') ?? '').not.toMatch(/height|top/);
+    });
+
+    it('stops listening to the visual viewport when it closes', () => {
+      stubPhone();
+      // Listener registrations by event type.
+      const listeners = new Map<string, () => void>();
+      const add = vi.fn((type: string, l: () => void) => listeners.set(type, l));
+      const remove = vi.fn((type: string, l: () => void) => {
+        if (listeners.get(type) === l) listeners.delete(type);
+      });
+      vi.stubGlobal('visualViewport', {
+        height: 844,
+        offsetTop: 0,
+        addEventListener: add,
+        removeEventListener: remove,
+      });
+      vi.stubGlobal('innerHeight', 844);
+      render(<Harness />);
+      openModal();
+      expect(add).toHaveBeenCalledWith('resize', expect.any(Function));
+      expect(add).toHaveBeenCalledWith('scroll', expect.any(Function));
+      expect(listeners.size).toBe(2);
+
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(remove).toHaveBeenCalledWith('resize', expect.any(Function));
+      expect(remove).toHaveBeenCalledWith('scroll', expect.any(Function));
+      expect(listeners.size).toBe(0);
+    });
+
+    it('does not listen on tablet / desktop', () => {
+      const add = vi.fn();
+      vi.stubGlobal('visualViewport', {
+        height: 500,
+        offsetTop: 0,
+        addEventListener: add,
+        removeEventListener: vi.fn(),
+      });
+      render(<Harness />);
+      openModal();
+      expect(add).not.toHaveBeenCalled();
+      expect(screen.getByTestId('modal-backdrop').style.height).toBe('');
+    });
   });
 });

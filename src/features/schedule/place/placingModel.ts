@@ -28,6 +28,11 @@ export type PlacingState = {
   id: string;
   cursor: SlotCursor;
   via: PlacingVia;
+  /**
+   * Phone (PHONE-2): the slot a tap chose, shown as a ghost with nudge / confirm buttons before
+   * anything is saved. `null` until a slot is tapped.
+   */
+  preview: SlotCursor | null;
 } | null;
 
 export type PlacingAction =
@@ -35,6 +40,12 @@ export type PlacingAction =
   | { type: 'select'; id: string; cursor: SlotCursor; via: PlacingVia }
   /** The keyboard cursor moved (arrow keys) or the phone switched days. */
   | { type: 'move'; cursor: SlotCursor }
+  /** Phone: a tapped slot is previewed (the keyboard cursor follows it). */
+  | { type: 'preview'; cursor: SlotCursor }
+  /** Phone: the preview moves half an hour earlier (−1) or later (+1) on its day. */
+  | { type: 'nudge'; delta: -1 | 1 }
+  /** Phone: the shown day changed; the preview (made on another day) is dropped. */
+  | { type: 'clearPreview' }
   /** Leave the mode: placed, returned to the bank, cancelled, or no longer possible. */
   | { type: 'end' };
 
@@ -42,10 +53,29 @@ export function placingReducer(state: PlacingState, action: PlacingAction): Plac
   switch (action.type) {
     case 'select':
       if (state?.id === action.id) return null;
-      return { id: action.id, cursor: clampCursor(action.cursor), via: action.via };
-    case 'move':
+      return { id: action.id, cursor: clampCursor(action.cursor), via: action.via, preview: null };
+    case 'move': {
       if (!state) return state;
-      return { ...state, cursor: clampCursor(action.cursor) };
+      const cursor = clampCursor(action.cursor);
+      // A preview stays only on its own day.
+      const preview = state.preview?.dayIndex === cursor.dayIndex ? state.preview : null;
+      return { ...state, cursor, preview };
+    }
+    case 'preview': {
+      if (!state) return state;
+      const cursor = clampCursor(action.cursor);
+      return { ...state, cursor, preview: cursor };
+    }
+    case 'clearPreview':
+      return state?.preview ? { ...state, preview: null } : state;
+    case 'nudge': {
+      if (!state?.preview) return state;
+      const preview = clampCursor({
+        ...state.preview,
+        slot: state.preview.slot + action.delta,
+      });
+      return { ...state, cursor: preview, preview };
+    }
     case 'end':
       return null;
   }

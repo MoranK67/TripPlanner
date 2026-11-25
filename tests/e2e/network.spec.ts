@@ -3,9 +3,16 @@
 
 import type { Locator, Page } from '@playwright/test';
 import { rest } from './fake-backend/server';
-import { expect, header, test, toast } from './support/fixtures';
+import { expect, test, toast } from './support/fixtures';
 import { t } from './support/i18n';
-import { activityDialog, bank, bankBlock, openBank, tripDialog } from './support/pages';
+import {
+  activityDialog,
+  bank,
+  bankBlock,
+  clickHeaderAction,
+  openBank,
+  tripDialog,
+} from './support/pages';
 import { TRIPS } from '../fixtures/testData';
 
 const NETWORK = t('errors.kinds.network');
@@ -71,9 +78,7 @@ test('create trip offline: error in the dialog, nothing saved, retry succeeds', 
   backend,
 }) => {
   await page.goto('/trips');
-  await header(page)
-    .getByRole('button', { name: t('trips.new') })
-    .click();
+  await clickHeaderAction(page, t('trips.new'));
   const dialog = tripDialog(page);
   await dialog.getByLabel(t('trips.dialog.name')).fill('נאפולי');
 
@@ -94,9 +99,7 @@ test('edit trip window offline keeps the dialog open with the error', async ({
 }) => {
   const trip = backend.db.seedTrip(user, TRIPS.rome);
   await page.goto(`/trips/${trip.id}`);
-  await header(page)
-    .getByRole('button', { name: t('trips.edit') })
-    .click();
+  await clickHeaderAction(page, t('trips.edit'));
   const dialog = tripDialog(page, 'edit');
   await dialog.getByLabel(t('trips.dialog.name')).fill('רומא מקוצרת');
 
@@ -114,9 +117,7 @@ test('delete trip offline: error toast, the trip stays', async ({ page, backend,
   const trip = backend.db.seedTrip(user, TRIPS.rome);
   await page.goto(`/trips/${trip.id}`);
   backend.fail(rest('DELETE', 'trips'), { kind: 'network' }, 1);
-  await header(page)
-    .getByRole('button', { name: t('common.delete') })
-    .click();
+  await clickHeaderAction(page, t('common.delete'));
   await page
     .getByRole('alertdialog')
     .getByRole('button', { name: t('common.confirmDelete') })

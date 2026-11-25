@@ -11,6 +11,10 @@
 //     cancels). The bar's "edit" button opens the dialog that a tap used to open.
 // A long press is a drag (usePointerDrag, 280 ms), a short tap is a click: the two never mix,
 // because the click that follows a drag is swallowed by the engine.
+//
+// Phone single-day view (PHONE-2): a tapped slot is not placed at once. It is previewed (a ghost
+// in green or red with half-hour earlier / later buttons, confirm and cancel) and only the confirm
+// button saves. Keyboard choices (Enter / Space on a slot) and every other layout place at once.
 
 import {
   useCallback,
@@ -25,12 +29,13 @@ import {
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { SLOT_HEIGHT_PX, type ToastApi } from '@/components/ui';
+import type { ToastApi } from '@/components/ui';
 import {
   canPlace,
   formatShortDate,
   formatWeekday,
   SLOT_MINUTES,
+  SLOTS_PER_DAY,
   type Activity,
   type IsoDate,
   type Minute,
@@ -39,9 +44,9 @@ import {
 } from '@/domain';
 import type { DayView } from '../drag/dragContext';
 import { readDirection } from '../drag/direction';
-import { timeRangeLabel } from '../timetableLayout';
+import { slotAtScrollTop, timeRangeLabel, type TimetableMetrics } from '../timetableLayout';
 import type { PlacingContextValue } from './placingContext';
-import { PlacingLayer, type FocusRequest } from './PlacingLayer';
+import { PlacingLayer, type ChooseVia, type FocusRequest } from './PlacingLayer';
 import {
   dayChecks,
   firstValidSlot,
@@ -67,6 +72,8 @@ export interface TapToPlaceOptions {
   view: DayView | null;
   /** The day-columns layer to portal the slot layer into. */
   columnsEl: HTMLElement | null;
+  /** The timetable's vertical scale (PHONE-2: denser on phones). */
+  metrics: TimetableMetrics;
   /** `useCanEdit()` (M7.3): offline no placement can start or finish; `readOnlyReason` says why. */
   canEdit: boolean;
   readOnlyReason: string | undefined;
@@ -91,6 +98,12 @@ type PendingFocus =
   | { kind: 'element'; element: HTMLElement | null };
 
 const PENDING_FOCUS_MS = 5000;
+
+/**
+ * After "שבץ" a quick second tap (a double tap) lands on whatever is now under the finger — often
+ * a block, which a tap would pick up again. Taps on blocks are ignored for this long.
+ */
+export const CONFIRM_TAP_GUARD_MS = 400;
 
 /** The block element(s) of an activity: one in the bank or in the grid. */
 function findBlock(root: HTMLElement, id: string, inside?: HTMLElement | null): HTMLElement | null {
@@ -122,6 +135,9 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
   const { t } = useTranslation();
   const [state, dispatch] = useReducer(placingReducer, null);
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
+  // Each preview made by a tap asks once for focus on its confirm button.
+  const [previewFocus, setPreviewFocus] = useState<object | null>(null);
+  const [placedCount, setPlacedCount] = useState(0);
   // A counter makes a repeated message (e.g. "cancelled" twice) a new text, so it is read again.
   const [announcement, setAnnouncementState] = useState({ text: '', n: 0 });
   const setAnnouncement = useCallback(
@@ -137,8 +153,9 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
   const originRef = useRef<HTMLElement | null>(null);
   const pendingFocus = useRef<PendingFocus | null>(null);
   const bypassClick = useRef(false);
+  const confirmedAt = useRef(-Infinity);
 
-  const { view, days, byId, columnsEl, tripWindow, activities, canEdit } = options;
+  const { view, days, byId, columnsEl, tripWindow, activities, canEdit, metrics } = options;
   const subject = state ? (byId.get(state.id) ?? null) : null;
 
   const dayLabel = useCallback(
@@ -179,7 +196,7 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
     if (date && activity.placement?.date === date) {
       return { dayIndex, slot: activity.placement.startMinute / SLOT_MINUTES };
     }
-    const from = scroller ? Math.ceil(scroller.scrollTop / SLOT_HEIGHT_PX) : 0;
+    const from = scroller ? slotAtScrollTop(scroller.scrollTop, o.metrics.slotHeight) : 0;
     if (!date) return { dayIndex, slot: from };
     const checks = dayChecks(
       o.tripWindow,
@@ -225,28 +242,39 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
     [cancel, initialCursor, setAnnouncement, showOffline, t],
   );
 
-  const choose = useCallback(
+  /** The `canPlace` result for the picked-up activity at a slot, or `null` if there is none. */
+  const checkAt = useCallback((dayIndex: number, slot: number) => {
+    const { options: o, state: s } = latest.current;
+    const activity = s && o.byId.get(s.id);
+    const date = o.days[dayIndex];
+    if (!activity || !date) return null;
+    const startMinute = slot * SLOT_MINUTES;
+    const check = canPlace({ window: o.tripWindow, activities: o.activities }, activity, {
+      date,
+      startMinute,
+    });
+    return { activity, date, startMinute, check };
+  }, []);
+
+  /** Saves the picked-up activity at a slot (optimistic, through the drag root's `onPlace`). */
+  const placeAt = useCallback(
     (dayIndex: number, slot: number) => {
-      const { options: o, state: s } = latest.current;
-      const activity = s && o.byId.get(s.id);
-      const date = o.days[dayIndex];
-      if (!s || !activity || !date) return;
+      const o = latest.current.options;
+      const at = checkAt(dayIndex, slot);
+      if (!at) return;
+      const { activity, date, startMinute, check } = at;
       if (!o.canEdit) {
         showOffline();
         dispatch({ type: 'end' });
         return;
       }
-      const startMinute = slot * SLOT_MINUTES;
-      const check = canPlace({ window: o.tripWindow, activities: o.activities }, activity, {
-        date,
-        startMinute,
-      });
       if (!check.ok) {
         // Same message per kind as a drop or a server rejection (DEC-014); the mode stays on.
         o.toast.show(t(`errors.kinds.${check.reason}`), { tone: 'error' });
         return;
       }
       dispatch({ type: 'end' });
+      setPlacedCount((n) => n + 1);
       const target = { date, startMinute };
       pendingFocus.current = {
         kind: 'placed',
@@ -266,8 +294,62 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
         }),
       );
     },
-    [dayLabel, setAnnouncement, showOffline, t],
+    [checkAt, dayLabel, setAnnouncement, showOffline, t],
   );
+
+  /** Announces the previewed slot: its time and, if it cannot be used, why (PHONE-2). */
+  const announcePreview = useCallback(
+    (dayIndex: number, slot: number) => {
+      const at = checkAt(dayIndex, slot);
+      if (!at) return;
+      const time = timeRangeLabel(at.startMinute, at.activity.durationMinutes);
+      setAnnouncement(
+        at.check.ok
+          ? t('schedule.preview.status', { name: at.activity.name, time })
+          : t('schedule.preview.statusInvalid', {
+              name: at.activity.name,
+              time,
+              reason: t(`errors.kinds.${at.check.reason}`),
+            }),
+      );
+    },
+    [checkAt, setAnnouncement, t],
+  );
+
+  const choose = useCallback(
+    (dayIndex: number, slot: number, via: ChooseVia) => {
+      const { options: o, state: s } = latest.current;
+      if (!s || !o.days[dayIndex]) return;
+      // Phone, finger or mouse: show where it would go first; only the confirm button saves.
+      if (o.view && via === 'pointer') {
+        dispatch({ type: 'preview', cursor: { dayIndex, slot } });
+        setPreviewFocus({});
+        announcePreview(dayIndex, slot);
+        return;
+      }
+      placeAt(dayIndex, slot);
+    },
+    [announcePreview, placeAt],
+  );
+
+  const nudge = useCallback(
+    (delta: -1 | 1) => {
+      const preview = latest.current.state?.preview;
+      if (!preview) return;
+      const slot = Math.max(0, Math.min(SLOTS_PER_DAY - 1, preview.slot + delta));
+      if (slot === preview.slot) return;
+      dispatch({ type: 'nudge', delta });
+      announcePreview(preview.dayIndex, slot);
+    },
+    [announcePreview],
+  );
+
+  const confirm = useCallback(() => {
+    const preview = latest.current.state?.preview;
+    if (!preview) return;
+    confirmedAt.current = performance.now();
+    placeAt(preview.dayIndex, preview.slot);
+  }, [placeAt]);
 
   const unplace = useCallback(() => {
     const { options: o, state: s } = latest.current;
@@ -340,6 +422,12 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
       const block = blockOf(e.target);
       if (!block) return;
       const { options: o, state: s } = latest.current;
+      // The second tap of a double tap on "שבץ": not a new pick-up (nor an edit).
+      if (e.detail > 0 && performance.now() - confirmedAt.current < CONFIRM_TAP_GUARD_MS) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       // The × (delete) keeps working; it ends the mode so its dialog is not mixed with it.
       if (e.target instanceof Element && e.target.closest('[data-no-drag]')) {
         if (s) dispatch({ type: 'end' });
@@ -385,6 +473,16 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [placing, cancel]);
+
+  // A preview belongs to the day it was made on: any day change (swipe, day switcher, keys) drops
+  // it, so coming back to that day starts from a plain slot choice again.
+  const viewStart = view?.start;
+  const previewDay = state?.preview?.dayIndex;
+  useEffect(() => {
+    if (previewDay !== undefined && viewStart !== undefined && previewDay !== viewStart) {
+      dispatch({ type: 'clearPreview' });
+    }
+  }, [previewDay, viewStart]);
 
   // The mode ends when it can no longer finish: offline, or the activity was deleted.
   useEffect(() => {
@@ -443,12 +541,14 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
   });
 
   const context = useMemo<PlacingContextValue>(
-    () => ({ activity: subject, cancel, unplace, edit }),
-    [subject, cancel, unplace, edit],
+    () => ({ activity: subject, cancel, unplace, edit, placedCount }),
+    [subject, cancel, unplace, edit, placedCount],
   );
 
   const cursor: SlotCursor | null =
     state && (view ? { dayIndex: view.start, slot: state.cursor.slot } : state.cursor);
+  // The preview belongs to the day it was made on; another shown day hides it (phone only).
+  const preview = view && state?.preview?.dayIndex === view.start ? state.preview : null;
 
   const nodes = (
     <>
@@ -467,6 +567,12 @@ export function useTapToPlace(options: TapToPlaceOptions): TapToPlace {
             focusRequest={focusRequest}
             onChoose={choose}
             onCursorKey={onCursorKey}
+            metrics={metrics}
+            preview={preview}
+            previewFocus={previewFocus}
+            onNudge={nudge}
+            onConfirm={confirm}
+            onCancel={cancel}
           />,
           columnsEl,
         )}

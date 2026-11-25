@@ -35,7 +35,7 @@ describe('placingReducer (mode state machine)', () => {
   it('picks an activity up, moves the cursor and ends', () => {
     let state: PlacingState = null;
     state = placingReducer(state, { type: 'select', id: 'a', cursor, via: 'pointer' });
-    expect(state).toEqual({ id: 'a', cursor, via: 'pointer' });
+    expect(state).toEqual({ id: 'a', cursor, via: 'pointer', preview: null });
     state = placingReducer(state, { type: 'move', cursor: { dayIndex: 2, slot: 11 } });
     expect(state?.cursor).toEqual({ dayIndex: 2, slot: 11 });
     expect(placingReducer(state, { type: 'end' })).toBeNull();
@@ -45,6 +45,43 @@ describe('placingReducer (mode state machine)', () => {
     const a = placingReducer(null, { type: 'select', id: 'a', cursor, via: 'keyboard' });
     expect(placingReducer(a, { type: 'select', id: 'a', cursor, via: 'pointer' })).toBeNull();
     expect(placingReducer(a, { type: 'select', id: 'b', cursor, via: 'pointer' })?.id).toBe('b');
+  });
+
+  it('previews a tapped slot and nudges it by half hours within the day (PHONE-2)', () => {
+    let state = placingReducer(null, { type: 'select', id: 'a', cursor, via: 'pointer' });
+    state = placingReducer(state, { type: 'preview', cursor: { dayIndex: 1, slot: 20 } });
+    expect(state?.preview).toEqual({ dayIndex: 1, slot: 20 });
+    expect(state?.cursor).toEqual({ dayIndex: 1, slot: 20 }); // the keyboard cursor follows
+    state = placingReducer(state, { type: 'nudge', delta: -1 });
+    expect(state?.preview).toEqual({ dayIndex: 1, slot: 19 });
+    expect(state?.cursor).toEqual({ dayIndex: 1, slot: 19 });
+    state = placingReducer(state, { type: 'preview', cursor: { dayIndex: 1, slot: 47 } });
+    state = placingReducer(state, { type: 'nudge', delta: 1 });
+    expect(state?.preview?.slot).toBe(47); // stays in the day
+    state = placingReducer(state, { type: 'preview', cursor: { dayIndex: 1, slot: 0 } });
+    state = placingReducer(state, { type: 'nudge', delta: -1 });
+    expect(state?.preview?.slot).toBe(0);
+    // Moving the cursor on the same day keeps the preview; another day drops it.
+    state = placingReducer(state, { type: 'move', cursor: { dayIndex: 1, slot: 5 } });
+    expect(state?.preview).toEqual({ dayIndex: 1, slot: 0 });
+    state = placingReducer(state, { type: 'move', cursor: { dayIndex: 2, slot: 5 } });
+    expect(state?.preview).toBeNull();
+    // A day change drops the preview (and changes nothing without one).
+    const withPreview = placingReducer(state, { type: 'preview', cursor });
+    expect(placingReducer(withPreview, { type: 'clearPreview' })?.preview).toBeNull();
+    expect(placingReducer(state, { type: 'clearPreview' })).toBe(state);
+    expect(placingReducer(null, { type: 'clearPreview' })).toBeNull();
+    // Nothing to nudge without a preview, and nothing at all while idle.
+    expect(placingReducer(state, { type: 'nudge', delta: 1 })).toBe(state);
+    expect(placingReducer(null, { type: 'preview', cursor })).toBeNull();
+    // Picking up another activity starts without a preview.
+    const other = placingReducer(placingReducer(state, { type: 'preview', cursor }), {
+      type: 'select',
+      id: 'b',
+      cursor,
+      via: 'pointer',
+    });
+    expect(other?.preview).toBeNull();
   });
 
   it('ignores moves while idle and clamps the cursor to the day', () => {

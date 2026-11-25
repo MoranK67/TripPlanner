@@ -1,7 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Button, Card, HeaderActions, LoadingState, useCanEdit } from '@/components/ui';
+import {
+  Button,
+  Card,
+  HeaderAction,
+  HeaderActions,
+  LoadingState,
+  useCanEdit,
+} from '@/components/ui';
 import { paletteColorAt, type TripSummary } from '@/domain';
 import { errorMessage } from '@/i18n/errors';
 import { useTripsQuery } from './hooks';
@@ -57,9 +64,14 @@ export function TripsPage({ headerActions }: TripsPageProps = {}) {
   return (
     <div className="mx-auto max-w-5xl">
       <HeaderActions>
-        <Button variant="primary" size="sm" disabled={!canEdit} title={reason} onClick={openCreate}>
-          {t('trips.new')}
-        </Button>
+        <HeaderAction
+          label={t('trips.new')}
+          variant="primary"
+          order={40}
+          disabled={!canEdit}
+          title={reason}
+          onSelect={openCreate}
+        />
         {headerActions}
       </HeaderActions>
       <h2 className="mt-1 mb-4 text-xl font-bold tablet:text-[22px]">{t('trips.title')}</h2>

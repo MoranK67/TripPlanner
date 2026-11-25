@@ -1,7 +1,8 @@
 import { useMutation } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { Button, HeaderActions } from '@/components/ui';
+import { useState } from 'react';
+import { Button, HeaderAction, HeaderActions, Modal } from '@/components/ui';
 import type { SessionResumeResult } from '@/data';
 import { AppLayout, MAIN_CONTENT_ID } from './AppLayout';
 import { Providers } from './Providers';
@@ -100,6 +101,127 @@ describe('AppLayout sign-out', () => {
     renderLayout(<p>תוכן</p>);
     const banner = screen.getByRole('banner');
     expect(await within(banner).findByRole('button', { name: 'יציאה' })).toBeInTheDocument();
+  });
+});
+
+describe('AppLayout on phones (PHONE-1)', () => {
+  // A resizable viewport: starts at phone width (< 601 px); `resize` fires the media listeners.
+  let width = 390;
+  const mediaListeners = new Set<() => void>();
+  function resize(next: number) {
+    width = next;
+    act(() => mediaListeners.forEach((l) => l()));
+  }
+  beforeEach(() => {
+    width = 390;
+    mediaListeners.clear();
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => {
+        const min = Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? 0);
+        return {
+          get matches() {
+            return width >= min;
+          },
+          media: query,
+          addEventListener: (_: string, l: () => void) => mediaListeners.add(l),
+          removeEventListener: (_: string, l: () => void) => mediaListeners.delete(l),
+        };
+      }),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function TripLikePage({ onEdit }: { onEdit: () => void }) {
+    return (
+      <HeaderActions>
+        <select aria-label="מעבר לטיול" data-header-primary="">
+          <option>רומא</option>
+        </select>
+        <HeaderAction label="עריכה" order={10} onSelect={onEdit} />
+        <HeaderAction label="+ טיול חדש" order={40} variant="primary" onSelect={() => {}} />
+      </HeaderActions>
+    );
+  }
+
+  it('one slim row: page control, status dot and a "⋯" menu with the page actions and sign-out', async () => {
+    const onEdit = vi.fn();
+    renderLayout(<TripLikePage onEdit={onEdit} />);
+    const banner = screen.getByRole('banner');
+    expect(await within(banner).findByLabelText('מעבר לטיול')).toBeInTheDocument();
+    // The actions are not buttons in the header any more…
+    expect(within(banner).queryByRole('button', { name: 'עריכה' })).not.toBeInTheDocument();
+    expect(within(banner).queryByRole('button', { name: 'יציאה' })).not.toBeInTheDocument();
+    // …but items of the menu, sign-out last.
+    const more = within(banner).getByRole('button', { name: 'פעולות נוספות' });
+    fireEvent.click(more);
+    const menu = within(banner).getByRole('menu', { name: 'פעולות נוספות' });
+    await waitFor(() =>
+      expect(
+        within(menu)
+          .getAllByRole('menuitem')
+          .map((el) => el.textContent),
+      ).toEqual(['עריכה', '+ טיול חדש', 'יציאה']),
+    );
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'עריכה' }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(more).toHaveFocus();
+  });
+
+  it('rotating across the breakpoint keeps an open dialog and what was typed in it', async () => {
+    /** Like the trip header: a header action that opens a dialog owned by the page controls. */
+    function EditablePage() {
+      const [open, setOpen] = useState(false);
+      return (
+        <HeaderActions>
+          <select aria-label="מעבר לטיול" data-header-primary="">
+            <option>רומא</option>
+          </select>
+          <HeaderAction label="עריכה" order={10} onSelect={() => setOpen(true)} />
+          <Modal open={open} onClose={() => setOpen(false)} title="עריכת טיול">
+            <input aria-label="שם הטיול" defaultValue="רומא" />
+          </Modal>
+        </HeaderActions>
+      );
+    }
+    renderLayout(<EditablePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'פעולות נוספות' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'עריכה' }));
+    const name = screen.getByLabelText('שם הטיול');
+    fireEvent.change(name, { target: { value: 'רומא והוותיקן' } });
+
+    resize(800); // phone -> tablet (landscape)
+    expect(screen.getByRole('dialog', { name: 'עריכת טיול' })).toBeInTheDocument();
+    expect(screen.getByLabelText('שם הטיול')).toBe(name);
+    expect(name).toHaveValue('רומא והוותיקן');
+    // The header is the tablet one now: the action is a button again, no "⋯" menu.
+    const banner = screen.getByRole('banner');
+    expect(within(banner).getByRole('button', { name: 'עריכה' })).toBeInTheDocument();
+    expect(within(banner).queryByRole('button', { name: 'פעולות נוספות' })).not.toBeInTheDocument();
+
+    resize(390); // and back
+    expect(screen.getByLabelText('שם הטיול')).toHaveValue('רומא והוותיקן');
+  });
+
+  it('sign-out from the menu still asks first', async () => {
+    renderLayout(<p>תוכן</p>);
+    // The menu appears once the session is known (sign-out is its only item here).
+    fireEvent.click(await screen.findByRole('button', { name: 'פעולות נוספות' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'יציאה' }));
+    expect(screen.getByRole('alertdialog', { name: 'יציאה מהחשבון' })).toBeInTheDocument();
+  });
+
+  it('keeps the title (as a home link) and shows the server status as a labelled dot', () => {
+    renderLayout(<p>תוכן</p>);
+    const banner = screen.getByRole('banner');
+    const title = within(banner).getByRole('heading', { level: 1, name: 'מתכנן הטיולים' });
+    expect(title.closest('a')).toHaveAttribute('href', '/trips');
+    // Supabase is not configured in these tests: the dot says so for screen readers.
+    const status = within(banner).getByRole('status');
+    expect(status).toHaveTextContent('השרת לא מוגדר');
+    expect(status).toHaveAttribute('title', expect.stringContaining('השרת לא מוגדר'));
   });
 });
 

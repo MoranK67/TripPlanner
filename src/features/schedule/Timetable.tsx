@@ -10,6 +10,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { tripDays, type Activity, type IsoDate, type Trip } from '@/domain';
 import { DRAG_SOURCE_CLASS, useDragRoot } from './drag/dragContext';
+import { useTimetableMetrics } from './metricsContext';
 import { DaySwitcher } from './phone/DaySwitcher';
 import { usePlannerMode } from './phone/plannerMode';
 import { PlacingBar } from './place/PlacingBar';
@@ -62,6 +63,15 @@ export function Timetable({
   const drag = useDragRoot();
   const mode = usePlannerMode();
   const oneDay = singleDay ?? mode === 'day';
+  // Vertical scale: the phone layout provides denser rows (PHONE-2). The drag root hit-tests and
+  // draws its previews with the same scale.
+  const metrics = useTimetableMetrics();
+  const setMetrics = drag?.setMetrics;
+  useLayoutEffect(() => {
+    if (!setMetrics) return;
+    setMetrics(metrics);
+    return () => setMetrics(null);
+  }, [setMetrics, metrics]);
   const common = {
     tripWindow: trip.window,
     activities,
@@ -73,6 +83,7 @@ export function Timetable({
     blockClassName: drag ? DRAG_SOURCE_CLASS : undefined,
     describedBy: drag ? hintId : undefined,
     labelledBy,
+    metrics,
     className,
   };
   const grid = oneDay ? (
@@ -88,7 +99,7 @@ export function Timetable({
       <p id={hintId} className="sr-only">
         {t('schedule.place.keyboardHint')}
       </p>
-      <PlacingBar onOpenActivity={onOpenActivity} />
+      <PlacingBar onOpenActivity={onOpenActivity} compact={oneDay} />
     </>
   );
 }

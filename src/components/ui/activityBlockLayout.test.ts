@@ -36,6 +36,12 @@ describe('activity block layout (FR-3.3)', () => {
     expect(isShortBlock(30)).toBe(true);
     expect(isShortBlock(60)).toBe(false);
   });
+
+  it('at a denser scale also uses the short layout when name and meta would not stack (PHONE-2)', () => {
+    expect(isShortBlock(60, 22)).toBe(true); // 41 px: one row, name and time side by side
+    expect(isShortBlock(90, 22)).toBe(false); // 63 px: one name line above the time
+    expect(isShortBlock(60, 28)).toBe(false);
+  });
 });
 
 describe('name line limit (UX-8)', () => {

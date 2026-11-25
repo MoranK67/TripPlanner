@@ -9,6 +9,8 @@ import {
   Input,
   LoadingState,
   Modal,
+  MODAL_FORM_CLASS,
+  ModalActions,
   OfflineNote,
   TimeInput,
   useCanEdit,
@@ -223,7 +225,7 @@ function TripForm({
         : t('trips.dialog.selectedNone');
 
   return (
-    <form noValidate onSubmit={handleSubmit}>
+    <form noValidate onSubmit={handleSubmit} className={MODAL_FORM_CLASS}>
       <OfflineNote />
       {generalError && <FormError>{generalError}</FormError>}
       <Field
@@ -295,7 +297,7 @@ function TripForm({
         />
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <ModalActions className="mt-2">
         <Button
           type="submit"
           variant="primary"
@@ -308,7 +310,7 @@ function TripForm({
         <Button variant="ghost" onClick={onCancel} disabled={mutation.isPending}>
           {t('common.cancel')}
         </Button>
-      </div>
+      </ModalActions>
     </form>
   );
 }

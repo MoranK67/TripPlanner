@@ -1,7 +1,15 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Button, ConfirmDialog, HeaderActions, useCanEdit, useToast } from '@/components/ui';
+import {
+  ConfirmDialog,
+  HeaderAction,
+  HeaderActions,
+  useCanEdit,
+  useHeaderMenuCollapsed,
+  useHeaderMenuNote,
+  useToast,
+} from '@/components/ui';
 import type { Trip } from '@/domain';
 import { errorMessage } from '@/i18n/errors';
 import { useDeleteTrip, useTripsQuery } from './hooks';
@@ -11,8 +19,10 @@ import { tripDaysLabel, tripRangeLabel } from './tripLabels';
 /**
  * The trip page's header bar (prototype `.trip-bar`): switch trip (FR-2.1), the trip's range and
  * length, edit (FR-2.6), delete with confirmation (FR-2.7) and new trip. Rendered into the app
- * header through <HeaderActions>. `exportAction` (the export button, FR-7) is passed in by the
- * trip page, so the trips feature does not depend on the export feature.
+ * header through <HeaderActions>. On phones (PHONE-1) only the selector stays in the slim header
+ * row; the actions are items of the "⋯" menu and the range is the menu's note. `exportAction`
+ * (the export button, FR-7) is passed in by the trip page, so the trips feature does not depend
+ * on the export feature.
  */
 export function TripHeaderControls({
   trip,
@@ -30,6 +40,9 @@ export function TripHeaderControls({
   const { canEdit, reason } = useCanEdit();
   const [dialog, setDialog] = useState<'edit' | 'new' | 'delete' | null>(null);
   const selectId = useId();
+  const collapsed = useHeaderMenuCollapsed();
+  const range = `${tripRangeLabel(trip.window, t, 'short')} · ${tripDaysLabel(trip.window, t)}`;
+  useHeaderMenuNote(range);
 
   // The current trip is always an option, even before the list has loaded.
   const options = trips.data?.some((x) => x.id === trip.id)
@@ -57,13 +70,14 @@ export function TripHeaderControls({
         {t('trips.switch')}
       </label>
       {/* Native select: switching trips navigates; styled like the prototype's `.trip-sel`.
-          Phones (UX-6): the selector takes a full row, then the trip's range, then the actions, so
-          the trip name is not squeezed by the buttons. From tablet up everything sits in one row. */}
+          Phones (PHONE-1): it fills the slim header row next to the "⋯" menu; data-header-primary
+          tells the app header to hide its title. From tablet up everything sits in one row. */}
       <select
         id={selectId}
+        data-header-primary=""
         value={trip.id}
         onChange={(e) => navigate(`/trips/${e.target.value}`)}
-        className="min-h-9 w-full min-w-0 cursor-pointer truncate rounded-[var(--radius-field)] border border-line-strong bg-bg px-3 py-1.5 font-medium text-ink outline-none focus-visible:border-accent-ink focus-visible:ring-2 focus-visible:ring-accent-soft tablet:w-auto tablet:max-w-60 tablet:min-w-40 tablet:flex-none pointer-coarse:min-h-10"
+        className="min-h-9 min-w-0 flex-1 cursor-pointer truncate rounded-[var(--radius-field)] border border-line-strong bg-bg px-3 py-1.5 font-medium text-ink outline-none focus-visible:border-accent-ink focus-visible:ring-2 focus-visible:ring-accent-soft tablet:w-auto tablet:max-w-60 tablet:min-w-40 tablet:flex-none pointer-coarse:min-h-10"
       >
         {options.map((option) => (
           <option key={option.id} value={option.id}>
@@ -71,31 +85,33 @@ export function TripHeaderControls({
           </option>
         ))}
       </select>
-      <span className="w-full text-[13px] text-ink-soft tablet:w-auto tablet:px-1">
-        {tripRangeLabel(trip.window, t, 'short')} · {tripDaysLabel(trip.window, t)}
-      </span>
+      {!collapsed && <span className="text-[13px] text-ink-soft tablet:px-1">{range}</span>}
       {exportAction}
-      <Button size="sm" disabled={!canEdit} title={reason} onClick={() => setDialog('edit')}>
-        {t('trips.edit')}
-      </Button>
-      <Button
-        size="sm"
+      {/* Phone menu order (PHONE-1): edit 10, export 20, delete 30, new trip 40. */}
+      <HeaderAction
+        label={t('trips.edit')}
+        order={10}
+        disabled={!canEdit}
+        title={reason}
+        onSelect={() => setDialog('edit')}
+      />
+      <HeaderAction
+        label={t('common.delete')}
         variant="ghost"
+        tone="danger"
+        order={30}
         disabled={!canEdit}
         title={reason}
-        onClick={() => setDialog('delete')}
-      >
-        {t('common.delete')}
-      </Button>
-      <Button
-        size="sm"
+        onSelect={() => setDialog('delete')}
+      />
+      <HeaderAction
+        label={t('trips.new')}
         variant="primary"
+        order={40}
         disabled={!canEdit}
         title={reason}
-        onClick={() => setDialog('new')}
-      >
-        {t('trips.new')}
-      </Button>
+        onSelect={() => setDialog('new')}
+      />
 
       <TripDialog open={dialog === 'edit'} trip={trip} onClose={() => setDialog(null)} />
       <TripDialog open={dialog === 'new'} onClose={() => setDialog(null)} />

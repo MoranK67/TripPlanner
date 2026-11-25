@@ -12,7 +12,7 @@ import {
   type RefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityBlock, cx, SLOT_HEIGHT_PX, useCanEdit } from '@/components/ui';
+import { ActivityBlock, cx, useCanEdit } from '@/components/ui';
 import {
   dayBounds,
   formatShortDate,
@@ -28,12 +28,13 @@ import {
 import {
   blockTop,
   COL_MIN_PX,
-  DAY_PX,
+  dayPx,
   disabledSpans,
-  HEADER_PX,
+  GRID_METRICS,
   initialScrollTop,
   TIME_COL_PX,
   timeRangeLabel,
+  type TimetableMetrics,
 } from './timetableLayout';
 
 export interface TimetableGridProps {
@@ -63,6 +64,8 @@ export interface TimetableGridProps {
   renderDayHeader?: (date: IsoDate, dayIndex: number, headingId: string) => ReactNode;
   /** Pointer handlers on the scroll container (the phone's day swipe). Must be stable. */
   gestureHandlers?: GestureHandlers;
+  /** Vertical scale (row and header heights). Defaults to the tablet / desktop scale. */
+  metrics?: TimetableMetrics;
   /** Id of a description of the timetable region (how to place without dragging). */
   describedBy?: string;
   /** Id of the element that names the timetable region; replaces the default `aria-label`. */
@@ -75,18 +78,19 @@ export type GestureHandlers = Pick<
   'onPointerDown' | 'onPointerUp' | 'onPointerCancel' | 'onPointerLeave'
 >;
 
-const HOUR_PX = 2 * SLOT_HEIGHT_PX;
-
 /**
  * 48 half-hour rows drawn as two repeating backgrounds on one layer instead of 48 × days cell
  * elements (NFR-3): a strong line on the hour, a light one on the half hour (prototype `.slot`).
  */
-const linesStyle: CSSProperties = {
-  backgroundImage: [
-    `repeating-linear-gradient(to bottom, transparent 0 ${HOUR_PX - 1}px, var(--color-line-strong) ${HOUR_PX - 1}px ${HOUR_PX}px)`,
-    `repeating-linear-gradient(to bottom, transparent 0 ${SLOT_HEIGHT_PX - 1}px, var(--color-line) ${SLOT_HEIGHT_PX - 1}px ${SLOT_HEIGHT_PX}px)`,
-  ].join(','),
-};
+function linesStyle(slotHeight: number): CSSProperties {
+  const hour = 2 * slotHeight;
+  return {
+    backgroundImage: [
+      `repeating-linear-gradient(to bottom, transparent 0 ${hour - 1}px, var(--color-line-strong) ${hour - 1}px ${hour}px)`,
+      `repeating-linear-gradient(to bottom, transparent 0 ${slotHeight - 1}px, var(--color-line) ${slotHeight - 1}px ${slotHeight}px)`,
+    ].join(','),
+  };
+}
 
 /** Prototype `.slot.off` hatch (DEC-018 tokens). */
 const disabledStyle: CSSProperties = {
@@ -117,10 +121,13 @@ export const TimetableGrid = memo(function TimetableGrid({
   dayCount,
   renderDayHeader,
   gestureHandlers,
+  metrics = GRID_METRICS,
   describedBy,
   labelledBy,
   className,
 }: TimetableGridProps) {
+  const { slotHeight, headerPx } = metrics;
+  const lines = useMemo(() => linesStyle(slotHeight), [slotHeight]);
   const { t } = useTranslation();
   const headingId = useId();
   const ownScrollerRef = useRef<HTMLDivElement>(null);
@@ -151,13 +158,15 @@ export const TimetableGrid = memo(function TimetableGrid({
   // FR-4.4: open at the trip start, at the first day (scrollLeft 0 is the inline start in RTL too).
   // Only when the trip changes, so editing activities never moves the view.
   const windowRef = useRef(tripWindow);
+  const slotHeightRef = useRef(slotHeight);
   useLayoutEffect(() => {
     windowRef.current = tripWindow;
+    slotHeightRef.current = slotHeight;
   });
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    el.scrollTop = initialScrollTop(windowRef.current);
+    el.scrollTop = initialScrollTop(windowRef.current, slotHeightRef.current);
     el.scrollLeft = 0;
   }, [scrollKey, scroller]);
 
@@ -188,7 +197,7 @@ export const TimetableGrid = memo(function TimetableGrid({
           // `width: max-content`, which lets fr tracks grow to their content's width.)
           width: `max(100%, ${TIME_COL_PX + days.length * COL_MIN_PX}px)`,
           gridTemplateColumns: `${TIME_COL_PX}px repeat(${days.length}, minmax(${COL_MIN_PX}px, 1fr))`,
-          gridTemplateRows: `${HEADER_PX}px ${DAY_PX}px`,
+          gridTemplateRows: `${headerPx}px ${dayPx(slotHeight)}px`,
         }}
       >
         <div className="sticky start-0 top-0 z-[5] border-b border-line-strong bg-panel" />
@@ -217,7 +226,7 @@ export const TimetableGrid = memo(function TimetableGrid({
             <div
               key={label}
               className="pt-[3px] text-center text-[11px] text-ink-soft"
-              style={{ height: HOUR_PX }}
+              style={{ height: 2 * slotHeight }}
             >
               {label}
             </div>
@@ -247,13 +256,14 @@ export const TimetableGrid = memo(function TimetableGrid({
                 onDelete={canDelete ? remove : undefined}
                 deleteDisabledReason={readOnlyReason}
                 blockClassName={blockClassName}
+                slotHeight={slotHeight}
               />
             );
           })}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 z-[1]"
-            style={linesStyle}
+            style={lines}
           />
         </div>
       </div>
@@ -289,6 +299,7 @@ interface DayColumnProps {
   /** `useCanEdit().reason`: set while offline, so the × is shown but disabled. */
   deleteDisabledReason: string | undefined;
   blockClassName: string | undefined;
+  slotHeight: number;
 }
 
 /** Re-render a column only if its own activities (by identity) or bounds changed (NFR-3). */
@@ -302,6 +313,7 @@ function sameColumn(prev: DayColumnProps, next: DayColumnProps): boolean {
     prev.onDelete === next.onDelete &&
     prev.deleteDisabledReason === next.deleteDisabledReason &&
     prev.blockClassName === next.blockClassName &&
+    prev.slotHeight === next.slotHeight &&
     prev.activities.length === next.activities.length &&
     prev.activities.every((a, i) => a === next.activities[i])
   );
@@ -317,8 +329,9 @@ const DayColumn = memo(function DayColumn({
   onDelete,
   deleteDisabledReason,
   blockClassName,
+  slotHeight,
 }: DayColumnProps) {
-  const spans = disabledSpans({ startMinute, endMinute });
+  const spans = disabledSpans({ startMinute, endMinute }, slotHeight);
   return (
     <div
       role="group"
@@ -347,7 +360,8 @@ const DayColumn = memo(function DayColumn({
             data-activity-id={a.id}
             className={cx('inset-x-1 z-[2]', blockClassName)}
             // Inline, because ActivityBlock's own `relative` class beats an `absolute` class.
-            style={{ position: 'absolute', top: blockTop(start) }}
+            style={{ position: 'absolute', top: blockTop(start, slotHeight) }}
+            slotHeight={slotHeight}
             name={a.name}
             durationMinutes={a.durationMinutes}
             color={a.color}

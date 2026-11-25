@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import { SLOT_MINUTES } from '@/domain';
 
 /**
@@ -5,6 +6,18 @@ import { SLOT_MINUTES } from '@/domain';
  * timetable (FR-3.3), so the timetable rows must use this constant too. Prototype: `H = 28`.
  */
 export const SLOT_HEIGHT_PX = 28;
+
+/**
+ * Slot height for every ActivityBlock below it that does not pass `slotHeight` itself. The phone
+ * planner (PHONE-2) provides a denser scale, so the bank sheet and the one-day timetable still
+ * share one scale (FR-3.3). Defaults to `SLOT_HEIGHT_PX`.
+ */
+export const SlotHeightContext = createContext<number>(SLOT_HEIGHT_PX);
+
+/** The slot height in effect here (see `SlotHeightContext`). */
+export function useSlotHeight(): number {
+  return useContext(SlotHeightContext);
+}
 
 /** Vertical gap left under a block so stacked / adjacent blocks don't touch (prototype: 3 px). */
 export const BLOCK_GAP_PX = 3;
@@ -22,9 +35,18 @@ export function activityBlockHeight(
   return blockSlots(durationMinutes) * slotHeight - BLOCK_GAP_PX;
 }
 
-/** One-slot blocks use the single-line "short" layout (name and time side by side). */
-export function isShortBlock(durationMinutes: number): boolean {
-  return blockSlots(durationMinutes) === 1;
+/**
+ * Blocks use the single-line "short" layout (name and time side by side) when they are one slot
+ * long, or when the stacked layout would not fit one name line above the meta line (a one-hour
+ * block at the phone's denser scale, PHONE-2). At the default scale that is one slot only.
+ */
+export function isShortBlock(
+  durationMinutes: number,
+  slotHeight: number = SLOT_HEIGHT_PX,
+): boolean {
+  if (blockSlots(durationMinutes) === 1) return true;
+  const stacked = BLOCK_TEXT_METRICS.chrome + BLOCK_TEXT_METRICS.nameLine + BLOCK_TEXT_METRICS.meta;
+  return activityBlockHeight(durationMinutes, slotHeight) < stacked;
 }
 
 /**

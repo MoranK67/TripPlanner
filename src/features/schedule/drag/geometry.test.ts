@@ -110,3 +110,28 @@ describe('edgeSide', () => {
     expect(edgeSide(area, { x: -40, y: 300 })).toBe(0);
   });
 });
+
+describe('hitTestSlot at the phone scale (PHONE-2)', () => {
+  // One 296 px day column, 40 px day row, 22 px half hours; slot s starts at y = s × 22 − 344.
+  const phone: GridMetrics = {
+    viewport: { left: 0, top: 40, right: 296, bottom: 600 },
+    columns: { left: 0, top: -344, right: 296, bottom: -344 + 48 * 22 },
+    dayCount: 1,
+    direction: 'rtl',
+    slotHeight: 22,
+  };
+
+  it('snaps the block top to the nearest 22 px row', () => {
+    const y = (slot: number) => slot * 22 - 344;
+    expect(hitTestSlot(phone, { x: 150, y: y(20) }, 0, 2)).toEqual({ dayIndex: 0, slot: 20 });
+    expect(hitTestSlot(phone, { x: 150, y: y(20) + 10 }, 0, 2)?.slot).toBe(20);
+    expect(hitTestSlot(phone, { x: 150, y: y(20) + 12 }, 0, 2)?.slot).toBe(21);
+    // The grab offset is subtracted: the pointer 10 px below the block top.
+    expect(hitTestSlot(phone, { x: 150, y: y(25) + 10 }, 10, 2)?.slot).toBe(25);
+  });
+
+  it('ignores the slim day row above the rows', () => {
+    expect(hitTestSlot(phone, { x: 150, y: 39 }, 0, 1)).toBeNull();
+    expect(hitTestSlot(phone, { x: 150, y: 40 }, 0, 1)).not.toBeNull();
+  });
+});

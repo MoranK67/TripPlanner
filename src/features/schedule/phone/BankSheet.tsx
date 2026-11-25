@@ -32,8 +32,10 @@ const noRef = () => {};
  * panel shrinks to zero height, so the timetable gets the room; the panel stays mounted (a removed
  * element would lose the finger's touch events mid-drag) and comes back after the drop.
  *
- * Tap-to-place (M7.2): while an activity waits for a slot the panel is hidden, so the day is in
- * full view; it comes back when the mode ends. The handle then leaves the mode and opens the bank.
+ * Tap-to-place (M7.2, PHONE-2): while an activity waits for a slot the whole sheet is hidden, so
+ * the day is in full view and the timetable's slim placing bar sits at the bottom instead. After a
+ * placement the sheet stays closed (the user sees the placed block); after a cancel it comes back
+ * as it was, with the picked-up item in view.
  */
 export function BankSheet({ label, count, children }: BankSheetProps) {
   const { t } = useTranslation();
@@ -44,6 +46,14 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
   const placingMode = usePlacing();
   const placing = !!placingMode?.activity;
   const shown = open && !placing;
+
+  // A tap-to-place placement closes the sheet (adjusted during render, not in an effect).
+  const placedCount = placingMode?.placedCount ?? 0;
+  const [seenPlaced, setSeenPlaced] = useState(placedCount);
+  if (placedCount !== seenPlaced) {
+    setSeenPlaced(placedCount);
+    setOpen(false);
+  }
 
   // The sheet registers itself as the bank drop zone; the panel inside must not replace it.
   const inner = useMemo<DragRootContextValue | null>(
@@ -65,17 +75,11 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
     const dy = e.clientY - s.y;
     if (Math.abs(dy) < HANDLE_SWIPE_PX) return;
     swiped.current = true;
-    if (dy < 0 && placing) placingMode?.cancel();
     setOpen(dy < 0);
   };
   const onClick = () => {
     if (swiped.current) {
       swiped.current = false;
-      return;
-    }
-    if (placing) {
-      placingMode?.cancel();
-      setOpen(true);
       return;
     }
     setOpen((o) => !o);
@@ -87,6 +91,9 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
       aria-label={label}
       data-testid="bank-sheet"
       data-open={shown || undefined}
+      // Out of the way while placing; still mounted, so it stays the drop zone once a drag starts
+      // (a drag ends the mode and brings the sheet back).
+      hidden={placing}
       className="flex shrink-0 flex-col rounded-t-[var(--radius-card)] border border-b-0 border-line bg-panel pb-[env(safe-area-inset-bottom)] shadow-[var(--shadow-card)]"
     >
       <button
@@ -118,7 +125,7 @@ export function BankSheet({ label, count, children }: BankSheetProps) {
         className={cx(
           // The sheet is the card; the bank panel inside drops its own card and title (UX-7).
           'flex min-h-0 flex-col px-2',
-          dragging ? 'h-0 overflow-hidden' : 'h-[45dvh] pb-2',
+          dragging ? 'h-0 overflow-hidden' : 'h-[40dvh] pb-2',
         )}
       >
         <DragRootContext.Provider value={inner}>{children}</DragRootContext.Provider>

@@ -15,7 +15,8 @@ export interface DaySwitcherProps {
 /**
  * Header of the phone's single-day timetable (M7.1): previous / next day buttons around a day
  * picker (a native select, so a long trip can jump straight to any day). Lives in the sticky header
- * cell, so it costs no extra height. The day change is announced through a polite status region.
+ * cell, so it costs no extra height; the row is slim on phones (PHONE-2: `PHONE_HEADER_PX`).
+ * The day change is announced through a polite status region.
  */
 export function DaySwitcher({ days, index, onChange, headingId }: DaySwitcherProps) {
   const { t } = useTranslation();
@@ -42,7 +43,7 @@ export function DaySwitcher({ days, index, onChange, headingId }: DaySwitcherPro
           value={index}
           onChange={(e) => onChange(Number(e.target.value))}
           className={cx(
-            'min-h-10 min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-lg bg-transparent ps-1 pe-5 text-center text-sm font-semibold text-ink',
+            'min-h-9 min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-lg bg-transparent ps-1 pe-5 text-center text-sm font-semibold text-ink',
             'hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent-ink',
           )}
         >
@@ -106,7 +107,7 @@ function StepButton({
       aria-disabled={disabled || undefined}
       onClick={disabled ? undefined : onClick}
       className={cx(
-        'grid size-10 shrink-0 place-items-center rounded-full text-ink',
+        'grid size-9 shrink-0 place-items-center rounded-full text-ink',
         'hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent-ink',
         'aria-disabled:cursor-default aria-disabled:opacity-35 aria-disabled:hover:bg-transparent',
       )}

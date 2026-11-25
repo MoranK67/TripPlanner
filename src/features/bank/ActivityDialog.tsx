@@ -8,6 +8,8 @@ import {
   FormError,
   Input,
   Modal,
+  MODAL_FORM_CLASS,
+  ModalActions,
   OfflineNote,
   TimeInput,
   useCanEdit,
@@ -176,7 +178,7 @@ function ActivityForm({
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit}>
+    <form noValidate onSubmit={handleSubmit} className={MODAL_FORM_CLASS}>
       <OfflineNote />
       {generalError && <FormError>{generalError}</FormError>}
       <Field label={t('bank.dialog.name')} error={shownNameError}>
@@ -206,7 +208,7 @@ function ActivityForm({
         onChange={setColor}
         className="mb-3.5"
       />
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <ModalActions className="mt-5">
         <Button
           type="submit"
           variant="primary"
@@ -219,7 +221,7 @@ function ActivityForm({
         <Button variant="ghost" onClick={onDone} disabled={mutation.isPending}>
           {t('common.cancel')}
         </Button>
-      </div>
+      </ModalActions>
     </form>
   );
 }

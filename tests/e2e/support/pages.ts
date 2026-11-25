@@ -144,3 +144,60 @@ export async function pickColor(dialog: Locator, colorName: string): Promise<voi
   await radio.locator('xpath=..').click();
   await expect(radio).toBeChecked();
 }
+
+/**
+ * The "⋯" button of the phone header (PHONE-1). On phones the app header is one slim row: the
+ * trip selector and this menu, which holds every header action (edit, export, delete, new trip,
+ * backup, sign-out) and the trip's dates.
+ */
+export function moreActionsButton(page: Page): Locator {
+  return page.getByRole('banner').getByRole('button', { name: t('app.moreActions') });
+}
+
+/** Opens the phone header's "⋯" menu (no-op when it is already open) and returns it. */
+export async function openHeaderMenu(page: Page): Promise<Locator> {
+  const more = moreActionsButton(page);
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  return page.getByRole('menu', { name: t('app.moreActions') });
+}
+
+/**
+ * Closes the phone header's "⋯" menu if it is open (it covers part of the page, so Playwright
+ * would refuse to click what lies under it). No-op on desktop.
+ */
+export async function closeHeaderMenu(page: Page): Promise<void> {
+  if (!isPhone(page)) return;
+  const more = moreActionsButton(page);
+  if ((await more.getAttribute('aria-expanded')) === 'true') await more.click();
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+}
+
+/**
+ * A header action (trip edit / delete, new trip, export, backup, sign-out) the way a user reaches
+ * it: a button in the header on desktop, an item of the "⋯" menu on phones (the menu is opened).
+ */
+export async function headerAction(page: Page, name: string): Promise<Locator> {
+  if (!isPhone(page)) return page.getByRole('banner').getByRole('button', { name });
+  return (await openHeaderMenu(page)).getByRole('menuitem', { name });
+}
+
+/** Clicks a header action (see `headerAction`). */
+export async function clickHeaderAction(page: Page, name: string): Promise<void> {
+  await (await headerAction(page, name)).click();
+}
+
+/**
+ * Checks the trip's range line ("15.3 09:00 עד 18.3 18:00 · 4 ימים"): in the header on desktop,
+ * at the top of the "⋯" menu on phones (the menu is opened and closed again).
+ */
+export async function expectTripRange(page: Page, text: string): Promise<void> {
+  if (!isPhone(page)) {
+    await expect(page.getByRole('banner').getByText(text)).toBeVisible();
+    return;
+  }
+  const menu = await openHeaderMenu(page);
+  await expect(menu).toHaveAccessibleDescription(text);
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+}
