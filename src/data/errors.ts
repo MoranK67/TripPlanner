@@ -10,7 +10,7 @@
 //   - plain table writes surface SQLSTATEs in `code`;
 //   - retry decisions use the SQLSTATE, never the HTTP status (PostgREST maps 40*/55*/57* to 500).
 
-import { isAuthError, type AuthError } from '@supabase/supabase-js';
+import { isAuthError, isAuthWeakPasswordError, type AuthError } from '@supabase/supabase-js';
 
 /**
  * Error taxonomy. §4.6 kinds plus `invalid_credentials` and `rate_limited`, which the login and
@@ -29,6 +29,14 @@ export const APP_ERROR_KINDS = [
 ] as const;
 
 export type AppErrorKind = (typeof APP_ERROR_KINDS)[number];
+
+/**
+ * Why Supabase Auth rejected a new password (`weak_password`, UX-9): too short, missing required
+ * character types, or found in known data breaches. Mirrors supabase-js `WeakPasswordReasons`.
+ */
+export const WEAK_PASSWORD_REASONS = ['length', 'characters', 'pwned'] as const;
+
+export type WeakPasswordReason = (typeof WEAK_PASSWORD_REASONS)[number];
 
 const KIND_MESSAGES: Record<AppErrorKind, string> = {
   network: 'The server could not be reached.',
@@ -67,6 +75,8 @@ export interface AppErrorOptions {
   cause?: unknown;
   /** Which trip / activity of a batch request failed, when known. */
   location?: AppErrorLocation | null;
+  /** For reason `weak_password`: which password rules failed (may be empty). */
+  weakPasswordReasons?: readonly WeakPasswordReason[];
 }
 
 export class AppError extends Error {
@@ -77,6 +87,8 @@ export class AppError extends Error {
   readonly code: string | null;
   readonly status: number | null;
   readonly location: AppErrorLocation | null;
+  /** For reason `weak_password`: which password rules failed; empty when unknown or other. */
+  readonly weakPasswordReasons: readonly WeakPasswordReason[];
 
   constructor(kind: AppErrorKind, options: AppErrorOptions = {}) {
     super(KIND_MESSAGES[kind], { cause: options.cause });
@@ -86,6 +98,7 @@ export class AppError extends Error {
     this.code = options.code ?? null;
     this.status = options.status ?? null;
     this.location = options.location ?? null;
+    this.weakPasswordReasons = options.weakPasswordReasons ?? [];
   }
 }
 
@@ -288,6 +301,13 @@ const AUTH_VALIDATION_CODES = new Set([
   'same_password',
 ]);
 
+/** The known, de-duplicated `reasons` of an `AuthWeakPasswordError`; empty for anything else. */
+function weakPasswordReasonsOf(error: AuthError): WeakPasswordReason[] {
+  if (!isAuthWeakPasswordError(error) || !Array.isArray(error.reasons)) return [];
+  const reasons: readonly unknown[] = error.reasons;
+  return WEAK_PASSWORD_REASONS.filter((reason) => reasons.includes(reason));
+}
+
 /** Maps a Supabase Auth error to an AppError. */
 export function fromAuthError(error: AuthError): AppError {
   const code = nonEmpty(error.code);
@@ -303,6 +323,12 @@ export function fromAuthError(error: AuthError): AppError {
     if (INVALID_CREDENTIAL_CODES.has(code)) return new AppError('invalid_credentials', base);
     if (RATE_LIMIT_CODES.has(code)) return new AppError('rate_limited', base);
     if (SESSION_CODES.has(code)) return new AppError('auth_expired', base);
+    if (code === 'weak_password') {
+      return new AppError('validation', {
+        ...base,
+        weakPasswordReasons: weakPasswordReasonsOf(error),
+      });
+    }
     if (AUTH_VALIDATION_CODES.has(code)) return new AppError('validation', base);
   }
   if (SESSION_ERROR_NAMES.has(error.name)) return new AppError('auth_expired', base);

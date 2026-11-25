@@ -2,7 +2,7 @@
 // Raw server text never reaches the user: anything unknown becomes `errors.kinds.unknown`.
 
 import type { TFunction } from 'i18next';
-import { isAppError, toAppError, type AppErrorKind } from '@/data';
+import { isAppError, toAppError, type AppErrorKind, type WeakPasswordReason } from '@/data';
 
 /**
  * Reasons with a more specific message than their kind. Keys live under `errors.reasons.*`.
@@ -30,6 +30,12 @@ export function isAbortedError(error: unknown): boolean {
 /** Hebrew message for any thrown value. Uses the reason when it has its own message. */
 export function errorMessage(error: unknown, t: TFunction): string {
   const appError = toAppError(error);
+  // UX-9: name the password rules that failed; the generic reason text is only a fallback.
+  if (appError.reason === 'weak_password' && appError.weakPasswordReasons.length > 0) {
+    return appError.weakPasswordReasons
+      .map((rule) => t(`errors.weakPassword.${rule satisfies WeakPasswordReason}`))
+      .join(' ');
+  }
   const reasonKey = appError.reason ? REASON_MESSAGES[appError.reason] : undefined;
   if (reasonKey) return t(reasonKey);
   return t(`errors.kinds.${appError.kind satisfies AppErrorKind}`);

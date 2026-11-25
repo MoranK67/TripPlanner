@@ -1,5 +1,5 @@
 import i18n from 'i18next';
-import { APP_ERROR_KINDS, AppError } from '@/data';
+import { APP_ERROR_KINDS, AppError, WEAK_PASSWORD_REASONS, type WeakPasswordReason } from '@/data';
 import he from './he.json';
 import { createErrorMessage, errorMessage, isAbortedError, isTimeoutError } from './errors';
 
@@ -19,6 +19,33 @@ describe('errorMessage', () => {
     expect(
       errorMessage(new AppError('rate_limited', { reason: 'over_email_send_rate_limit' }), t),
     ).toBe(he.errors.reasons.over_email_send_rate_limit);
+  });
+
+  describe('weak password (UX-9)', () => {
+    const weak = (weakPasswordReasons: WeakPasswordReason[]) =>
+      new AppError('validation', { reason: 'weak_password', weakPasswordReasons });
+
+    it.each(WEAK_PASSWORD_REASONS)('names the failed rule %s', (rule) => {
+      const message = errorMessage(weak([rule]), t);
+      expect(message).toBe(he.errors.weakPassword[rule]);
+      expect(message).toMatch(/[א-ת]/);
+    });
+
+    it('explains character types instead of length for a long password', () => {
+      expect(errorMessage(weak(['characters']), t)).not.toBe(he.errors.weakPassword.length);
+      expect(he.errors.weakPassword.characters).toContain('ספרה');
+    });
+
+    it('lists every failed rule', () => {
+      expect(errorMessage(weak(['length', 'characters']), t)).toBe(
+        `${he.errors.weakPassword.length} ${he.errors.weakPassword.characters}`,
+      );
+    });
+
+    it('falls back to a generic message without reasons', () => {
+      expect(errorMessage(weak([]), t)).toBe(he.errors.reasons.weak_password);
+      expect(he.errors.reasons.weak_password).not.toContain('ארוכה');
+    });
   });
 
   it('does not reveal whether an account exists (user_not_found = wrong credentials)', () => {

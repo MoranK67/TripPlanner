@@ -6,9 +6,11 @@ export {
   AppError,
   isAppError,
   toAppError,
+  WEAK_PASSWORD_REASONS,
   type AppErrorKind,
   type AppErrorLocation,
   type AppErrorOptions,
+  type WeakPasswordReason,
 } from './errors';
 export {
   authRepo,

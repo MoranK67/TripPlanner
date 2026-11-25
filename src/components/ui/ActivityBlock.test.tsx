@@ -42,6 +42,27 @@ describe('ActivityBlock', () => {
     expect(block(container)).not.toHaveAttribute('data-short');
   });
 
+  it('clamps a long name in a one-hour block so the duration stays visible (UX-8)', () => {
+    const longName = 'סיור מודרך ארוך במיוחד ברחובות העיר העתיקה ובשוק';
+    const { container, rerender } = render(
+      <ActivityBlock name={longName} durationMinutes={60} color="#FFD6E0" onOpen={() => {}} />,
+    );
+    const nameEl = screen.getByText(longName);
+    expect(nameEl).toHaveClass('line-clamp-(--name-lines)');
+    expect(nameEl.style.getPropertyValue('--name-lines')).toBe('1');
+    expect(screen.getByText('שעה')).toBeInTheDocument();
+    // The full name stays available: as the block's title and in the button's accessible name.
+    expect(block(container)).toHaveAttribute('title', longName);
+    expect(screen.getByRole('button', { name: `${longName} שעה` })).toBeInTheDocument();
+    // The height still maps to time.
+    expect(block(container).style.height).toBe('53px');
+
+    rerender(<ActivityBlock name={longName} durationMinutes={90} color="#FFD6E0" />);
+    expect(screen.getByText(longName).style.getPropertyValue('--name-lines')).toBe('2');
+    rerender(<ActivityBlock name={longName} durationMinutes={30} color="#FFD6E0" />);
+    expect(screen.getByText(longName).style.getPropertyValue('--name-lines')).toBe('');
+  });
+
   it('sets the block color, normalized, with a palette fallback for bad values', () => {
     const { container, rerender } = render(
       <ActivityBlock name="א" durationMinutes={30} color="#cde5ff" />,

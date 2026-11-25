@@ -3,6 +3,7 @@ import {
   AuthError,
   AuthRetryableFetchError,
   AuthSessionMissingError,
+  AuthWeakPasswordError,
 } from '@supabase/supabase-js';
 import {
   APP_ERROR_KINDS,
@@ -347,6 +348,40 @@ describe('fromAuthError', () => {
     expect(error.kind).toBe('network');
     expect(error.reason).toBe('timeout');
     expect(error.retryable).toBe(true);
+  });
+
+  describe('AuthWeakPasswordError (UX-9)', () => {
+    it('keeps the failed rules in a fixed order, without duplicates', () => {
+      const error = fromAuthError(
+        new AuthWeakPasswordError('server text', 422, ['pwned', 'characters', 'pwned', 'length']),
+      );
+      expect(error.kind).toBe('validation');
+      expect(error.reason).toBe('weak_password');
+      expect(error.weakPasswordReasons).toEqual(['length', 'characters', 'pwned']);
+      expect(error.message).not.toContain('server text');
+    });
+
+    it('drops reasons it does not know', () => {
+      const reasons = ['characters', 'something_new'] as unknown as ('characters' | 'length')[];
+      const error = fromAuthError(new AuthWeakPasswordError('weak', 422, reasons));
+      expect(error.weakPasswordReasons).toEqual(['characters']);
+    });
+
+    it('has no reasons when the server sent none or the error is not an AuthWeakPasswordError', () => {
+      expect(fromAuthError(new AuthWeakPasswordError('weak', 422, [])).weakPasswordReasons).toEqual(
+        [],
+      );
+      expect(
+        fromAuthError(new AuthApiError('weak', 422, 'weak_password')).weakPasswordReasons,
+      ).toEqual([]);
+    });
+
+    it('other errors have no weak-password reasons', () => {
+      expect(new AppError('validation').weakPasswordReasons).toEqual([]);
+      expect(
+        fromAuthError(new AuthApiError('x', 400, 'same_password')).weakPasswordReasons,
+      ).toEqual([]);
+    });
   });
 
   it('AuthSessionMissingError → auth_expired', () => {

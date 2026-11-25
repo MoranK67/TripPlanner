@@ -1,7 +1,12 @@
 import { forwardRef, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDurationHe, isHexColor, normalizeHexColor, PALETTE } from '@/domain';
-import { activityBlockHeight, isShortBlock, SLOT_HEIGHT_PX } from './activityBlockLayout';
+import {
+  activityBlockHeight,
+  isShortBlock,
+  nameLineLimit,
+  SLOT_HEIGHT_PX,
+} from './activityBlockLayout';
 import { cx } from './cx';
 
 export interface ActivityBlockProps extends Omit<
@@ -45,7 +50,8 @@ function hasOwnPosition(className: string | undefined, style: CSSProperties | un
 /**
  * A colored activity block, used in the bank and in the timetable (prototype `.block`).
  * Height is proportional to the duration; a one-slot block switches to a single-line "short"
- * layout. Text uses the `block-ink` tokens, which pass WCAG AA on every palette color.
+ * layout; taller blocks clamp the name (ellipsis, full name in `title`) so the meta line always
+ * stays visible (UX-8). Text uses the `block-ink` tokens, which pass WCAG AA on every palette color.
  *
  * Structure: an outer `div` (gets `ref`, `style`, `className` and any extra props — position it,
  * or attach drag handlers to it), an inner open button, and a sibling × button (buttons can't nest).
@@ -82,9 +88,17 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
     <>
       <span
         className={cx(
-          'block text-[13px] leading-[1.3] font-semibold',
-          short ? 'min-w-0 flex-1 truncate' : '[overflow-wrap:anywhere]',
+          'text-[13px] leading-[1.3] font-semibold',
+          short
+            ? 'block min-w-0 flex-1 truncate'
+            : // UX-8: clamp the name so the meta line below always fits the fixed height.
+              'line-clamp-(--name-lines) shrink-0 [overflow-wrap:anywhere]',
         )}
+        style={
+          short
+            ? undefined
+            : ({ '--name-lines': nameLineLimit(durationMinutes, slotHeight) } as CSSProperties)
+        }
       >
         {name}
       </span>
@@ -92,8 +106,8 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
           display. Whitespace-only text between flex items is not rendered, so layout is unchanged. */}{' '}
       <span
         className={cx(
-          'block text-[11.5px] text-block-ink-soft',
-          short ? 'shrink-0 whitespace-nowrap' : 'mt-px',
+          'block text-[11.5px] leading-[1.5] text-block-ink-soft',
+          short ? 'shrink-0 whitespace-nowrap' : 'mt-px shrink-0',
         )}
       >
         {subtitle}

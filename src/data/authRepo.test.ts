@@ -1,4 +1,9 @@
-import { AuthApiError, AuthRetryableFetchError, type Session } from '@supabase/supabase-js';
+import {
+  AuthApiError,
+  AuthRetryableFetchError,
+  AuthWeakPasswordError,
+  type Session,
+} from '@supabase/supabase-js';
 import {
   authEventFromSupabase,
   createAuthRepo,
@@ -222,6 +227,18 @@ describe('authRepo.updatePassword', () => {
     const error = await rejection(repo.updatePassword('1'));
     expect(error.kind).toBe('validation');
     expect(error.reason).toBe('weak_password');
+    expect(error.weakPasswordReasons).toEqual([]);
+  });
+
+  it('weak password carries the failed rules (UX-9)', async () => {
+    mock.auth.updateUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: new AuthWeakPasswordError('weak', 422, ['characters', 'length']),
+    } as never);
+    const error = await rejection(repo.updatePassword('abcdefghijklmnopqr'));
+    expect(error.kind).toBe('validation');
+    expect(error.reason).toBe('weak_password');
+    expect(error.weakPasswordReasons).toEqual(['length', 'characters']);
   });
 });
 

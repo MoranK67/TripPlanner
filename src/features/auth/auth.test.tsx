@@ -287,14 +287,45 @@ describe('ResetPasswordPage', () => {
     expect(fake.updatePassword).not.toHaveBeenCalled();
   });
 
-  it('shows the weak-password reason from the server', async () => {
+  it('shows a generic weak-password message when the server names no rule', async () => {
     fake.updatePassword.mockRejectedValue(new AppError('validation', { reason: 'weak_password' }));
     renderApp('/reset-password');
     emit('password_recovery', SESSION);
     type('סיסמה חדשה*', 'abc');
     type('שוב את הסיסמה החדשה*', 'abc');
     fireEvent.click(screen.getByRole('button', { name: 'שמירת הסיסמה' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('הסיסמה חלשה מדי');
+    expect(await screen.findByRole('alert')).toHaveTextContent('הסיסמה לא עומדת בדרישות האבטחה.');
+  });
+
+  it('explains missing character types for a long password (UX-9)', async () => {
+    fake.updatePassword.mockRejectedValue(
+      new AppError('validation', {
+        reason: 'weak_password',
+        weakPasswordReasons: ['characters'],
+      }),
+    );
+    renderApp('/reset-password');
+    emit('password_recovery', SESSION);
+    type('סיסמה חדשה*', 'abcdefghijklmnopqr');
+    type('שוב את הסיסמה החדשה*', 'abcdefghijklmnopqr');
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת הסיסמה' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'הסיסמה צריכה לכלול אותיות גדולות וקטנות באנגלית, ספרה וסימן (למשל ! או #).',
+    );
+    expect(alert).not.toHaveTextContent('קצרה');
+  });
+
+  it('names a leaked password (UX-9)', async () => {
+    fake.updatePassword.mockRejectedValue(
+      new AppError('validation', { reason: 'weak_password', weakPasswordReasons: ['pwned'] }),
+    );
+    renderApp('/reset-password');
+    emit('password_recovery', SESSION);
+    type('סיסמה חדשה*', 'Password1!');
+    type('שוב את הסיסמה החדשה*', 'Password1!');
+    fireEvent.click(screen.getByRole('button', { name: 'שמירת הסיסמה' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('הופיעה בדליפות מידע');
   });
 
   it('saves the new password, ends recovery and opens the trips list', async () => {

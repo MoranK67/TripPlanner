@@ -26,3 +26,30 @@ export function activityBlockHeight(
 export function isShortBlock(durationMinutes: number): boolean {
   return blockSlots(durationMinutes) === 1;
 }
+
+/**
+ * Vertical metrics of the stacked (non-short) layout in ActivityBlock, in px. Keep in sync with
+ * its classes: 1 px border top and bottom, `py-1.5`, name `text-[13px] leading-[1.3]`, meta
+ * `text-[11.5px] leading-[1.5] mt-px`.
+ */
+export const BLOCK_TEXT_METRICS = {
+  chrome: 2 * 1 + 2 * 6,
+  nameLine: 13 * 1.3,
+  meta: 11.5 * 1.5 + 1,
+} as const;
+
+/**
+ * How many lines the name may use in a stacked block so the meta line (duration / time range)
+ * below it is never clipped (UX-8). The block height maps to time, so the name gives way: it is
+ * clamped with an ellipsis and the block's title keeps the full name. At least one line.
+ */
+export function nameLineLimit(
+  durationMinutes: number,
+  slotHeight: number = SLOT_HEIGHT_PX,
+): number {
+  const free =
+    activityBlockHeight(durationMinutes, slotHeight) -
+    BLOCK_TEXT_METRICS.chrome -
+    BLOCK_TEXT_METRICS.meta;
+  return Math.max(1, Math.floor(free / BLOCK_TEXT_METRICS.nameLine));
+}

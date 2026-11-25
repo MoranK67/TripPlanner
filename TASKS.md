@@ -52,8 +52,8 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | UX-4 | `beforeunload` guard while writes are pending (`useIsMutating() > 0`), in AppLayout (desktop best effort) | frontend-engineer | M5.4 | done | from DATA-1 report |
 | UX-6 | Phone trip header: selector on its own full-width row (trip name readable at 360 px) | frontend-engineer | M7.1 | done | |
 | UX-7 | Bank sheet: BankPanel `variant="sheet"` (sr-only title, no inner card) | frontend-engineer | M7.1 | done | |
-| UX-8 | Narrow bank sheet (360 px): a 1-hour block whose name wraps to 2 lines clips the duration text (ActivityBlock fixed height) | frontend-engineer | — | todo | from UX-7 screenshots |
-| UX-9 | Weak-password message always says "choose a longer password"; show the actual Supabase `weak_password` reasons (length / characters / pwned) | core-engineer + frontend-engineer | — | todo | owner hit it on the live reset page (25.11) |
+| UX-8 | Narrow bank sheet (360 px): a 1-hour block whose name wraps to 2 lines clips the duration text (ActivityBlock fixed height) | frontend-engineer | — | done | from UX-7 screenshots |
+| UX-9 | Weak-password message always says "choose a longer password"; show the actual Supabase `weak_password` reasons (length / characters / pwned) | core-engineer + frontend-engineer | — | done | owner hit it on the live reset page (25.11) |
 | M11.3 | Keep-alive for the free Supabase project (scheduled GitHub Action, every 3 days) + weekly backup | platform-engineer | M8.4 | waiting owner approval | dev project was paused on 2026-11-23 after a week idle |
 | DOC-1 | Public-facing README (pitch, screenshots, how-it-was-built), MIT LICENSE, screenshots in docs/screenshots | Orchestrator + qa-engineer | — | done | before making the repo public |
 | M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | done | batch with next UI task |

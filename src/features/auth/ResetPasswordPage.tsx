@@ -62,7 +62,8 @@ function ResetPasswordForm() {
     },
   });
 
-  // Password strength rules live in Supabase Auth; its `weak_password` error is shown as is.
+  // Password strength rules live in Supabase Auth; its `weak_password` error names the failed
+  // rules (length / character types / leaked), see errorMessage (UX-9).
   const passwordError = submitted && password === '' ? t('auth.reset.passwordRequired') : undefined;
   const confirmError =
     submitted && password !== '' && confirm !== password ? t('auth.reset.mismatch') : undefined;
