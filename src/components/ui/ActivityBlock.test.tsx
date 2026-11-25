@@ -252,4 +252,30 @@ describe('ActivityBlock', () => {
     );
     expect(block(container)).toHaveClass('relative');
   });
+
+  it('adds the tag to the title and, after the visible text, to the accessible name (FEAT-2)', () => {
+    const { container } = render(
+      <ActivityBlock
+        name="קפה"
+        tag="מרכז העיר"
+        durationMinutes={60}
+        color="#FFD6E0"
+        meta="09:00–10:00"
+        onOpen={() => {}}
+      />,
+    );
+    expect(block(container)).toHaveAttribute('title', 'קפה · מרכז העיר');
+    expect(screen.getByRole('button', { name: /^קפה/ })).toHaveAccessibleName(
+      'קפה 09:00–10:00 (תגית: מרכז העיר)',
+    );
+    // Not visible: the block relies on the group colour (layout unchanged, UX-8).
+    expect(screen.getByText('(תגית: מרכז העיר)', { exact: false })).toHaveClass('sr-only');
+  });
+
+  it('keeps the plain name as the title without a tag', () => {
+    const { container } = render(
+      <ActivityBlock name="קפה" tag={null} durationMinutes={60} color="#FFD6E0" />,
+    );
+    expect(block(container)).toHaveAttribute('title', 'קפה');
+  });
 });

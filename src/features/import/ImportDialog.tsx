@@ -25,15 +25,18 @@ import {
   ACTIVITY_NAME_MAX,
   formatDurationHe,
   MAX_IMPORT_ROWS,
-  paletteColorAt,
   parseImport,
+  TAG_MAX,
+  type Activity,
   type ActivityInput,
   type ImportParseResult,
   type Trip,
 } from '@/domain';
 import { errorMessage, isAbortedError, isTimeoutError } from '@/i18n/errors';
+import { AiPromptCopy } from './AiPromptCopy';
 import { importMutationKeys, useImportActivities } from './hooks';
 import { IMPORT_REASON_KEYS } from './importReasons';
+import { previewColors } from './previewColors';
 import { useDebouncedValue } from './useDebouncedValue';
 
 /** Delay before the counts are announced to screen readers, so typing is not interrupted. */
@@ -42,16 +45,30 @@ const ANNOUNCE_DELAY_MS = 500;
 export interface ImportDialogProps {
   open: boolean;
   onClose: () => void;
-  /** The trip to import into; its color cursor gives the preview colors (FR-6.4). */
-  trip: Pick<Trip, 'id' | 'colorCursor'>;
+  /**
+   * The trip to import into: its color cursor gives the preview colors (FR-6.4); its name and
+   * dates go into the AI prompt (FEAT-2).
+   */
+  trip: ImportTrip;
+  /** The trip's activities: a tag they already use gives the preview its group colour (FEAT-2). */
+  activities?: readonly Activity[];
 }
+
+type ImportTrip = Pick<Trip, 'id' | 'colorCursor' | 'name' | 'window'>;
+
+const NO_ACTIVITIES: readonly Activity[] = [];
 
 /**
  * "Import list" dialog (FR-6.1–FR-6.5): paste text, see a live preview of the parsed rows (valid
  * rows with color and duration, invalid rows with the reason) and add the valid rows to the bank
  * in one call. More than `MAX_IMPORT_ROWS` valid rows blocks the whole import (DEC-015).
  */
-export function ImportDialog({ open, onClose, trip }: ImportDialogProps) {
+export function ImportDialog({
+  open,
+  onClose,
+  trip,
+  activities = NO_ACTIVITIES,
+}: ImportDialogProps) {
   const { t } = useTranslation();
   // While saving, the dialog cannot be closed: its toast and error report need it.
   const saving = useIsMutating({ mutationKey: importMutationKeys.import(trip.id) }) > 0;
@@ -73,7 +90,14 @@ export function ImportDialog({ open, onClose, trip }: ImportDialogProps) {
         />
       }
     >
-      {open && <ImportForm trip={trip} onDone={onClose} textareaRef={textareaRef} />}
+      {open && (
+        <ImportForm
+          trip={trip}
+          activities={activities}
+          onDone={onClose}
+          textareaRef={textareaRef}
+        />
+      )}
     </Modal>
   );
 }
@@ -82,16 +106,26 @@ function noop() {}
 
 function validItems(result: ImportParseResult): ActivityInput[] {
   return result.rows.flatMap((row) =>
-    row.ok ? [{ name: row.name, durationMinutes: row.durationMinutes }] : [],
+    row.ok
+      ? [
+          {
+            name: row.name,
+            durationMinutes: row.durationMinutes,
+            ...(row.tag === null ? {} : { tag: row.tag }),
+          },
+        ]
+      : [],
   );
 }
 
 function ImportForm({
   trip,
+  activities,
   onDone,
   textareaRef,
 }: {
-  trip: Pick<Trip, 'id' | 'colorCursor'>;
+  trip: ImportTrip;
+  activities: readonly Activity[];
   onDone: () => void;
   textareaRef: RefObject<HTMLTextAreaElement>;
 }) {
@@ -108,11 +142,11 @@ function ImportForm({
   const result = useMemo(() => parseImport(deferredText), [deferredText]);
   const { rows, validCount, invalidCount, exceedsLimit } = result;
   const canImport = validCount > 0 && !exceedsLimit;
-  // Valid rows get consecutive colors from the trip's cursor, as the DB will assign them.
-  const rowColors = useMemo(() => {
-    let next = 0;
-    return rows.map((row) => (row.ok ? paletteColorAt(trip.colorCursor + next++) : null));
-  }, [rows, trip.colorCursor]);
+  // The colors the DB will assign: the cursor's next colors, or a tag group's colour (FEAT-2).
+  const rowColors = useMemo(
+    () => previewColors(rows, trip.colorCursor, activities),
+    [rows, trip.colorCursor, activities],
+  );
 
   // Separators come from the translation, not from code (M6.1 nit).
   let summary = '';
@@ -165,6 +199,7 @@ function ImportForm({
     <form noValidate onSubmit={handleSubmit} className={MODAL_FORM_CLASS}>
       <OfflineNote />
       {generalError && <FormError>{generalError}</FormError>}
+      <AiPromptCopy trip={trip} />
       <Field label={t('import.textLabel')}>
         <Textarea
           ref={textareaRef}
@@ -216,6 +251,15 @@ function ImportForm({
                   <span className="min-w-0 flex-1 truncate font-medium" title={row.name}>
                     {row.name}
                   </span>
+                  {row.tag !== null && (
+                    <span
+                      className="max-w-[35%] shrink truncate rounded-full bg-accent-soft px-2 text-[12px] leading-[1.6] text-accent-ink"
+                      title={row.tag}
+                    >
+                      <span className="sr-only">{t('import.tagPrefix')} </span>
+                      {row.tag}
+                    </span>
+                  )}
                   <span className="text-[12.5px] whitespace-nowrap text-ink-soft">
                     {formatDurationHe(row.durationMinutes)}
                     {row.rounded && ` ${t('import.rounded')}`}
@@ -239,7 +283,7 @@ function ImportForm({
                   {row.raw}
                 </span>
                 <span className="max-w-[55%] shrink-0 text-[12.5px] leading-snug">
-                  {t(IMPORT_REASON_KEYS[row.reason], { max: ACTIVITY_NAME_MAX })}
+                  {t(IMPORT_REASON_KEYS[row.reason], { max: ACTIVITY_NAME_MAX, tagMax: TAG_MAX })}
                 </span>
               </li>
             );

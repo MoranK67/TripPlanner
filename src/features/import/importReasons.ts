@@ -3,7 +3,7 @@ import type { ImportRowError } from '@/domain';
 /**
  * i18n key for every reason the parser can reject a row with (DEC-009, DEC-015). Typed as a full
  * `Record`, so a new `ImportRowError` code fails the typecheck until it gets a Hebrew message.
- * Messages may use `{{max}}` (the name length limit).
+ * Messages may use `{{max}}` (the name length limit) and `{{tagMax}}` (the tag length limit).
  */
 export const IMPORT_REASON_KEYS: Readonly<Record<ImportRowError, string>> = {
   missing_separator: 'import.reasons.missing_separator',

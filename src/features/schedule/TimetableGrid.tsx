@@ -366,6 +366,7 @@ const DayColumn = memo(function DayColumn({
             durationMinutes={a.durationMinutes}
             color={a.color}
             meta={timeRangeLabel(start, a.durationMinutes)}
+            tag={a.tag}
             onOpen={() => onOpen(a)}
             onDelete={onDelete && (() => onDelete(a))}
             deleteDisabledReason={onDelete && deleteDisabledReason}

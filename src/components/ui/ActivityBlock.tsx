@@ -24,6 +24,11 @@ export interface ActivityBlockProps extends Omit<
    * time range ("09:00–10:30", FR-4.5).
    */
   meta?: ReactNode;
+  /**
+   * The activity's tag (FEAT-2). Not shown as visible text (blocks rely on the tag group's
+   * colour), but added to the title and, for screen readers, to the end of the accessible name.
+   */
+  tag?: string | null;
   /** Opens the edit dialog (FR-3.5). When set, the block body is a button. */
   onOpen?: () => void;
   /** Shows the × button. The caller must confirm with ConfirmDialog before deleting (FR-3.4). */
@@ -68,6 +73,7 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
     durationMinutes,
     color,
     meta,
+    tag,
     onOpen,
     onDelete,
     deleteDisabledReason,
@@ -88,6 +94,7 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
   const blockColor = isHexColor(color) ? normalizeHexColor(color) : FALLBACK_COLOR;
   const subtitle = meta ?? formatDurationHe(durationMinutes);
   const deleteDisabled = deleteDisabledReason !== undefined;
+  const title = tag ? t('common.activityBlock.titleWithTag', { name, tag }) : name;
 
   const bodyClass = cx(
     'flex size-full min-w-0 px-2.5 text-start text-block-ink',
@@ -124,13 +131,21 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
       >
         {subtitle}
       </span>
+      {/* Screen readers only, after the visible text, so the name still starts with what is shown
+          (WCAG 2.5.3). Absolutely positioned (sr-only), so the block layout is unchanged (UX-8). */}
+      {tag && (
+        <>
+          {' '}
+          <span className="sr-only">{t('common.activityBlock.tag', { tag })}</span>
+        </>
+      )}
     </>
   );
 
   return (
     <div
       ref={ref}
-      title={name}
+      title={title}
       data-short={short || undefined}
       className={cx(
         // The × is positioned against the block, so it needs a containing block — but a caller's

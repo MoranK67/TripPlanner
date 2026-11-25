@@ -19,13 +19,27 @@
 // lives at module level, per QueryClient and trip (`TripQueue`). While a trip's queue is not
 // empty, a refetch this hook did not start (window focus, another feature's invalidation) would
 // show stale server rows; a query cache listener re-applies the queue's values on top of it.
+//
+// FEAT-1: the activity dialog's saves (`useQueuedActivityUpdate`: name, duration, colour, tag and
+// placement in one `update_activity` call) join the same queue, so a dialog save and a drag of the
+// same trip also reach the server in order and share the rollback / refetch rules. They report
+// their errors in the dialog, not as a toast.
 
 import { hashKey, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui';
-import { activitiesRepo } from '@/data';
-import type { Activity, IsoDate, Minute, TripWithActivities } from '@/domain';
+import { activitiesRepo, type ActivityUpdateResult } from '@/data';
+import {
+  normalizeTag,
+  tagColor,
+  tagKey,
+  type Activity,
+  type ActivityPatch,
+  type IsoDate,
+  type Minute,
+  type TripWithActivities,
+} from '@/domain';
 import { tripKeys } from '@/features/trips';
 import { errorMessage, isAbortedError } from '@/i18n/errors';
 
@@ -36,12 +50,19 @@ export interface PlacementActions {
   unplace: (activityId: string) => void;
 }
 
-/** Mutation key of every placement write of a trip (also used to count pending writes). */
+/**
+ * Mutation key of every placement write of a trip (also used to count pending writes). Dialog
+ * saves use `activityEditMutationKey`, which starts with it, so the count includes them.
+ */
 const placementMutationKey = (tripId: string) => ['placement', tripId] as const;
+
+/** Mutation key of the activity dialog's saves (FEAT-1), for `useIsMutating` in the dialog. */
+export const activityEditMutationKey = (tripId: string) => ['placement', tripId, 'edit'] as const;
 
 type PlacementVariables =
   | { kind: 'place'; id: string; date: IsoDate; startMinute: Minute }
-  | { kind: 'unplace'; id: string };
+  | { kind: 'unplace'; id: string }
+  | { kind: 'update'; id: string; patch: ActivityPatch };
 
 /**
  * Per activity, while the trip's queue drains: the last server-confirmed value, the number of
@@ -77,18 +98,65 @@ function replaceActivity(data: TripWithActivities, next: Activity): TripWithActi
   };
 }
 
+/**
+ * `current` returned to the end of the bank, as unplace_activity / update_activity(to_bank) do:
+ * a no-op for a bank activity; otherwise bank_position = max + 1 over all of the trip's activities.
+ */
+function toBank(data: TripWithActivities, current: Activity): Activity {
+  if (!current.placement) return current;
+  const max = data.activities.reduce((m, a) => Math.max(m, a.bankPosition), 0);
+  return { ...current, placement: null, bankPosition: max + 1 };
+}
+
+/**
+ * A dialog save as update_activity will return it. Joining a tag group takes the group's colour
+ * (DEC-042). Without a placement in the patch the activity stays where it is; the rare FR-3.6
+ * automatic return to the bank shows when the server answers.
+ */
+function applyPatch(data: TripWithActivities, current: Activity, patch: ActivityPatch): Activity {
+  let next: Activity = { ...current };
+  if (patch.name !== undefined) next.name = patch.name;
+  if (patch.durationMinutes !== undefined) next.durationMinutes = patch.durationMinutes;
+  if (patch.color !== undefined) next.color = patch.color;
+  if (patch.tag !== undefined) {
+    const tag = normalizeTag(patch.tag);
+    if (tag !== null && tagKey(tag) !== tagKey(current.tag)) {
+      next.color = tagColor(data.activities, tag, current.id) ?? next.color;
+    }
+    next.tag = tag;
+  }
+  if (patch.placement === null) next = toBank(data, next);
+  else if (patch.placement !== undefined) next.placement = patch.placement;
+  return next;
+}
+
 /** The activity as the server will return it, computed locally (mirrors the RPCs). */
 function applyOptimistic(data: TripWithActivities, vars: PlacementVariables): Activity | null {
   const current = data.activities.find((a) => a.id === vars.id);
   if (!current) return null;
-  if (vars.kind === 'place') {
-    return { ...current, placement: { date: vars.date, startMinute: vars.startMinute } };
+  switch (vars.kind) {
+    case 'place':
+      return { ...current, placement: { date: vars.date, startMinute: vars.startMinute } };
+    case 'unplace':
+      return toBank(data, current);
+    case 'update':
+      return applyPatch(data, current, vars.patch);
   }
-  // unplace_activity is a no-op for a bank activity; otherwise bank_position = max + 1 over all
-  // of the trip's activities.
-  if (!current.placement) return current;
-  const max = data.activities.reduce((m, a) => Math.max(m, a.bankPosition), 0);
-  return { ...current, placement: null, bankPosition: max + 1 };
+}
+
+/** Sends one queued write. Place / unplace never return to the bank by themselves. */
+async function runWrite(vars: PlacementVariables): Promise<ActivityUpdateResult> {
+  switch (vars.kind) {
+    case 'place':
+      return {
+        activity: await activitiesRepo.place(vars.id, vars.date, vars.startMinute),
+        returnedToBank: false,
+      };
+    case 'unplace':
+      return { activity: await activitiesRepo.unplace(vars.id), returnedToBank: false };
+    case 'update':
+      return activitiesRepo.update(vars.id, vars.patch);
+  }
 }
 
 /**
@@ -153,31 +221,28 @@ function releaseQueue(queryClient: QueryClient, tripId: string, queue: TripQueue
 }
 
 /**
- * Place / move / unplace for one trip, ready to pass to `TimetableDragRoot`. Optimistic, with
- * rollback and a toast on failure (FR-5.7). See the file header for the concurrency rules.
+ * One of the trip's queued writes (see the file header). `mutationKey` must start with
+ * `placementMutationKey(tripId)`, so the queue counts it as pending.
  */
-export function usePlacementActions(tripId: string): PlacementActions {
+function useQueueMutation(tripId: string, mutationKey: readonly unknown[]) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { t } = useTranslation();
 
   const key = tripKeys.detail(tripId);
-  const mutationKey = placementMutationKey(tripId);
+  const queueKey = placementMutationKey(tripId);
 
   const write = (activity: Activity) =>
     queryClient.setQueryData<TripWithActivities>(key, (old) =>
       old ? replaceActivity(old, activity) : old,
     );
 
-  const { mutate } = useMutation({
+  return useMutation({
     mutationKey,
     // One queue per trip: writes reach the server in drop order.
     scope: { id: `placement:${tripId}` },
-    mutationFn: (vars: PlacementVariables) =>
-      vars.kind === 'place'
-        ? activitiesRepo.place(vars.id, vars.date, vars.startMinute)
-        : activitiesRepo.unplace(vars.id),
-    onMutate: async (vars) => {
+    mutationFn: runWrite,
+    onMutate: async (vars: PlacementVariables) => {
       // Read the cache and bump the counter before any await, so a second drop in the same tick
       // sees this one's optimistic value and the counter.
       const queue = getQueue(queryClient, tripId);
@@ -201,7 +266,7 @@ export function usePlacementActions(tripId: string): PlacementActions {
       // touch the queue of a later session.
       return { queue };
     },
-    onSuccess: (activity, vars, context) => {
+    onSuccess: ({ activity }, vars, context) => {
       const queue = context?.queue;
       // The trip's cache was cleared (sign-out): do not write into a later session's cache.
       if (!queue || !isLive(queryClient, tripId, queue)) return;
@@ -217,7 +282,8 @@ export function usePlacementActions(tripId: string): PlacementActions {
       const entry = queue.entries.get(vars.id);
       // Only the last queued write rolls back; earlier failures are superseded by it.
       if (entry && entry.pending <= 1) write(entry.base);
-      if (isAbortedError(error)) return;
+      // Dialog saves show their error in the dialog.
+      if (vars.kind === 'update' || isAbortedError(error)) return;
       const message = errorMessage(error, t);
       // Offline, every queued write fails the same way: one toast is enough.
       if (queue.toasted.has(message)) return;
@@ -231,13 +297,20 @@ export function usePlacementActions(tripId: string): PlacementActions {
       if (entry) entry.pending -= 1;
       // This mutation still counts as pending here. Refetch only after the last write, so the
       // server state never overwrites a queued optimistic move.
-      if (queryClient.isMutating({ mutationKey }) <= 1) {
+      if (queryClient.isMutating({ mutationKey: queueKey }) <= 1) {
         releaseQueue(queryClient, tripId, queue);
         void queryClient.invalidateQueries({ queryKey: key });
       }
     },
   });
+}
 
+/**
+ * Place / move / unplace for one trip, ready to pass to `TimetableDragRoot`. Optimistic, with
+ * rollback and a toast on failure (FR-5.7). See the file header for the concurrency rules.
+ */
+export function usePlacementActions(tripId: string): PlacementActions {
+  const { mutate } = useQueueMutation(tripId, placementMutationKey(tripId));
   return useMemo(
     () => ({
       place: (id, date, startMinute) => mutate({ kind: 'place', id, date, startMinute }),
@@ -245,4 +318,51 @@ export function usePlacementActions(tripId: string): PlacementActions {
     }),
     [mutate],
   );
+}
+
+/** Callbacks of one dialog save (`QueuedActivityUpdate.mutate`). */
+export interface QueuedActivityUpdateCallbacks {
+  onSuccess?: (result: ActivityUpdateResult) => void;
+  onError?: (error: unknown) => void;
+}
+
+/** The activity dialog's save through the trip's placement queue (FEAT-1). */
+export interface QueuedActivityUpdate {
+  /**
+   * Saves `patch` (name, duration, colour, tag, placement) in one `update_activity` call, after
+   * the trip's earlier queued writes. The cache shows the result at once and is rolled back on
+   * failure; the server's answer (e.g. a tag group's colour) replaces it. No toast on failure:
+   * read `error`.
+   */
+  mutate: (
+    vars: { id: string; patch: ActivityPatch },
+    callbacks?: QueuedActivityUpdateCallbacks,
+  ) => void;
+  isPending: boolean;
+  isError: boolean;
+  error: unknown;
+  reset: () => void;
+}
+
+/** See `QueuedActivityUpdate`. Its pending saves are counted by `activityEditMutationKey`. */
+export function useQueuedActivityUpdate(tripId: string): QueuedActivityUpdate {
+  const {
+    mutate: run,
+    isPending,
+    isError,
+    error,
+    reset,
+  } = useQueueMutation(tripId, activityEditMutationKey(tripId));
+  const mutate = useCallback<QueuedActivityUpdate['mutate']>(
+    ({ id, patch }, callbacks = {}) =>
+      run(
+        { kind: 'update', id, patch },
+        {
+          onSuccess: (result) => callbacks.onSuccess?.(result),
+          onError: (e) => callbacks.onError?.(e),
+        },
+      ),
+    [run],
+  );
+  return { mutate, isPending, isError, error, reset };
 }

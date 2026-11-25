@@ -6,6 +6,13 @@
 // import_activities. Business errors use the DB error contract (header of
 // supabase/migrations/20261112140400_m1_hardening.sql): message = TP_* code, details = reason.
 //
+// FEAT-1/2 (migrations 20261125120000 and 20261125120100): `activities.tag` (normalised: trimmed,
+// blank → null; 1..30 code points, no control characters) and "same tag ⇒ same colour" in a trip
+// (on insert and on a real tag change the activity takes the colour of the group's oldest member;
+// joining a group does not move the colour cursor). update_activity also takes tag,
+// scheduled_date + start_minute (place mode: validation → TP_OUT_OF_RANGE → TP_OVERLAP, never
+// auto-returns to the bank) and to_bank.
+//
 // Pure Node code: no Playwright imports, so it can be unit-tested or reused by other runners.
 
 export const PALETTE = [
@@ -50,6 +57,7 @@ export interface ActivityRow {
   scheduled_date: string | null;
   start_minute: number | null;
   bank_position: number;
+  tag: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -155,6 +163,30 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+// JavaScript's trim() whitespace set, as the migration's private.normalize_tag.
+/** private.normalize_tag: trimmed; empty → null. */
+export function normalizeTag(tag: string | null | undefined): string | null {
+  if (tag === null || tag === undefined) return null;
+  const trimmed = tag.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+/** private.tag_is_valid for an already normalised tag (the activities_tag_valid check). */
+function tagIsValid(tag: string): boolean {
+  // eslint-disable-next-line no-control-regex -- the DB rule rejects control characters.
+  return [...tag].length <= 30 && !/[\u0001-\u001f\u007f-\u009f]/.test(tag);
+}
+
+/** 23514 for a plain write with a bad tag. */
+function tagCheckViolation(): DbFailure {
+  return new DbFailure(400, {
+    code: '23514',
+    message: 'new row for relation "activities" violates check constraint "activities_tag_valid"',
+    details: null,
+    hint: null,
+  });
+}
+
 export interface SeedTrip {
   id?: string;
   name: string;
@@ -171,6 +203,7 @@ export interface SeedActivity {
   name: string;
   duration_minutes?: number;
   color?: string;
+  tag?: string;
   scheduled_date?: string;
   start_minute?: number;
 }
@@ -222,6 +255,7 @@ export class FakeDb {
         name: a.name,
         duration_minutes: a.duration_minutes ?? 60,
         ...(a.color ? { color: a.color } : {}),
+        ...(a.tag ? { tag: a.tag } : {}),
       });
       if (a.scheduled_date !== undefined && a.start_minute !== undefined) {
         inserted.scheduled_date = a.scheduled_date;
@@ -257,6 +291,23 @@ export class FakeDb {
     const activity = this.visibleActivities(userId).find((a) => a.id === activityId);
     if (!activity) throw tpError('TP_NOT_FOUND', 'activity');
     return activity;
+  }
+
+  /**
+   * private.tag_group_color: colour of the oldest other activity of the trip with the same tag
+   * (case-insensitive), ordered by (created_at, bank_position, id); `null` if none.
+   */
+  private tagGroupColor(tripId: string, tag: string, excludeId: string | null): string | null {
+    const key = tag.toLowerCase();
+    const members = this.activities
+      .filter((a) => a.trip_id === tripId && a.id !== excludeId && a.tag?.toLowerCase() === key)
+      .sort(
+        (a, b) =>
+          (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0) ||
+          a.bank_position - b.bank_position ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      );
+    return members[0]?.color ?? null;
   }
 
   private maxBankPosition(tripId: string): number {
@@ -345,10 +396,18 @@ export class FakeDb {
         hint: null,
       });
     }
+    if (body.tag !== undefined && body.tag !== null && typeof body.tag !== 'string') {
+      throw tagCheckViolation();
+    }
+    const tag = normalizeTag(body.tag as string | null | undefined);
+    if (tag !== null && !tagIsValid(tag)) throw tagCheckViolation();
+    // Same tag ⇒ same colour (wins over a given colour); joining a group keeps the cursor.
+    const groupColor = tag === null ? null : this.tagGroupColor(trip.id, tag, null);
     const color =
-      typeof body.color === 'string' ? body.color : PALETTE[trip.color_cursor % PALETTE.length]!;
-    // Every insert advances the cursor, whether or not a colour was given.
-    trip.color_cursor = (trip.color_cursor + 1) % PALETTE.length;
+      groupColor ??
+      (typeof body.color === 'string' ? body.color : PALETTE[trip.color_cursor % PALETTE.length]!);
+    // Otherwise every insert advances the cursor, whether or not a colour was given.
+    if (groupColor === null) trip.color_cursor = (trip.color_cursor + 1) % PALETTE.length;
     const row: ActivityRow = {
       id: nextUuid(),
       trip_id: trip.id,
@@ -361,6 +420,7 @@ export class FakeDb {
         typeof body.bank_position === 'number'
           ? body.bank_position
           : this.maxBankPosition(trip.id) + 1,
+      tag,
       created_at: nowIso(),
       updated_at: nowIso(),
     };
@@ -441,15 +501,18 @@ export class FakeDb {
   }
 
   /**
-   * Edits name / duration / colour. A placed activity whose new duration no longer fits (or now
-   * overlaps a neighbour) moves to the bank: `returned_to_bank: true`.
+   * update_activity (20261125120100): name / duration / colour / tag and the placement in one
+   * call. Without placement arguments ("keep"), a placed activity whose new duration no longer
+   * fits (or now overlaps a neighbour) moves to the bank: `returned_to_bank: true`.
+   * scheduled_date + start_minute place it (validation → TP_OUT_OF_RANGE → TP_OVERLAP, checked
+   * with the new duration); to_bank returns it to the end of the bank.
    * `forceReturnedToBank` lets a test force that answer once, e.g. for a bank activity.
    */
   forceReturnedToBank = false;
 
   private updateActivity(userId: string, args: Record<string, unknown>) {
     if (!isUuid(args.activity_id)) throw tpError('TP_VALIDATION', 'activity_id');
-    const { name, duration_minutes: duration, color } = args;
+    const { name, duration_minutes: duration, color, tag: rawTag } = args;
     if (name != null && (typeof name !== 'string' || name.length < 1 || name.length > 60)) {
       throw tpError('TP_VALIDATION', 'name');
     }
@@ -462,43 +525,83 @@ export class FakeDb {
     if (color != null && (typeof color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(color))) {
       throw tpError('TP_VALIDATION', 'color');
     }
+    // NULL keeps the tag; '' (or only whitespace) clears it.
+    let tag: string | null = null;
+    if (rawTag != null) {
+      if (typeof rawTag !== 'string') throw tpError('TP_VALIDATION', 'tag');
+      tag = normalizeTag(rawTag);
+      if (tag !== null && !tagIsValid(tag)) throw tpError('TP_VALIDATION', 'tag');
+    }
+
+    const date = args.scheduled_date;
+    const start = args.start_minute;
+    let mode: 'keep' | 'place' | 'bank' = 'keep';
+    if (args.to_bank === true) {
+      if (date != null || start != null) throw tpError('TP_VALIDATION', 'placement');
+      mode = 'bank';
+    } else if (date != null || start != null) {
+      if (date == null || !isIsoDate(date)) throw tpError('TP_VALIDATION', 'scheduled_date');
+      if (typeof start !== 'number' || start < 0 || start > 1410 || start % 30 !== 0) {
+        throw tpError('TP_VALIDATION', 'start_minute');
+      }
+      mode = 'place';
+    }
+
     const activity = this.ownActivity(userId, args.activity_id);
     const trip = this.ownTrip(userId, activity.trip_id);
     const newDuration = typeof duration === 'number' ? duration : activity.duration_minutes;
+    const clashes = (d: string, m: number) =>
+      this.activities.some(
+        (o) => o.id !== activity.id && o.trip_id === trip.id && overlaps(o, d, m, newDuration),
+      );
 
-    // Like the DB: the fit is checked only when the duration actually changes. A rename or
-    // recolour never moves a placed activity, even if it sits outside the window today.
     let returned = false;
-    if (
+    let toBank = false;
+    if (mode === 'place') {
+      const d = date as string;
+      const m = start as number;
+      if (!fitsTripWindow(trip, d, m, newDuration)) {
+        throw tpError('TP_OUT_OF_RANGE', 'outside_trip_window');
+      }
+      if (clashes(d, m)) throw tpError('TP_OVERLAP', 'overlap');
+    } else if (mode === 'bank') {
+      toBank = activity.scheduled_date !== null;
+    } else if (
+      // Like the DB: the fit is checked only when the duration actually changes. A rename or
+      // recolour never moves a placed activity, even if it sits outside the window today.
       activity.scheduled_date !== null &&
       activity.start_minute !== null &&
       newDuration !== activity.duration_minutes
     ) {
-      const date = activity.scheduled_date;
-      const start = activity.start_minute;
-      const fits =
-        fitsTripWindow(trip, date, start, newDuration) &&
-        !this.activities.some(
-          (o) =>
-            o.id !== activity.id && o.trip_id === trip.id && overlaps(o, date, start, newDuration),
-        );
-      if (!fits) returned = true;
+      const d = activity.scheduled_date;
+      const m = activity.start_minute;
+      returned = !fitsTripWindow(trip, d, m, newDuration) || clashes(d, m);
+    }
+    if (this.forceReturnedToBank && mode === 'keep') {
+      this.forceReturnedToBank = false;
+      returned = true;
     }
 
     if (typeof name === 'string') activity.name = name;
     activity.duration_minutes = newDuration;
     if (typeof color === 'string') activity.color = color;
-    activity.updated_at = nowIso();
-    if (this.forceReturnedToBank) {
-      this.forceReturnedToBank = false;
-      returned = true;
+    if (rawTag != null) {
+      const changed = tag !== null && tag.toLowerCase() !== activity.tag?.toLowerCase();
+      // activities_15_tag_color: a real change to a group's tag takes the group's colour.
+      const group = changed ? this.tagGroupColor(trip.id, tag!, activity.id) : null;
+      if (group !== null) activity.color = group;
+      activity.tag = tag;
     }
-    if (returned) {
-      const base = this.maxBankPosition(trip.id);
+    if (mode === 'place') {
+      activity.scheduled_date = date as string;
+      activity.start_minute = start as number;
+    }
+    if (returned || toBank) {
+      activity.bank_position = this.maxBankPosition(trip.id) + 1;
       activity.scheduled_date = null;
       activity.start_minute = null;
-      activity.bank_position = base + 1;
     }
+    activity.updated_at = nowIso();
     return { activity: { ...activity }, returned_to_bank: returned };
   }
 
@@ -549,7 +652,7 @@ export class FakeDb {
       if (typeof item !== 'object' || item === null || Array.isArray(item)) {
         throw tpError('TP_VALIDATION', `item:${n}`);
       }
-      const { name, duration_minutes: d, color } = item as Record<string, unknown>;
+      const { name, duration_minutes: d, color, tag } = item as Record<string, unknown>;
       if (typeof name !== 'string' || name.trim().length < 1 || name.length > 60) {
         throw tpError('TP_VALIDATION', `item:${n}:name`);
       }
@@ -558,6 +661,12 @@ export class FakeDb {
       }
       if (color != null && (typeof color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(color))) {
         throw tpError('TP_VALIDATION', `item:${n}:color`);
+      }
+      if (tag != null) {
+        const normalized = typeof tag === 'string' ? normalizeTag(tag) : undefined;
+        if (normalized === undefined || (normalized !== null && !tagIsValid(normalized))) {
+          throw tpError('TP_VALIDATION', `item:${n}:tag`);
+        }
       }
     });
     // All validated first: one transaction, nothing half-imported.

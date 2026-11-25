@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { ToastProvider } from '@/components/ui';
 import { AppError } from '@/data';
 import {
+  buildAiPrompt,
   PALETTE,
   type Activity,
   type ImportRowError,
@@ -57,7 +58,11 @@ function setup(ui: 'dialog' | 'bank' = 'dialog', activities: Activity[] = []) {
   render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        {ui === 'dialog' ? <ImportDialog open onClose={onClose} trip={trip} /> : <CachedBank />}
+        {ui === 'dialog' ? (
+          <ImportDialog open onClose={onClose} trip={trip} activities={activities} />
+        ) : (
+          <CachedBank />
+        )}
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -73,6 +78,17 @@ function CachedBank() {
 
 function paste(text: string) {
   fireEvent.change(screen.getByLabelText('הרשימה'), { target: { value: text } });
+}
+
+/** The computed `background-color` of a hex colour, as the preview's colour chips report it. */
+function cssColor(hex: string): string {
+  const probe = document.createElement('span');
+  probe.style.backgroundColor = hex;
+  return probe.style.backgroundColor;
+}
+
+function chipColor(item: HTMLElement | undefined): string {
+  return (item?.querySelector('[aria-hidden="true"]') as HTMLElement).style.backgroundColor;
 }
 
 function lines(count: number): string {
@@ -329,5 +345,76 @@ describe('from the bank panel', () => {
     );
     expect(items.map((li) => li.textContent)).toEqual(['מוזיאון שעה×', 'קפה שעה×', 'גלידה שעה×']);
     expect(screen.getByRole('heading', { name: 'מאגר אטרקציות (3)' })).toBeInTheDocument();
+  });
+});
+
+describe('tags (FEAT-2)', () => {
+  it('shows a tag column and gives same-tag rows the group colour', () => {
+    setup('dialog', [
+      activity({ id: 'old', tag: 'נמל', color: PALETTE[4], createdAt: '2026-01-01T00:00:00Z' }),
+    ]);
+    paste('מוזיאון; 3; מרכז העיר\nשייט; 1; נמל\nקפה; 1; מרכז העיר\nגלידה; 1');
+    const items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('מוזיאוןתגית: מרכז העיר3 שעות');
+    expect(items[3]).toHaveTextContent('גלידהשעה');
+    expect(items.map(chipColor)).toEqual(
+      // Cursor 8: a new group takes the next colour; "נמל" joins the trip's group (no cursor move).
+      [PALETTE[8], PALETTE[4], PALETTE[8], PALETTE[9]].map(cssColor),
+    );
+  });
+
+  it('sends the tags with the rows', async () => {
+    repo.importMany.mockResolvedValue([activity({ id: 'n1', tag: 'מרכז העיר' })]);
+    setup();
+    paste('מוזיאון; 3; מרכז העיר\nקפה; 1');
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת שתי אטרקציות למאגר' }));
+    await waitFor(() =>
+      expect(repo.importMany).toHaveBeenCalledWith('trip-1', [
+        { name: 'מוזיאון', durationMinutes: 180, tag: 'מרכז העיר' },
+        { name: 'קפה', durationMinutes: 60 },
+      ]),
+    );
+  });
+});
+
+describe('AI prompt (FEAT-2)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function mockClipboard(writeText: (text: string) => Promise<void>) {
+    const spy = vi.fn(writeText);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: spy },
+    });
+    return spy;
+  }
+
+  it('copies the prompt for the trip and confirms with a toast', async () => {
+    const writeText = mockClipboard(() => Promise.resolve());
+    setup();
+    expect(
+      screen.getByText('מדביקים ב-ChatGPT או ב-Claude, ואת התשובה מדביקים כאן'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'העתקת הודעה ל-AI' }));
+    expect(
+      await screen.findByText('ההודעה הועתקה. עכשיו מדביקים אותה ב-ChatGPT או ב-Claude.'),
+    ).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(buildAiPrompt(trip));
+    expect(screen.queryByLabelText('ההודעה ל-AI')).not.toBeInTheDocument();
+  });
+
+  it('falls back to a selected read-only box when copying fails', async () => {
+    mockClipboard(() => Promise.reject(new Error('denied')));
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'העתקת הודעה ל-AI' }));
+    const box = await screen.findByLabelText('ההודעה ל-AI');
+    expect(box).toHaveValue(buildAiPrompt(trip));
+    expect(box).toHaveAttribute('readonly');
+    await waitFor(() => expect(box).toHaveFocus());
+    const input = box as HTMLTextAreaElement;
+    expect(input.selectionEnd - input.selectionStart).toBe(input.value.length);
+    expect(box).toHaveAccessibleDescription(/לא הצלחנו להעתיק אוטומטית/);
   });
 });

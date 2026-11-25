@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityBlock, Button, cx, useCanEdit } from '@/components/ui';
-import { isInBank, type Activity, type Trip } from '@/domain';
+import { isInBank, matchesTag, tripTags, type Activity, type Trip } from '@/domain';
 import { ImportDialog } from '@/features/import';
 import { dragSourceProps, useBankDropZone } from '@/features/schedule';
+import { TagFilter, type TagChip } from './TagFilter';
+import { useTagFilter } from './tagFilterStore';
 import { useActivityDialogs } from './useActivityDialogs';
 
 export interface BankPanelProps {
@@ -48,10 +50,25 @@ export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProp
     [activities],
   );
 
-  const { openAdd, openEdit, openDelete, dialogs } = useActivityDialogs(trip, {
+  // Tag filter (FEAT-2): chips for the tags of bank activities (colour = the trip-wide group
+  // colour); the selected chip stays even when its last activity leaves the bank.
+  const [tagFilter, setTagFilter] = useTagFilter(trip.id);
+  const chips = useMemo<TagChip[]>(
+    () =>
+      tripTags(activities)
+        .map((tag) => ({ ...tag, bankCount: bank.filter((a) => matchesTag(a, tag.key)).length }))
+        .filter((chip) => chip.bankCount > 0 || chip.key === tagFilter),
+    [activities, bank, tagFilter],
+  );
+  const activeChip = chips.find((chip) => chip.key === tagFilter) ?? null;
+  // A selected tag that no activity has any more (renamed / deleted) shows everything.
+  const activeKey = activeChip?.key ?? null;
+  const shown = bank.filter((a) => matchesTag(a, activeKey));
+
+  const { openAdd, openEdit, openDelete, dialogs } = useActivityDialogs(trip, activities, {
     onDeleteStart: (activity) => {
-      const index = bank.findIndex((a) => a.id === activity.id);
-      const neighbor = bank[index + 1] ?? bank[index - 1] ?? null;
+      const index = shown.findIndex((a) => a.id === activity.id);
+      const neighbor = shown[index + 1] ?? shown[index - 1] ?? null;
       focusAfterDelete.current = { deletedId: activity.id, targetId: neighbor?.id ?? null };
     },
     onDeleteError: () => {
@@ -117,9 +134,17 @@ export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProp
         </div>
       </div>
 
+      {chips.length > 0 && (
+        <TagFilter chips={chips} selected={activeKey} onSelect={setTagFilter} scroll={sheet} />
+      )}
+
       {bank.length === 0 ? (
         <p className="m-0 flex-1 px-2 py-6 text-center text-[13.5px] leading-relaxed whitespace-pre-line text-ink-soft">
           {t('bank.empty')}
+        </p>
+      ) : shown.length === 0 ? (
+        <p className="m-0 flex-1 px-2 py-6 text-center text-[13.5px] leading-relaxed text-ink-soft">
+          {t('bank.filter.empty', { tag: activeChip?.tag ?? '' })}
         </p>
       ) : (
         <ul
@@ -129,7 +154,7 @@ export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProp
             sheet ? 'px-1 py-2' : 'p-3',
           )}
         >
-          {bank.map((activity) => (
+          {shown.map((activity) => (
             <li key={activity.id} className="w-[calc(50%-4px)] shrink-0 tablet:w-auto">
               <ActivityBlock
                 {...dragSourceProps(activity.id)}
@@ -138,6 +163,7 @@ export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProp
                   else blockRefs.current.delete(activity.id);
                 }}
                 name={activity.name}
+                tag={activity.tag}
                 durationMinutes={activity.durationMinutes}
                 color={activity.color}
                 onOpen={() => openEdit(activity)}
@@ -155,7 +181,12 @@ export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProp
       </p>
 
       {dialogs}
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} trip={trip} />
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        trip={trip}
+        activities={activities}
+      />
     </div>
   );
 }

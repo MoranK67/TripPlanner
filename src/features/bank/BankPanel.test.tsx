@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AppError } from '@/data';
 import { PALETTE, type Activity, type Trip, type TripWithActivities } from '@/domain';
 import { ToastProvider } from '@/components/ui';
 import { tripKeys, useTripQuery } from '@/features/trips';
 import { BankPanel, type BankPanelProps } from './BankPanel';
+import { resetTagFilters } from './tagFilterStore';
 
 const repo = vi.hoisted(() => ({
   create: vi.fn(),
@@ -75,6 +76,7 @@ function renderBank(activities: Activity[] = ACTIVITIES, variant?: BankPanelProp
 
 beforeEach(() => {
   for (const fn of [...Object.values(repo), trips.get]) fn.mockReset();
+  resetTagFilters();
 });
 
 describe('BankPanel list', () => {
@@ -422,5 +424,75 @@ describe('offline (M7.3, FR-8.3)', () => {
     expect(screen.getByRole('button', { name: 'מחיקת קולוסיאום' })).not.toHaveAttribute(
       'aria-disabled',
     );
+  });
+});
+
+describe('tag filter chips (FEAT-2)', () => {
+  const TAGGED = [
+    activity({ id: 'm', name: 'מוזיאון', tag: 'מרכז', color: PALETTE[2], bankPosition: 1 }),
+    activity({ id: 'c', name: 'קפה', tag: 'מרכז', color: PALETTE[2], bankPosition: 2 }),
+    activity({ id: 'p', name: 'נמל', tag: 'Port', color: PALETTE[6], bankPosition: 3 }),
+    activity({ id: 'x', name: 'גלידה', bankPosition: 4 }),
+    // Placed: its tag counts for the colour, not for the bank count.
+    activity({
+      id: 'z',
+      name: 'מצודה',
+      tag: 'צפון',
+      placement: { date: '2026-05-01', startMinute: 600 },
+    }),
+  ];
+  const names = () =>
+    within(screen.getByRole('list', { name: 'אטרקציות במאגר' }))
+      .getAllByRole('listitem')
+      .map((li) => li.querySelector('[title]')?.getAttribute('title'));
+
+  it('shows "all" and each bank tag with its count as a toggle group', () => {
+    renderBank(TAGGED);
+    const group = screen.getByRole('group', { name: 'סינון לפי תגית' });
+    const chips = within(group).getAllByRole('button');
+    expect(chips.map((c) => c.textContent)).toEqual(['הכול', 'מרכז (2)', 'Port (1)']);
+    expect(chips[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(chips[1]).toHaveAttribute('aria-pressed', 'false');
+    // Hebrew collation: Hebrew tags before Latin ones.
+  });
+
+  it('filters the list, and pressing the chip again shows all', () => {
+    renderBank(TAGGED);
+    expect(names()).toEqual(['מוזיאון · מרכז', 'קפה · מרכז', 'נמל · Port', 'גלידה']);
+    const chip = screen.getByRole('button', { name: 'מרכז (2)' });
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'הכול' })).toHaveAttribute('aria-pressed', 'false');
+    expect(names()).toEqual(['מוזיאון · מרכז', 'קפה · מרכז']);
+    fireEvent.click(chip);
+    expect(names()).toHaveLength(4);
+  });
+
+  it('remembers the selection per trip while the panel remounts', () => {
+    renderBank(TAGGED);
+    fireEvent.click(screen.getByRole('button', { name: 'Port (1)' }));
+    cleanup();
+    renderBank(TAGGED, 'sheet');
+    expect(screen.getByRole('button', { name: 'Port (1)' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(names()).toEqual(['נמל · Port']);
+  });
+
+  it('scrolls sideways in the phone sheet instead of wrapping', () => {
+    renderBank(TAGGED, 'sheet');
+    expect(screen.getByRole('group', { name: 'סינון לפי תגית' })).toHaveClass(
+      'flex-nowrap',
+      'overflow-x-auto',
+    );
+  });
+
+  it('has no chips without tags, and puts the tag in the block name', () => {
+    renderBank(TAGGED);
+    expect(screen.getByRole('button', { name: 'קפה שעה (תגית: מרכז)' })).toBeInTheDocument();
+    cleanup();
+    renderBank();
+    expect(screen.queryByRole('group', { name: 'סינון לפי תגית' })).not.toBeInTheDocument();
   });
 });

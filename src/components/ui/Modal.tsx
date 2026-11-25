@@ -246,8 +246,10 @@ export function ModalActions({ children, className }: { children: ReactNode; cla
       className={cx(
         'flex flex-wrap items-center gap-2',
         className,
+        // Sticky offsets count from inside the scrolling body's 16 px padding: `-bottom-4` puts
+        // the row on the screen's bottom edge, so content no longer shows through below it.
         fullScreen &&
-          'max-tablet:sticky max-tablet:bottom-0 max-tablet:z-[1] max-tablet:-mx-4 max-tablet:-mb-4 max-tablet:mt-auto max-tablet:border-t max-tablet:border-line max-tablet:bg-panel max-tablet:px-4 max-tablet:pt-3 max-tablet:pb-[max(12px,env(safe-area-inset-bottom))]',
+          'max-tablet:sticky max-tablet:-bottom-4 max-tablet:z-[1] max-tablet:-mx-4 max-tablet:-mb-4 max-tablet:mt-auto max-tablet:border-t max-tablet:border-line max-tablet:bg-panel max-tablet:px-4 max-tablet:pt-3 max-tablet:pb-[max(12px,env(safe-area-inset-bottom))]',
       )}
     >
       {children}

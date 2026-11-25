@@ -5,9 +5,9 @@ import { ToastProvider } from '@/components/ui';
 import { AppError } from '@/data';
 import { PALETTE, type Activity, type TripWithActivities } from '@/domain';
 import { tripKeys } from '@/features/trips';
-import { usePlacementActions } from './hooks';
+import { usePlacementActions, useQueuedActivityUpdate } from './hooks';
 
-const repo = vi.hoisted(() => ({ place: vi.fn(), unplace: vi.fn() }));
+const repo = vi.hoisted(() => ({ place: vi.fn(), unplace: vi.fn(), update: vi.fn() }));
 const toastShown = vi.hoisted(() => vi.fn());
 
 // Record every toast.show call (the provider replaces the visible toast, so the DOM cannot count).
@@ -121,6 +121,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   repo.place.mockReset();
   repo.unplace.mockReset();
+  repo.update.mockReset();
   toastShown.mockReset();
 });
 
@@ -525,5 +526,113 @@ describe('usePlacementActions', () => {
     await act(async () => save.reject(new AppError('network')));
     expect(cached()).toBeUndefined();
     expect(toastShown).not.toHaveBeenCalled();
+  });
+});
+
+describe('useQueuedActivityUpdate (FEAT-1 dialog saves)', () => {
+  function setupEdit() {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false, networkMode: 'offlineFirst' },
+      },
+    });
+    const tagged: TripWithActivities = {
+      ...data,
+      activities: [
+        ...data.activities,
+        { ...museum, id: 'a-3', tag: 'נמל', color: PALETTE[6], placement: null, bankPosition: 5 },
+      ],
+    };
+    queryClient.setQueryData(tripKeys.detail('trip-1'), tagged);
+    vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () => ({ placement: usePlacementActions('trip-1'), edit: useQueuedActivityUpdate('trip-1') }),
+      { wrapper },
+    );
+    const find = (id: string) =>
+      queryClient
+        .getQueryData<TripWithActivities>(tripKeys.detail('trip-1'))
+        ?.activities.find((a) => a.id === id);
+    return { result, find, queryClient };
+  }
+
+  it('applies the whole patch at once (placement, tag group colour), then the server answer', async () => {
+    const save = deferred<{ activity: Activity; returnedToBank: boolean }>();
+    repo.update.mockReturnValue(save.promise);
+    const { result, find } = setupEdit();
+    const onSuccess = vi.fn();
+    const patch = {
+      name: 'שוק הפשפשים',
+      durationMinutes: 120,
+      tag: 'נמל',
+      placement: { date: '2026-12-02', startMinute: 600 },
+    };
+    act(() => result.current.edit.mutate({ id: 'a-1', patch }, { onSuccess }));
+    await waitFor(() =>
+      expect(find('a-1')).toMatchObject({
+        name: 'שוק הפשפשים',
+        durationMinutes: 120,
+        tag: 'נמל',
+        color: PALETTE[6],
+        placement: { date: '2026-12-02', startMinute: 600 },
+      }),
+    );
+    expect(repo.update).toHaveBeenCalledWith('a-1', patch);
+    const server = { ...activity, ...patch, color: PALETTE[6] };
+    await act(async () => save.resolve({ activity: server, returnedToBank: false }));
+    await waitFor(() =>
+      expect(onSuccess).toHaveBeenCalledWith({ activity: server, returnedToBank: false }),
+    );
+    expect(find('a-1')).toEqual(server);
+  });
+
+  it('placement: null returns a placed activity to the end of the bank', async () => {
+    repo.update.mockReturnValue(new Promise(() => {}));
+    const { result, find } = setupEdit();
+    act(() => result.current.edit.mutate({ id: 'a-2', patch: { placement: null } }));
+    await waitFor(() => expect(find('a-2')).toMatchObject({ placement: null, bankPosition: 6 }));
+  });
+
+  it('rolls back on failure without a toast (the dialog shows the error)', async () => {
+    repo.update.mockRejectedValue(new AppError('conflict_overlap'));
+    const { result, find } = setupEdit();
+    const onError = vi.fn();
+    act(() =>
+      result.current.edit.mutate(
+        { id: 'a-1', patch: { placement: { date: '2026-12-01', startMinute: 540 } } },
+        { onError },
+      ),
+    );
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(find('a-1')?.placement).toBeNull();
+    expect(result.current.edit.isError).toBe(true);
+    expect(toastShown).not.toHaveBeenCalled();
+  });
+
+  it('waits for an earlier drop of the same trip (one queue, DEC-031)', async () => {
+    const drop = deferred<Activity>();
+    repo.place.mockReturnValue(drop.promise);
+    repo.update.mockResolvedValue({
+      activity: placed(activity, '2026-12-03', 600),
+      returnedToBank: false,
+    });
+    const { result } = setupEdit();
+    act(() => result.current.placement.place('a-1', '2026-12-02', 600));
+    act(() =>
+      result.current.edit.mutate({
+        id: 'a-1',
+        patch: { placement: { date: '2026-12-03', startMinute: 600 } },
+      }),
+    );
+    await waitFor(() => expect(repo.place).toHaveBeenCalled());
+    expect(repo.update).not.toHaveBeenCalled();
+    await act(async () => drop.resolve(placed(activity, '2026-12-02', 600)));
+    await waitFor(() => expect(repo.update).toHaveBeenCalled());
   });
 });

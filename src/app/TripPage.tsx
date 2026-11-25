@@ -72,7 +72,7 @@ function TripPlanner({ trip, activities }: { trip: Trip; activities: Activity[] 
   const headingRef = useRef<HTMLHeadingElement>(null);
   const focusAfterDelete = useFocusAfterTimetableDelete(activities, headingRef);
   // Placed blocks open the same edit / delete dialogs as the bank (FR-3.4, FR-3.5).
-  const timetableDialogs = useActivityDialogs(trip, focusAfterDelete);
+  const timetableDialogs = useActivityDialogs(trip, activities, focusAfterDelete);
   const placement = usePlacementActions(trip.id);
   const bankCount = useMemo(() => activities.filter(isInBank).length, [activities]);
   return (

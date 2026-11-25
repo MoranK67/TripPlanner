@@ -74,11 +74,19 @@ export async function openBank(page: Page): Promise<void> {
   await expect(handle).toHaveAttribute('aria-expanded', 'true');
 }
 
-/** The open button of a bank block (its accessible name is "<name> <duration>"). */
+/** `text` as an exact-match regular expression source. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * A bank block's list item, by activity name. The block's title is the name, or
+ * "<name> · <tag>" for a tagged activity (FEAT-2).
+ */
 export function bankBlock(page: Page, name: string): Locator {
   return bank(page)
     .getByRole('listitem')
-    .filter({ has: page.getByTitle(name, { exact: true }) });
+    .filter({ has: page.getByTitle(new RegExp(`^${escapeRegExp(name)}( · .+)?$`)) });
 }
 
 /**

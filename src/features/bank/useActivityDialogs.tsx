@@ -32,6 +32,8 @@ type DialogKind = 'add' | 'edit' | 'delete';
  */
 export function useActivityDialogs(
   trip: Trip,
+  /** All of the trip's activities (placement checks and tag suggestions in the dialog). */
+  activities: readonly Activity[],
   { onDeleteStart, onDeleteError }: ActivityDialogsOptions = {},
 ): ActivityDialogsController {
   const { t } = useTranslation();
@@ -70,8 +72,8 @@ export function useActivityDialogs(
       <ActivityDialog
         open={open === 'add' || open === 'edit'}
         onClose={close}
-        tripId={trip.id}
-        colorCursor={trip.colorCursor}
+        trip={trip}
+        activities={activities}
         activity={open === 'add' ? undefined : (item ?? undefined)}
       />
       <ConfirmDialog

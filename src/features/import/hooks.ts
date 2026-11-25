@@ -3,7 +3,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { activitiesRepo } from '@/data';
-import { PALETTE, type ActivityInput, type TripWithActivities } from '@/domain';
+import { PALETTE, tagKey, type ActivityInput, type TripWithActivities } from '@/domain';
 import { tripKeys } from '@/features/trips';
 
 /** Mutation key per trip, so the dialog can tell (with `useIsMutating`) that an import is running. */
@@ -22,18 +22,24 @@ export function useImportActivities(tripId: string) {
     mutationKey: importMutationKeys.import(tripId),
     mutationFn: (items: readonly ActivityInput[]) => activitiesRepo.importMany(tripId, items),
     onSuccess: (created) => {
-      // Show them at once (and move the color cursor like the DB did), then reconcile.
-      queryClient.setQueryData<TripWithActivities>(key, (old) =>
-        old
-          ? {
-              trip: {
-                ...old.trip,
-                colorCursor: (old.trip.colorCursor + created.length) % PALETTE.length,
-              },
-              activities: [...old.activities, ...created],
-            }
-          : old,
-      );
+      // Show them at once (and move the color cursor like the DB did), then reconcile. Rows
+      // that joined a tag group (an existing one or one an earlier row started) took its colour
+      // and did not move the cursor (DEC-042).
+      queryClient.setQueryData<TripWithActivities>(key, (old) => {
+        if (!old) return old;
+        const groups = new Set(old.activities.map((a) => tagKey(a.tag)));
+        let step = 0;
+        for (const activity of created) {
+          const group = tagKey(activity.tag);
+          if (group !== null && groups.has(group)) continue;
+          step += 1;
+          groups.add(group);
+        }
+        return {
+          trip: { ...old.trip, colorCursor: (old.trip.colorCursor + step) % PALETTE.length },
+          activities: [...old.activities, ...created],
+        };
+      });
     },
     // Also after an error: a timed-out import may have been committed (UX-3, DEC-032), and the
     // refetched bank shows it before the user tries again.

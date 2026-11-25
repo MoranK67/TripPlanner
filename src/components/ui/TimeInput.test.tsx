@@ -119,4 +119,11 @@ describe('TimeInput', () => {
     rerender(<TimeInput label={LABEL} min={0} max={1410} value={600} onChange={() => {}} />);
     expect(input()).toHaveValue('10:00');
   });
+
+  it('can be disabled, and then shows no error', () => {
+    render(<Harness initial={null} disabled showErrors error="שגיאה מבחוץ" />);
+    expect(input()).toBeDisabled();
+    expect(input()).not.toHaveAttribute('aria-invalid');
+    expect(screen.queryByText('שגיאה מבחוץ')).not.toBeInTheDocument();
+  });
 });

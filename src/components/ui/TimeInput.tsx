@@ -31,6 +31,8 @@ export interface TimeInputProps {
   messages?: Partial<Record<HhmmError, string>>;
   /** Field id (see `Field`). */
   id?: string;
+  /** Disables the field; it then shows no error (e.g. a time that does not apply right now). */
+  disabled?: boolean;
   className?: string;
 }
 
@@ -52,6 +54,7 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(function T
     error,
     messages,
     id,
+    disabled = false,
     className,
   },
   ref,
@@ -82,7 +85,13 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(function T
         max: minuteLabel(max),
       }))
     : null;
-  const shownError = parseError ? (touched || showErrors ? parseError : null) : error;
+  const shownError = disabled
+    ? null
+    : parseError
+      ? touched || showErrors
+        ? parseError
+        : null
+      : error;
 
   function handleChange(next: string) {
     setText(next);
@@ -107,6 +116,7 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(function T
         autoComplete="off"
         spellCheck={false}
         maxLength={5}
+        disabled={disabled}
         className="text-end tabular-nums"
         aria-describedby={roundedTo !== null ? noteId : undefined}
         onChange={(e) => handleChange(e.target.value)}
