@@ -2,6 +2,10 @@
 
 # העלאת האפליקציה לאינטרנט עם Cloudflare Pages — מדריך צעד אחר צעד
 
+> **האתר באוויר (25.11.2026):** https://tripplanner-ag4.pages.dev (שם הפרויקט: `tripplanner`).
+> שימי לב: הכפתור הכחול **Create application** יוצר היום *Worker*. כדי ליצור Pages לוחצים על השורה הקטנה
+> "Looking to deploy Pages? **Get started**" בתחתית המסך.
+
 אחרי המדריך הזה תהיה לאפליקציה כתובת קבועה באינטרנט, למשל `https://trip-planner.pages.dev`.
 מכל שינוי שנשמר ב־GitHub (בענף `main`) Cloudflare בונה ומעלה גרסה חדשה לבד, תוך כמה דקות.
 

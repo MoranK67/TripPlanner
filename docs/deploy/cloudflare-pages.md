@@ -1,5 +1,9 @@
 # Deploying the web app to Cloudflare Pages (M8.4)
 
+> **Live (2026-11-25):** project `tripplanner`, production URL https://tripplanner-ag4.pages.dev.
+> Cloudflare's main "Create application" button now creates a *Worker*; use the small
+> "Looking to deploy Pages? Get started" link at the bottom of that screen instead.
+
 The web build is a static Vite SPA (`dist/`). Cloudflare Pages builds it from GitHub on every
 push: `main` → production, every other branch / pull request → a preview URL. No GitHub Actions
 workflow and no Cloudflare token are needed (Git integration). Hebrew step-by-step for the owner:
