@@ -145,7 +145,10 @@ begin
   perform tests.make_activity(t, 'existing');   -- cursor 1, bank_position 1
 
   perform tests.authenticate_as(tests.user_a());
-  select array_agg(r order by r.bank_position) into v_rows
+  -- FEAT-3: the RPC returns the activity columns, then outcome columns (not an activities row).
+  select array_agg(row(r.id, r.trip_id, r.name, r.duration_minutes, r.color, r.scheduled_date,
+    r.start_minute, r.bank_position, r.created_at, r.updated_at, r.tag)::public.activities
+    order by r.bank_position) into v_rows
   from public.import_activities(t, '[
     {"name": "Louvre", "duration_minutes": 180},
     {"name": "קפה", "duration_minutes": 30, "color": "#123456"},

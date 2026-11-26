@@ -1,6 +1,6 @@
 import { createActivitiesRepo, type ActivitiesRepo } from './activitiesRepo';
 import { AppError } from './errors';
-import { activityRow } from './testing/fixtures';
+import { activityRow, importActivitiesRow } from './testing/fixtures';
 import { argsOf, createMockSupabase, methods, type MockSupabase } from './testing/mockSupabase';
 
 let mock: MockSupabase;
@@ -395,14 +395,21 @@ describe('activitiesRepo.unplace', () => {
 describe('activitiesRepo.importMany', () => {
   it('calls import_activities with snake_case items and returns activities in order', async () => {
     mock.ok([
-      activityRow({ id: 'a', name: 'A', duration_minutes: 30 }),
-      activityRow({ id: 'b', name: 'B', duration_minutes: 90, bank_position: 2 }),
+      importActivitiesRow({ id: 'a', name: 'A', duration_minutes: 30 }),
+      importActivitiesRow({
+        id: 'b',
+        name: 'B',
+        duration_minutes: 90,
+        bank_position: 2,
+        item_index: 2,
+      }),
     ]);
     const result = await repo.importMany('trip-1', [
       { name: 'A', durationMinutes: 30 },
       { name: 'B', durationMinutes: 90, color: '#c8ebe3' },
     ]);
-    expect(result.map((a) => a.id)).toEqual(['a', 'b']);
+    expect(result.map((r) => r.activity.id)).toEqual(['a', 'b']);
+    expect(result.every((r) => !r.placed && r.bankReason === null)).toBe(true);
     const [request] = mock.requests;
     expect(request?.target).toBe('import_activities');
     expect(request?.rpcArgs).toEqual({
@@ -451,11 +458,11 @@ describe('activitiesRepo.importMany', () => {
   });
 
   it('sends tags and reports a bad tag as item:<n>:tag, like the RPC', async () => {
-    mock.ok([activityRow({ tag: 'מרכז' })]);
-    const [activity] = await repo.importMany('trip-1', [
+    mock.ok([importActivitiesRow({ tag: 'מרכז' })]);
+    const [outcome] = await repo.importMany('trip-1', [
       { name: 'A', durationMinutes: 30, tag: 'מרכז' },
     ]);
-    expect(activity?.tag).toBe('מרכז');
+    expect(outcome?.activity.tag).toBe('מרכז');
     expect(mock.requests[0]?.rpcArgs).toEqual({
       trip_id: 'trip-1',
       items: [{ name: 'A', duration_minutes: 30, tag: 'מרכז' }],
@@ -467,6 +474,65 @@ describe('activitiesRepo.importMany', () => {
       ]),
     );
     expect(error.reason).toBe('item:2:tag');
+  });
+
+  it('sends placements and returns per-item outcomes ordered by item_index (FEAT-3)', async () => {
+    mock.ok([
+      importActivitiesRow({
+        id: 'c',
+        item_index: 3,
+        bank_reason: 'overlaps_import_row',
+        conflict_activity_id: 'a',
+        conflict_item: 1,
+      }),
+      importActivitiesRow({
+        id: 'a',
+        item_index: 1,
+        placed: true,
+        scheduled_date: '2026-05-02',
+        start_minute: 600,
+      }),
+      importActivitiesRow({ id: 'b', item_index: 2, bank_reason: 'outside_trip_hours' }),
+    ]);
+    const result = await repo.importMany('trip-1', [
+      { name: 'A', durationMinutes: 60, placement: { date: '2026-05-02', startMinute: 600 } },
+      { name: 'B', durationMinutes: 60, placement: { date: '2026-05-03', startMinute: 1050 } },
+      { name: 'C', durationMinutes: 60, placement: { date: '2026-05-02', startMinute: 630 } },
+    ]);
+    expect(mock.requests[0]?.rpcArgs).toEqual({
+      trip_id: 'trip-1',
+      items: [
+        { name: 'A', duration_minutes: 60, scheduled_date: '2026-05-02', start_minute: 600 },
+        { name: 'B', duration_minutes: 60, scheduled_date: '2026-05-03', start_minute: 1050 },
+        { name: 'C', duration_minutes: 60, scheduled_date: '2026-05-02', start_minute: 630 },
+      ],
+    });
+    expect(result).toEqual([
+      {
+        activity: expect.objectContaining({
+          id: 'a',
+          placement: { date: '2026-05-02', startMinute: 600 },
+        }),
+        placed: true,
+        bankReason: null,
+        conflictActivityId: null,
+        conflictItem: null,
+      },
+      {
+        activity: expect.objectContaining({ id: 'b', placement: null }),
+        placed: false,
+        bankReason: 'outside_trip_hours',
+        conflictActivityId: null,
+        conflictItem: null,
+      },
+      {
+        activity: expect.objectContaining({ id: 'c', placement: null }),
+        placed: false,
+        bankReason: 'overlaps_import_row',
+        conflictActivityId: 'a',
+        conflictItem: 1,
+      },
+    ]);
   });
 
   it.each([

@@ -109,6 +109,16 @@ export interface ActivityInput {
   tag?: string | null;
 }
 
+/**
+ * One item of a text import (`activitiesRepo.importMany`, FR-6.4, FEAT-3): a new activity and,
+ * optionally, where to place it. The server places it when the slot is free and inside the trip,
+ * otherwise it goes to the bank with a reason (the whole import never fails for a placement).
+ */
+export interface ImportItemInput extends ActivityInput {
+  /** FEAT-3: requested slot (from `planImportPlacements` / the day number). Missing or `null` = bank. */
+  placement?: Placement | null;
+}
+
 /** Editable activity fields (`activitiesRepo.update`, FR-3.5). */
 export interface ActivityPatch {
   name?: string;
@@ -135,6 +145,17 @@ export type ImportRow =
       rounded: boolean;
       /** Optional third field (FEAT-2), normalized; `null` when absent or empty. */
       tag: string | null;
+      /**
+       * Requested placement from the optional 4th and 5th fields (FEAT-3); `null` when both are
+       * absent or empty, or when `placementIssue` is set. Not yet checked against a trip: see
+       * `planImportPlacements`.
+       */
+      placement: ImportPlacementRequest | null;
+      /**
+       * Why the placement fields could not be used (FEAT-3). The row itself stays valid and goes
+       * to the bank. `null` when the fields are fine or absent.
+       */
+      placementIssue: ImportPlacementIssue | null;
     }
   | {
       ok: false;
@@ -142,6 +163,23 @@ export type ImportRow =
       /** Machine-readable reason; the UI maps it to a Hebrew message. */
       reason: ImportRowError;
     };
+
+/** Placement requested by an import row (FEAT-3): `name;duration;tag;day;start`. */
+export interface ImportPlacementRequest {
+  /** 1-based trip day number (day 1 = the trip's start date). May lie outside the trip. */
+  day: number;
+  /** Start minute on the half-hour grid, 0..1410 (the typed time rounded, DEC-035). */
+  startMinute: Minute;
+  /** The typed start time was rounded to the grid. */
+  startRounded: boolean;
+}
+
+/**
+ * Why an import row's placement fields were not usable (FEAT-3):
+ * - `placement_incomplete`: only one of day / start is given;
+ * - `placement_invalid`: both are given but one is not a valid day number or time.
+ */
+export type ImportPlacementIssue = 'placement_incomplete' | 'placement_invalid';
 
 /**
  * Why an import row was rejected. Extended by the parser task (M2.4) if needed; adding a member

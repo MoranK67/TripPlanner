@@ -1,7 +1,7 @@
 // Pasted-text import parser (FR-6.1–FR-6.5). Ported from the prototype's `parseImport` and
 // hardened: Excel quoting, tab preferred over `;` for Excel rows, stray/unclosed braces,
 // names validated (not silently truncated) and the 200-row limit. FEAT-2 adds an optional third
-// field, the tag.
+// field, the tag; FEAT-3 optional 4th and 5th fields, the trip day number and the start time.
 
 import {
   ACTIVITY_NAME_MAX,
@@ -12,6 +12,7 @@ import {
 import { parseDuration, roundToSlot } from './duration';
 import { nameLength } from './guards';
 import { normalizeTag, validateTag, type TagError } from './tags';
+import { parseClockTime } from './time';
 import type { ImportRow, ImportRowError } from './types';
 
 export interface ImportParseResult {
@@ -81,26 +82,81 @@ interface RowFields {
   durationText: string;
   /** Raw third field; `null` for a two-field row. */
   tagText: string | null;
+  /** Raw fourth field (trip day number, FEAT-3); `null` when the row has fewer fields. */
+  dayText: string | null;
+  /** Raw fifth field (start time, FEAT-3); `null` when the row has fewer fields. */
+  startText: string | null;
 }
 
+/** Most fields a row can have: `name;duration;tag;day;start` (FEAT-3). */
+const MAX_FIELDS = 5;
+
 /**
- * Splits an entry into name, duration and optional tag (FEAT-2). With two or more separators the
- * row is `name;duration;tag` when the field before the last separator is a duration; otherwise
- * (including two-field rows) the last separator splits name and duration, so names may contain
- * `;` as before (`Show; VIP; 2`). `null` when there is no separator at all.
+ * Splits an entry into name, duration and the optional tag, day and start fields (FEAT-2/3).
+ * Names may contain `;` (`Show; VIP; 2`), so the fields are found from the end: the widest shape
+ * (5, then 4, then 3 fields) whose duration field parses wins; otherwise the last separator splits
+ * name and duration, as before. Rows with 2 or 3 fields therefore split exactly as in FEAT-2.
+ * `null` when there is no separator at all.
  */
 function splitFields(raw: string): RowFields | null {
   const seps = separatorPositions(raw);
-  const last = seps.at(-1);
-  if (last === undefined) return null;
-  const before = seps.at(-2);
-  if (before !== undefined) {
-    const middle = raw.slice(before + 1, last).trim();
-    if (middle !== '' && parseDuration(middle) !== null) {
-      return { name: raw.slice(0, before), durationText: middle, tagText: raw.slice(last + 1) };
-    }
+  if (seps.length === 0) return null;
+  const between = (from: number, to: number | undefined) => raw.slice(from + 1, to);
+
+  for (let fields = MAX_FIELDS; fields >= 3; fields -= 1) {
+    // The name ends at separator `first`; the duration lies between it and the next one.
+    const first = seps.length - (fields - 1);
+    const nameEnd = seps[first];
+    if (first < 0 || nameEnd === undefined) continue;
+    const durationText = between(nameEnd, seps[first + 1]).trim();
+    if (durationText === '' || parseDuration(durationText) === null) continue;
+    const rest = seps.slice(first + 1).map((sep, i) => between(sep, seps[first + 2 + i]));
+    return {
+      name: raw.slice(0, nameEnd),
+      durationText,
+      tagText: rest[0] ?? null,
+      dayText: rest[1] ?? null,
+      startText: rest[2] ?? null,
+    };
   }
-  return { name: raw.slice(0, last), durationText: raw.slice(last + 1).trim(), tagText: null };
+  const last = seps.length - 1;
+  const lastSep = seps[last] ?? 0;
+  return {
+    name: raw.slice(0, lastSep),
+    durationText: raw.slice(lastSep + 1).trim(),
+    tagText: null,
+    dayText: null,
+    startText: null,
+  };
+}
+
+// The 4th field: a trip day number, optionally written `יום 2` (as an AI chat may answer).
+const DAY_NUMBER = /^(?:יום\s*)?(\d{1,3})$/;
+
+type PlacementFields = Pick<Extract<ImportRow, { ok: true }>, 'placement' | 'placementIssue'>;
+
+/**
+ * Reads the optional day and start fields (FEAT-3). Both empty → no placement; only one given →
+ * `placement_incomplete`; both given but either malformed (day not a whole number ≥ 1, start not a
+ * time, or rounding past 23:30) → `placement_invalid`. Whether the day and hours fit the trip is
+ * decided later by `planImportPlacements`.
+ */
+function parsePlacementFields(dayText: string | null, startText: string | null): PlacementFields {
+  const day = (dayText ?? '').trim();
+  const start = (startText ?? '').trim();
+  if (day === '' && start === '') return { placement: null, placementIssue: null };
+  if (day === '' || start === '')
+    return { placement: null, placementIssue: 'placement_incomplete' };
+
+  const dayMatch = DAY_NUMBER.exec(day);
+  const dayNumber = dayMatch ? Number(dayMatch[1]) : 0;
+  const time = parseClockTime(start);
+  if (dayNumber < 1 || time === null)
+    return { placement: null, placementIssue: 'placement_invalid' };
+  return {
+    placement: { day: dayNumber, startMinute: time.minute, startRounded: time.rounded },
+    placementIssue: null,
+  };
 }
 
 const TAG_ERROR = {
@@ -150,13 +206,22 @@ export function parseImportRow(entry: string): ImportRow {
   const tagError = tag === null ? null : validateTag(tag);
   const tagReason = tagError === null ? null : TAG_ERROR[tagError];
   if (tagReason !== null) return { ok: false, raw, reason: tagReason };
-  return { ok: true, name, durationMinutes, rounded: durationMinutes !== minutes, tag };
+  return {
+    ok: true,
+    name,
+    durationMinutes,
+    rounded: durationMinutes !== minutes,
+    tag,
+    ...parsePlacementFields(fields.dayText, fields.startText),
+  };
 }
 
 /**
  * Parses pasted text (FR-6.2): one `name; duration` per line, `{name;duration},{name;duration}`,
  * or two tab-separated columns pasted from Excel. Each format takes an optional third field, the
- * tag (FEAT-2): `name;duration;tag`, `{name;duration;tag}`, or a third Excel column. Empty lines are ignored; a header row such as
+ * tag (FEAT-2): `name;duration;tag`, `{name;duration;tag}`, or a third Excel column; and optional
+ * 4th and 5th fields, the trip day number and start time (FEAT-3): `name;duration;tag;2;09:30`
+ * (the tag may be empty: `name;2;;2;09:30`). Empty lines are ignored; a header row such as
  * `שם; זמן` comes out as an invalid row (its duration does not parse).
  */
 export function parseImport(text: string): ImportParseResult {

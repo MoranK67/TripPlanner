@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Field, Textarea, useToast } from '@/components/ui';
-import { buildAiPrompt, type AiPromptTrip } from '@/domain';
+import { buildAiPrompt, type AiPromptTrip, type ImportType } from '@/domain';
 
 export interface AiPromptCopyProps {
   /** The trip the prompt asks about (its name is the destination, FEAT-2). */
   trip: AiPromptTrip;
+  /** The import type chosen in the dialog: the prompt asks for its line format (FEAT-3). */
+  type: ImportType;
 }
 
 /**
  * "העתקת הודעה ל-AI" (FEAT-2): copies a ready-made Hebrew message for ChatGPT / Claude that asks
- * for attractions in the import format. When the clipboard is not available (old browser, denied
+ * for attractions in the chosen import type's format. When the clipboard is not available (old browser, denied
  * permission), the message is shown in a read-only box, focused and selected for a manual copy.
  */
-export function AiPromptCopy({ trip }: AiPromptCopyProps) {
+export function AiPromptCopy({ trip, type }: AiPromptCopyProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const [fallback, setFallback] = useState<string | null>(null);
@@ -26,7 +28,7 @@ export function AiPromptCopy({ trip }: AiPromptCopyProps) {
   }, [fallback]);
 
   async function copy() {
-    const prompt = buildAiPrompt(trip);
+    const prompt = buildAiPrompt(trip, type);
     try {
       // `clipboard` is missing outside secure contexts and in old browsers.
       if (!navigator.clipboard) throw new Error('clipboard unavailable');

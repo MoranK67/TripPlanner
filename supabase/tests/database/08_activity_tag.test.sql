@@ -301,7 +301,10 @@ begin
   perform tests.authenticate_as(tests.user_a());
   existing := tests.add(t, 'existing', 'Old town', '#0A0A0A');   -- cursor → 1
   v_cursor_before := tests.cursor_of(t);
-  select array_agg(r order by r.bank_position) into v_rows
+  -- FEAT-3: the RPC returns the activity columns, then outcome columns (not an activities row).
+  select array_agg(row(r.id, r.trip_id, r.name, r.duration_minutes, r.color, r.scheduled_date,
+    r.start_minute, r.bank_position, r.created_at, r.updated_at, r.tag)::public.activities
+    order by r.bank_position) into v_rows
   from public.import_activities(t, jsonb_build_array(
     jsonb_build_object('name', 'A', 'duration_minutes', 60, 'tag', 'Day 1'),
     jsonb_build_object('name', 'B', 'duration_minutes', 60, 'tag', '  day 1 '),
@@ -313,7 +316,9 @@ begin
     jsonb_build_object('name', 'H', 'duration_minutes', 60, 'tag', '')
   )) r;
   -- Backward compatibility: the pre-FEAT-2 item shape.
-  select array_agg(r order by r.bank_position) into v_old
+  select array_agg(row(r.id, r.trip_id, r.name, r.duration_minutes, r.color, r.scheduled_date,
+    r.start_minute, r.bank_position, r.created_at, r.updated_at, r.tag)::public.activities
+    order by r.bank_position) into v_old
   from public.import_activities(t, '[{"name": "old", "duration_minutes": 30}]') r;
 
   select count(*)::integer into v_count_before from public.activities where trip_id = t;

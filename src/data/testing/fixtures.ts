@@ -1,5 +1,5 @@
 // Test-only DB row factories.
-import type { ActivityRow, TripRow } from '../mapping';
+import type { ActivityRow, ImportActivitiesRow, TripRow } from '../mapping';
 
 export function tripRow(overrides: Partial<TripRow> = {}): TripRow {
   return {
@@ -31,6 +31,21 @@ export function activityRow(overrides: Partial<ActivityRow> = {}): ActivityRow {
     tag: null,
     created_at: '2026-04-01T10:00:00Z',
     updated_at: '2026-04-01T10:00:00Z',
+    ...overrides,
+  };
+}
+
+/** An `import_activities` result row (FEAT-3): a bank activity, no placement requested. */
+export function importActivitiesRow(
+  overrides: Partial<ImportActivitiesRow> = {},
+): ImportActivitiesRow {
+  return {
+    ...activityRow(),
+    item_index: 1,
+    placed: false,
+    bank_reason: null,
+    conflict_activity_id: null,
+    conflict_item: null,
     ...overrides,
   };
 }

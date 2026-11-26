@@ -9,7 +9,8 @@ import { FAKE_PUBLISHABLE_KEY, FAKE_SUPABASE_URL } from './tests/e2e/fake-backen
 // A production build (not the dev server) on purpose: the dev server re-optimizes dependencies
 // the first time a lazy chunk (e.g. the calendar) loads and then reloads the page mid-test.
 
-const PORT = 5199;
+// `E2E_PORT` lets a second checkout (git worktree) run the suite at the same time.
+const PORT = Number(process.env.E2E_PORT) || 5199;
 const BASE_URL = `http://localhost:${PORT}`;
 /** Build output for the E2E server; inside node_modules so it is git-ignored and never `dist`. */
 const OUT_DIR = 'node_modules/.e2e-dist';

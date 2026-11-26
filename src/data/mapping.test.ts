@@ -3,6 +3,7 @@ import {
   activityFromRow,
   activityInsertFromInput,
   activityUpdateFromJson,
+  importedActivityFromRow,
   importItemsFromInputs,
   importTripsCountsFromJson,
   importTripsFromBackup,
@@ -16,7 +17,7 @@ import {
   updateActivityArgs,
   updateTripWindowArgs,
 } from './mapping';
-import { activityRow, tripRow } from './testing/fixtures';
+import { activityRow, importActivitiesRow, tripRow } from './testing/fixtures';
 
 const window = {
   startDate: '2026-05-01',
@@ -194,6 +195,73 @@ describe('activity mapping', () => {
       activity_id: 'act-1',
       to_bank: true,
     });
+  });
+
+  it('importItemsFromInputs sends scheduled_date + start_minute only with a placement (FEAT-3)', () => {
+    expect(
+      importItemsFromInputs([
+        { name: 'A', durationMinutes: 30, placement: { date: '2026-05-02', startMinute: 570 } },
+        { name: 'B', durationMinutes: 30, placement: null },
+        {
+          name: 'C',
+          durationMinutes: 30,
+          tag: 'x',
+          placement: { date: '2026-05-01', startMinute: 0 },
+        },
+      ]),
+    ).toEqual([
+      { name: 'A', duration_minutes: 30, scheduled_date: '2026-05-02', start_minute: 570 },
+      { name: 'B', duration_minutes: 30 },
+      { name: 'C', duration_minutes: 30, tag: 'x', scheduled_date: '2026-05-01', start_minute: 0 },
+    ]);
+  });
+
+  it('importedActivityFromRow maps a placed row', () => {
+    expect(
+      importedActivityFromRow(
+        importActivitiesRow({ scheduled_date: '2026-05-02', start_minute: 600, placed: true }),
+      ),
+    ).toEqual({
+      activity: expect.objectContaining({
+        id: 'act-1',
+        placement: { date: '2026-05-02', startMinute: 600 },
+      }),
+      placed: true,
+      bankReason: null,
+      conflictActivityId: null,
+      conflictItem: null,
+    });
+  });
+
+  it('importedActivityFromRow maps a banked row with its reason and conflict', () => {
+    expect(
+      importedActivityFromRow(
+        importActivitiesRow({
+          item_index: 3,
+          bank_reason: 'overlaps_import_row',
+          conflict_activity_id: 'act-0',
+          conflict_item: 1,
+        }),
+      ),
+    ).toMatchObject({
+      activity: { placement: null },
+      placed: false,
+      bankReason: 'overlaps_import_row',
+      conflictActivityId: 'act-0',
+      conflictItem: 1,
+    });
+  });
+
+  it('importedActivityFromRow keeps an unknown bank_reason as null instead of failing', () => {
+    expect(
+      importedActivityFromRow(importActivitiesRow({ bank_reason: 'newer_reason' })).bankReason,
+    ).toBeNull();
+  });
+
+  it('importedActivityFromRow rejects a placed row without a placement', () => {
+    expect(() => importedActivityFromRow(importActivitiesRow({ placed: true }))).toThrow(
+      expect.objectContaining({ kind: 'unknown', reason: 'invalid_response' }),
+    );
   });
 
   it('importItemsFromInputs sends a normalized tag only when present', () => {
