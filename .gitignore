@@ -30,3 +30,6 @@ Thumbs.db
 *.log
 .vscode/*
 !.vscode/extensions.json
+
+# Owner's private Hebrew progress note (kept locally, not published)
+docs/PROGRESS.he.md

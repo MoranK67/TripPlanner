@@ -85,9 +85,9 @@ and the test suite below.
 
 ## Status
 
-In active development. The core planner, phone view, offline reading, import/export and PWA are
-done; deploying the public site is the next milestone. See [docs/PROGRESS.he.md](docs/PROGRESS.he.md)
-(Hebrew) and [TASKS.md](TASKS.md).
+In active development and in daily use. The core planner, phone view, offline reading,
+import/export, tags, AI-assisted import and the installable PWA are done, and the web app is
+deployed on Cloudflare Pages. See [TASKS.md](TASKS.md) and [DECISIONS.md](DECISIONS.md).
 
 ## For developers
 
