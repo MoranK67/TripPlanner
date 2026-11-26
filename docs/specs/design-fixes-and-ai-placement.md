@@ -50,6 +50,25 @@ The hint text under the bank list becomes one short line in a smaller, muted fon
 | Desktop | `לחיצה: עריכה · גרירה ללוח: שיבוץ` |
 | Phone (sheet) | `נגיעה: שיבוץ · לחיצה ארוכה: גרירה` (matches tap-to-place and the long-press drag) |
 
+## DES-4 — App name "TripPlanner" (frontend-engineer + platform-engineer)
+
+The owner asked on 26.11 to rename the app from "מתכנן הטיולים" to **TripPlanner**, in the visible
+title and the installed app.
+
+- **Visible title:**
+  - the in-app title (`app.title` in he.json): header, login page, document title;
+  - the README screenshots' alt text, if needed.
+- **Installed app:**
+  - the browser tab title (`index.html <title>`);
+  - the PWA manifest `name` / `short_name` (pwa.config.ts);
+  - the iOS meta `apple-mobile-web-app-title`.
+- Keep `lang="he"` and `dir="rtl"`. "TripPlanner" is a Latin word inside RTL text, so make sure it
+  displays correctly next to Hebrew.
+- Update the E2E and unit tests that look for the old title.
+- An already-installed iPhone icon keeps its old label until it is re-added to the home screen.
+  The PWA update prompt does not rename it. Tell the owner.
+- The URL does not change (`tripplanner-ag4.pages.dev`; a custom domain was not requested).
+
 ## FEAT-3 — AI import with a type choice and automatic placement
 
 ### Import types (frontend + core)

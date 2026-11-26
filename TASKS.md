@@ -64,6 +64,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | DES-1 | Compact tag filter: one "סינון: הכול ▾" menu instead of chips | frontend-engineer | FEAT-2 | planned, waiting owner go | spec docs/specs/design-fixes-and-ai-placement.md; branch design-fixes |
 | DES-2 | Short blocks: the name wins; time label degrades (range → start → hidden) | frontend-engineer | — | planned, waiting owner go | same |
 | DES-3 | One-line, smaller bank hint (desktop / phone wording) | frontend-engineer | — | planned, waiting owner go | same |
+| DES-4 | Rename the app to "TripPlanner" (in-app title, tab title, PWA name, iOS home-screen label) | frontend-engineer + platform-engineer | — | planned, waiting owner go | owner request 26.11 |
 | FEAT-3 | AI import with a type choice (name;duration / +tag / +day;start) and automatic placement; failed placements go to the bank with a reason | db → core → frontend | FEAT-2 | planned, waiting owner go | same spec; branch ai-import-placement; owner choices 26.11: bank with reason, day = trip day number |
 | DOC-1 | Public-facing README (pitch, screenshots, how-it-was-built), MIT LICENSE, screenshots in docs/screenshots | Orchestrator + qa-engineer | — | done | before making the repo public |
 | M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | done | batch with next UI task |
