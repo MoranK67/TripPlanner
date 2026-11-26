@@ -117,7 +117,7 @@ export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProp
             </span>
           )}
         </h2>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1.5">
           {/* FR-6.1: paste a list. The accessible name starts with the visible word. */}
           <Button
             size="sm"
@@ -131,12 +131,13 @@ export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProp
           <Button variant="primary" size="sm" disabled={!canEdit} title={reason} onClick={openAdd}>
             {t('bank.add')}
           </Button>
+          {/* DES-1: one compact control instead of a row of chips. Last, so when the row wraps (an
+              active filter in the narrow side panel) it moves under the buttons, in reading order. */}
+          {chips.length > 0 && (
+            <TagFilter chips={chips} selected={activeKey} onSelect={setTagFilter} />
+          )}
         </div>
       </div>
-
-      {chips.length > 0 && (
-        <TagFilter chips={chips} selected={activeKey} onSelect={setTagFilter} scroll={sheet} />
-      )}
 
       {bank.length === 0 ? (
         <p className="m-0 flex-1 px-2 py-6 text-center text-[13.5px] leading-relaxed whitespace-pre-line text-ink-soft">
@@ -176,9 +177,13 @@ export function BankPanel({ trip, activities, variant = 'panel' }: BankPanelProp
         </ul>
       )}
 
-      <p className="m-0 hidden border-t border-line px-4 pt-2 pb-3 text-xs leading-normal text-ink-soft tablet:block">
-        {t('bank.hint')}
-      </p>
+      {/* DES-3: one short line in a small muted font. The phone sheet shows its own hint for the
+          touch gestures (schedule.sheet.hintPlace) under this panel. */}
+      {!sheet && (
+        <p className="m-0 truncate border-t border-line px-4 pt-1.5 pb-2 text-[11px] leading-normal text-ink-soft">
+          {t('bank.hint')}
+        </p>
+      )}
 
       {dialogs}
       <ImportDialog

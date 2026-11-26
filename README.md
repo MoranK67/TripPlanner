@@ -1,4 +1,4 @@
-# מתכנן הטיולים · Trip Planner
+# TripPlanner
 
 **A visual, timetable-first trip planner.** Set the trip's dates and hours, collect colored activity
 blocks whose height matches their duration, and drag them into a half-hour grid covering every day of

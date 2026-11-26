@@ -46,6 +46,19 @@ function row(backend: { db: { activities: ActivityRow[] } }, name: string) {
   return backend.db.activities.find((a) => a.name === name);
 }
 
+/** The bank's tag filter menu button (DES-1): "סינון: הכול" or "סינון: <tag> (<count>)". */
+function filterTrigger(page: Page): Locator {
+  return bank(page).getByRole('button', { name: new RegExp(`^${t('bank.filter.trigger')} `) });
+}
+
+/** Opens the tag filter menu and returns one of its options (Esc closes it again). */
+async function filterOption(page: Page, name: string): Promise<Locator> {
+  await filterTrigger(page).click();
+  return page
+    .getByRole('menu', { name: t('bank.filter.label') })
+    .getByRole('menuitemradio', { name, exact: true });
+}
+
 /** The dialog's placement controls. */
 function placement(dialog: Locator) {
   return {
@@ -228,7 +241,7 @@ test.describe('FEAT-2: tags', () => {
     ).toHaveAttribute('style', new RegExp(`--block-color: ${SKY}`, 'i'));
   });
 
-  test('the bank filter chips', async ({ page, backend, user }) => {
+  test('the bank tag filter (compact menu, DES-1)', async ({ page, backend, user }) => {
     const trip = backend.db.seedTrip(user, TRIPS.rome, [
       { name: 'פנתאון', tag: 'מרכז העיר' },
       { name: 'פיאצה נבונה', tag: 'מרכז העיר' },
@@ -237,24 +250,48 @@ test.describe('FEAT-2: tags', () => {
     ]);
     await page.goto(`/trips/${trip.id}`);
     await openBank(page);
-    const chips = bank(page).getByRole('group', { name: t('bank.filter.label') });
-    await expect(chips.getByRole('button')).toHaveText(['הכול', 'מרכז העיר (2)', 'ערב (1)']);
-    if (isPhone(page)) {
-      await expect(chips).toHaveCSS('overflow-x', 'auto');
-    }
+    const trigger = filterTrigger(page);
+    await expect(trigger).toHaveAccessibleName(
+      `${t('bank.filter.trigger')} ${t('bank.filter.all')}`,
+    );
     const items = bank(page).getByRole('listitem');
     await expect(items).toHaveCount(4);
-    await expectNoA11yViolations(page, 'bank with tag chips');
+    await expectNoA11yViolations(page, 'bank with the tag filter');
 
-    await chips.getByRole('button', { name: 'מרכז העיר (2)' }).click();
-    await expect(chips.getByRole('button', { name: 'מרכז העיר (2)' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await trigger.click();
+    const menu = page.getByRole('menu', { name: t('bank.filter.label') });
+    await expect(menu.getByRole('menuitemradio')).toHaveText(['✓הכול', 'מרכז העיר (2)', 'ערב (1)']);
+    await expect(menu.getByRole('menuitemradio', { name: t('bank.filter.all') })).toBeFocused();
+    await expectNoA11yViolations(page, 'bank tag filter menu open');
+    // Keyboard: down to the first tag, Enter chooses it and closes the menu.
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(menu).toBeHidden();
+    await expect(trigger).toHaveAccessibleName(`${t('bank.filter.trigger')} מרכז העיר (2)`);
+    await expect(trigger).toBeFocused();
     await expect(items).toHaveCount(2);
     await expect(bankBlock(page, 'גלידה')).toHaveCount(0);
+    await expectNoA11yViolations(page, 'bank tag filter active');
 
-    await chips.getByRole('button', { name: t('bank.filter.all') }).click();
+    // The ✕ next to it clears the filter.
+    await bank(page)
+      .getByRole('button', { name: t('bank.filter.clear'), exact: true })
+      .click();
+    await expect(items).toHaveCount(4);
+    await expect(trigger).toHaveAccessibleName(
+      `${t('bank.filter.trigger')} ${t('bank.filter.all')}`,
+    );
+
+    // Choosing "הכול" from the menu also shows all; Esc closes without choosing.
+    await trigger.click();
+    await menu.getByRole('menuitemradio', { name: 'ערב (1)' }).click();
+    await expect(items).toHaveCount(1);
+    await trigger.click();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(items).toHaveCount(1);
+    await trigger.click();
+    await menu.getByRole('menuitemradio', { name: t('bank.filter.all') }).click();
     await expect(items).toHaveCount(4);
   });
 
@@ -288,11 +325,8 @@ test.describe('FEAT-2: tags', () => {
         color: LAVENDER,
       });
     await openBank(page);
-    await expect(
-      bank(page)
-        .getByRole('group', { name: t('bank.filter.label') })
-        .getByRole('button', { name: 'מרכז העיר (2)' }),
-    ).toBeVisible();
+    await expect(await filterOption(page, 'מרכז העיר (2)')).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // Clear the tag: the colour stays, the chip count drops.
     await openActivityEditor(page, 'גלידה');
@@ -302,11 +336,8 @@ test.describe('FEAT-2: tags', () => {
     await expect.poll(() => row(backend, 'גלידה')?.tag).toBeNull();
     expect(row(backend, 'גלידה')?.color).toBe(LAVENDER);
     await openBank(page);
-    await expect(
-      bank(page)
-        .getByRole('group', { name: t('bank.filter.label') })
-        .getByRole('button', { name: 'מרכז העיר (1)' }),
-    ).toBeVisible();
+    await expect(await filterOption(page, 'מרכז העיר (1)')).toBeVisible();
+    await page.keyboard.press('Escape');
   });
 
   test('copy the AI prompt', async ({ page, context, backend, user }) => {

@@ -427,7 +427,7 @@ describe('offline (M7.3, FR-8.3)', () => {
   });
 });
 
-describe('tag filter chips (FEAT-2)', () => {
+describe('tag filter (FEAT-2, compact menu since DES-1)', () => {
   const TAGGED = [
     activity({ id: 'm', name: 'מוזיאון', tag: 'מרכז', color: PALETTE[2], bankPosition: 1 }),
     activity({ id: 'c', name: 'קפה', tag: 'מרכז', color: PALETTE[2], bankPosition: 2 }),
@@ -445,64 +445,109 @@ describe('tag filter chips (FEAT-2)', () => {
     within(screen.getByRole('list', { name: 'אטרקציות במאגר' }))
       .getAllByRole('listitem')
       .map((li) => li.querySelector('[title]')?.getAttribute('title'));
+  const trigger = () => screen.getByRole('button', { name: /^סינון:/ });
+  const choose = (name: string) => {
+    fireEvent.click(trigger());
+    fireEvent.click(screen.getByRole('menuitemradio', { name }));
+  };
 
-  it('shows "all" and each bank tag with its count as a toggle group', () => {
+  it('is one menu button reading "סינון: הכול", with "all" and each bank tag and count', () => {
     renderBank(TAGGED);
-    const group = screen.getByRole('group', { name: 'סינון לפי תגית' });
-    const chips = within(group).getAllByRole('button');
-    expect(chips.map((c) => c.textContent)).toEqual(['הכול', 'מרכז (2)', 'Port (1)']);
-    expect(chips[0]).toHaveAttribute('aria-pressed', 'true');
-    expect(chips[1]).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('group', { name: 'סינון לפי תגית' })).not.toBeInTheDocument();
+    expect(trigger()).toHaveAccessibleName('סינון: הכול');
+    expect(trigger()).toHaveAttribute('aria-haspopup', 'menu');
+    fireEvent.click(trigger());
+    const menu = screen.getByRole('menu', { name: 'סינון לפי תגית' });
+    const options = within(menu).getAllByRole('menuitemradio');
     // Hebrew collation: Hebrew tags before Latin ones.
+    expect(options.map((o) => o.textContent)).toEqual(['✓הכול', 'מרכז (2)', 'Port (1)']);
+    expect(options.map((o) => o.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+    expect(options[0]).toHaveFocus();
+    // Each tag option has its group colour dot.
+    expect(options[1]?.querySelector('[style]')).toHaveStyle({ backgroundColor: PALETTE[2] });
+    // No clear button while nothing is filtered.
+    expect(screen.queryByRole('button', { name: 'ביטול הסינון' })).not.toBeInTheDocument();
   });
 
-  it('filters the list, and pressing the chip again shows all', () => {
+  it('filters the list on choosing, closes the menu, and shows the tag in the trigger', () => {
     renderBank(TAGGED);
     expect(names()).toEqual(['מוזיאון · מרכז', 'קפה · מרכז', 'נמל · Port', 'גלידה']);
-    const chip = screen.getByRole('button', { name: 'מרכז (2)' });
-    fireEvent.click(chip);
-    expect(chip).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'הכול' })).toHaveAttribute('aria-pressed', 'false');
+    choose('מרכז (2)');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger()).toHaveAccessibleName('סינון: מרכז (2)');
+    expect(trigger()).toHaveFocus();
     expect(names()).toEqual(['מוזיאון · מרכז', 'קפה · מרכז']);
-    fireEvent.click(chip);
+    fireEvent.click(trigger());
+    expect(screen.getByRole('menuitemradio', { name: 'מרכז (2)' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'הכול' }));
     expect(names()).toHaveLength(4);
+    expect(trigger()).toHaveAccessibleName('סינון: הכול');
+  });
+
+  it('clears the filter with the separate ✕, keeping focus on the trigger', () => {
+    renderBank(TAGGED);
+    choose('Port (1)');
+    expect(names()).toEqual(['נמל · Port']);
+    fireEvent.click(screen.getByRole('button', { name: 'ביטול הסינון' }));
+    expect(names()).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'ביטול הסינון' })).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
   });
 
   it('remembers the selection per trip while the panel remounts', () => {
     renderBank(TAGGED);
-    fireEvent.click(screen.getByRole('button', { name: 'Port (1)' }));
+    choose('Port (1)');
     cleanup();
     renderBank(TAGGED, 'sheet');
-    expect(screen.getByRole('button', { name: 'Port (1)' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(trigger()).toHaveAccessibleName('סינון: Port (1)');
     expect(names()).toEqual(['נמל · Port']);
   });
 
   it('forgets the selection when the trip data is cleared (sign-out, user switch)', () => {
     const queryClient = renderBank(TAGGED);
-    fireEvent.click(screen.getByRole('button', { name: 'Port (1)' }));
+    choose('Port (1)');
     cleanup();
     act(() => queryClient.clear());
     renderBank(TAGGED);
-    expect(screen.getByRole('button', { name: 'הכול' })).toHaveAttribute('aria-pressed', 'true');
+    expect(trigger()).toHaveAccessibleName('סינון: הכול');
     expect(names()).toHaveLength(4);
   });
 
-  it('scrolls sideways in the phone sheet instead of wrapping', () => {
-    renderBank(TAGGED, 'sheet');
-    expect(screen.getByRole('group', { name: 'סינון לפי תגית' })).toHaveClass(
-      'flex-nowrap',
-      'overflow-x-auto',
+  it('says so when the chosen tag has no bank activities left', () => {
+    renderBank(TAGGED);
+    choose('Port (1)');
+    cleanup();
+    // Its only activity was placed meanwhile.
+    renderBank(
+      TAGGED.map((a) =>
+        a.id === 'p' ? { ...a, placement: { date: '2026-05-01', startMinute: 720 } } : a,
+      ),
     );
+    // The chosen tag stays in the menu (count 0) until another option is chosen.
+    expect(trigger()).toHaveAccessibleName('סינון: Port (0)');
+    expect(screen.getByText('אין במאגר אטרקציות עם התגית „Port”.')).toBeInTheDocument();
   });
 
-  it('has no chips without tags, and puts the tag in the block name', () => {
+  it('has no filter without tags, and puts the tag in the block name', () => {
     renderBank(TAGGED);
     expect(screen.getByRole('button', { name: 'קפה שעה (תגית: מרכז)' })).toBeInTheDocument();
     cleanup();
     renderBank();
-    expect(screen.queryByRole('group', { name: 'סינון לפי תגית' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^סינון:/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('bank hint (DES-3)', () => {
+  it('is one short line: click to edit, drag to place (side panel)', () => {
+    renderBank([activity({ id: 'a', name: 'קפה' })]);
+    expect(screen.getByText('לחיצה: עריכה · גרירה ללוח: שיבוץ')).toHaveClass('truncate');
+  });
+
+  it('leaves the hint to the phone sheet, which names the touch gestures', () => {
+    renderBank([activity({ id: 'a', name: 'קפה' })], 'sheet');
+    expect(screen.queryByText('לחיצה: עריכה · גרירה ללוח: שיבוץ')).not.toBeInTheDocument();
   });
 });

@@ -133,7 +133,7 @@ describe('preview (FR-8.1, FR-8.2)', () => {
     setup();
     await pickPrototype();
     pick('{"format": "something-else"}', 'other.json');
-    expect(await screen.findByText(/זה לא קובץ גיבוי של מתכנן הטיולים/)).toBeInTheDocument();
+    expect(await screen.findByText(/זה לא קובץ גיבוי של TripPlanner/)).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'הטיולים בקובץ' })).not.toBeInTheDocument();
     expect(importButton('הוספת הטיולים')).toBeDisabled();
   });

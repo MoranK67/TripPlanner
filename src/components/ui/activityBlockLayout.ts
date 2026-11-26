@@ -75,3 +75,32 @@ export function nameLineLimit(
     BLOCK_TEXT_METRICS.meta;
   return Math.max(1, Math.floor(free / BLOCK_TEXT_METRICS.nameLine));
 }
+
+/**
+ * Height of the one-row ("short") layout's line in ActivityBlock (`h-[17px] leading-[17px]`, keep
+ * in sync): a 13 px name at its 1.3 line height. Items that don't fit wrap onto a second line that
+ * this height clips (DES-2), so it must fit inside the smallest short block (one slot on the
+ * phone's 22 px scale, minus its 1 px borders).
+ */
+export const BLOCK_SHORT_ROW_PX = 17;
+
+/** A time range label ("14:30–15:00") split for the one-row layout: start and "–end". */
+export interface SplitTimeRange {
+  start: string;
+  /** The rest of the label, from the dash on ("–15:00"). */
+  rest: string;
+}
+
+const TIME_RANGE = /^(\d{1,2}:\d{2})([–-]\d{1,2}:\d{2})$/;
+
+/**
+ * Splits a placed block's time range so a short block can drop the end time first and the start
+ * time next, keeping the room for the name (DES-2). Anything else (a duration, a custom node)
+ * returns `null` and is shown or hidden as a whole.
+ */
+export function splitTimeRange(meta: unknown): SplitTimeRange | null {
+  if (typeof meta !== 'string') return null;
+  const match = TIME_RANGE.exec(meta.trim());
+  if (!match?.[1] || !match[2]) return null;
+  return { start: match[1], rest: match[2] };
+}

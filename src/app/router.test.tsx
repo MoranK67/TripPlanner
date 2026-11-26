@@ -69,7 +69,7 @@ describe('app shell routing', () => {
 
   it('shows the app title in Hebrew', async () => {
     renderAt('/trips');
-    expect(await screen.findByRole('heading', { name: 'מתכנן הטיולים' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'TripPlanner' })).toBeInTheDocument();
   });
 
   it('sends a signed-out user from a guarded page to the login page', async () => {
