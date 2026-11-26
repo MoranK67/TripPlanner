@@ -130,7 +130,7 @@ Priority uses MoSCoW: **Must** (MVP blocker), **Should** (MVP, can slip to just 
 | FR-3.3 | Blocks are colored and their **height is proportional to duration**, using the same scale in the bank and the timetable. | Must | [C] |
 | FR-3.4 | Deleting an activity (from bank or timetable) always asks "are you sure?" in a small dialog. | Must | [C] |
 | FR-3.5 | Clicking/tapping a block opens an edit dialog (name, duration, color; "return to bank" if placed). | Must | [C] (prototype) |
-| FR-3.6 | If an edited duration no longer fits its timetable position, the activity returns to the bank with a notice. | Must | [C] (prototype) |
+| FR-3.6 | If an edited duration no longer fits its timetable position, the activity dialog shows an error and blocks saving until the times are fixed or "unplaced" is chosen (DEC-043). The server still returns the activity to the bank with a notice as a fallback when another device changed the timetable meanwhile. | Must | [C] (prototype) |
 | FR-3.7 | Placing an activity in the timetable **removes it from the bank**; returning it appends it to the end of the bank. | Must | [C] |
 
 ### 2.4 Timetable
