@@ -68,6 +68,62 @@ plain.describe('update_activity (20261112140500_m1_update_activity.sql, DEC-022)
   });
 });
 
+plain.describe(
+  'import_activities with placement (20261126120000_feat3_import_placement.sql)',
+  () => {
+    plain('places in input order and banks the rest with the reason, never raising', () => {
+      const db = new FakeDb();
+      const user = db.addUser(TEST_USER_EMAIL, TEST_PASSWORD);
+      // Rome: 10–13 Mar 2027, 10:00–20:00. "old" sits on 11 Mar 12:00–13:00.
+      const trip = db.seedTrip(user, TRIPS.rome, [
+        { name: 'old', scheduled_date: '2027-03-11', start_minute: 720, duration_minutes: 60 },
+      ]);
+      const old = db.activities[0]!;
+      const item = (name: string, extra: Record<string, unknown> = {}) => ({
+        name,
+        duration_minutes: 60,
+        ...extra,
+      });
+      const rows = db.rpc(user.id, 'import_activities', {
+        trip_id: trip.id,
+        items: [
+          item('a', { scheduled_date: '2027-03-11', start_minute: 600 }),
+          item('b', { scheduled_date: '2027-03-11' }),
+          item('c', { scheduled_date: '2027-03-11', start_minute: 615 }),
+          item('d', { scheduled_date: '2027-03-20', start_minute: 600 }),
+          item('e', { scheduled_date: '2027-03-10', start_minute: 540 }),
+          item('f', { scheduled_date: '2027-03-11', start_minute: 690 }),
+          item('g', { scheduled_date: '2027-03-11', start_minute: 630 }),
+          item('h', { scheduled_date: '2027-03-11', start_minute: 660 }),
+          item('i'),
+        ],
+      }) as (ActivityRow & Record<string, unknown>)[];
+      const outcome = (r: (typeof rows)[number]) => [
+        r.name,
+        r.item_index,
+        r.placed,
+        r.bank_reason,
+        r.conflict_activity_id,
+        r.conflict_item,
+      ];
+      expect(rows.map(outcome)).toEqual([
+        ['a', 1, true, null, null, null],
+        ['b', 2, false, 'placement_incomplete', null, null],
+        ['c', 3, false, 'placement_invalid', null, null],
+        ['d', 4, false, 'day_out_of_trip', null, null],
+        ['e', 5, false, 'outside_trip_hours', null, null],
+        ['f', 6, false, 'overlaps_existing', old.id, null],
+        ['g', 7, false, 'overlaps_import_row', rows[0]!.id, 1],
+        // Back to back with "a" and with "old": no overlap.
+        ['h', 8, true, null, null, null],
+        ['i', 9, false, null, null, null],
+      ]);
+      expect(rows[0]).toMatchObject({ scheduled_date: '2027-03-11', start_minute: 600 });
+      expect(rows[1]).toMatchObject({ scheduled_date: null, start_minute: null });
+    });
+  },
+);
+
 test.describe('PostgREST auth', () => {
   /** Calls the fake PostgREST from the page (so the fixture's routes answer) with a bearer token. */
   async function getTrips(page: Page, token: string) {

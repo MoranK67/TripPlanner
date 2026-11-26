@@ -11,10 +11,12 @@ import {
   type TripWithActivities,
 } from '@/domain';
 import { BankPanel } from '@/features/bank';
+import { placementQueueScope } from '@/features/schedule';
 import { tripKeys, useTripQuery } from '@/features/trips';
 import i18n from '@/i18n';
 import { ImportDialog } from './ImportDialog';
 import { IMPORT_REASON_KEYS } from './importReasons';
+import { IMPORT_TYPE_STORAGE_KEY } from './useImportType';
 
 const repo = vi.hoisted(() => ({ importMany: vi.fn() }));
 const trips = vi.hoisted(() => ({ get: vi.fn() }));
@@ -109,6 +111,8 @@ function lines(count: number): string {
 beforeEach(() => {
   repo.importMany.mockReset();
   trips.get.mockReset();
+  // The import type is remembered per device (FEAT-3): every test starts from the default.
+  localStorage.clear();
 });
 
 describe('preview (FR-6.2–FR-6.4)', () => {
@@ -429,5 +433,292 @@ describe('AI prompt (FEAT-2)', () => {
     const input = box as HTMLTextAreaElement;
     expect(input.selectionEnd - input.selectionStart).toBe(input.value.length);
     expect(box).toHaveAccessibleDescription(/לא הצלחנו להעתיק אוטומטית/);
+  });
+});
+
+describe('import types (FEAT-3)', () => {
+  const radio = (name: string) => screen.getByRole('radio', { name });
+
+  it('offers three types in a labelled radio group, "+ תגיות" by default', () => {
+    setup();
+    const group = screen.getByRole('radiogroup', { name: 'מה מייבאים?' });
+    expect(within(group).getAllByRole('radio')).toHaveLength(3);
+    expect(radio('אטרקציות ומשך')).toHaveAccessibleDescription(
+      'שם וזמן לכל אטרקציה. הכול נכנס למאגר.',
+    );
+    expect(radio('+ תגיות')).toBeChecked();
+    expect(radio('+ שיבוץ בלוח')).not.toBeChecked();
+    expect(screen.getByLabelText('הרשימה')).toHaveAttribute(
+      'placeholder',
+      i18n.t('import.placeholder.tags'),
+    );
+  });
+
+  it('remembers the choice on this device, and the hint and placeholder follow it', () => {
+    setup();
+    fireEvent.click(radio('+ שיבוץ בלוח'));
+    expect(localStorage.getItem(IMPORT_TYPE_STORAGE_KEY)).toBe('placement');
+    const box = screen.getByLabelText('הרשימה');
+    expect(box).toHaveAttribute('placeholder', i18n.t('import.placeholder.placement'));
+    expect(box).toHaveAccessibleDescription(/שם; זמן; תגית; יום; שעת התחלה/);
+
+    fireEvent.click(radio('אטרקציות ומשך'));
+    expect(box).toHaveAttribute('placeholder', i18n.t('import.placeholder.basic'));
+    expect(box).toHaveAccessibleDescription(/בפורמט שם; זמן\./);
+    expect(localStorage.getItem(IMPORT_TYPE_STORAGE_KEY)).toBe('basic');
+  });
+
+  it('opens with the stored type', () => {
+    localStorage.setItem(IMPORT_TYPE_STORAGE_KEY, 'placement');
+    setup();
+    expect(radio('+ שיבוץ בלוח')).toBeChecked();
+  });
+
+  it.each([
+    ['אטרקציות ומשך', 'basic'],
+    ['+ תגיות', 'tags'],
+    ['+ שיבוץ בלוח', 'placement'],
+  ] as const)('copies the AI prompt of the "%s" type', async (label, type) => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    setup();
+    fireEvent.click(radio(label));
+    fireEvent.click(screen.getByRole('button', { name: 'העתקת הודעה ל-AI' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(buildAiPrompt(trip, type)));
+  });
+});
+
+describe('placement preview (FEAT-3)', () => {
+  // Trip: 1.5 10:00 – 3.5 18:00. "מוזיאון" sits on day 2, 14:00–15:00.
+  const museum = activity({
+    id: 'old',
+    name: 'מוזיאון',
+    placement: { date: '2026-05-02', startMinute: 840 },
+  });
+  const text = [
+    'קולוסיאום; 3; רומא העתיקה; 1; 10:00',
+    'פורום; 2; רומא העתיקה; 1; 12:00',
+    'שבור',
+    'ארוחת בוקר; 1; ; 1; 09:00',
+    'וותיקן; 4; ; 5; 10:00',
+    'גלידה; 1; ; 2',
+    'שוק; 1; ; 2; 25:00',
+    'פיצה; 1; אוכל; 2; 12:10',
+    'טרסטוורה; 1',
+    'קפה; 1; ; 2; 14:30',
+  ].join('\n');
+
+  function choosePlacement() {
+    fireEvent.click(screen.getByRole('radio', { name: '+ שיבוץ בלוח' }));
+  }
+
+  function placedOutcome(a: Activity): ImportedActivity {
+    return {
+      activity: a,
+      placed: true,
+      bankReason: null,
+      conflictActivityId: null,
+      conflictItem: null,
+    };
+  }
+
+  it('shows where every row goes, with the reason for the bank, and a summary', () => {
+    setup('dialog', [museum]);
+    choosePlacement();
+    paste(text);
+    const items = within(screen.getByRole('list')).getAllByRole('listitem');
+    const destination = (i: number) => items[i]?.lastElementChild?.textContent;
+    expect(destination(0)).toBe('יום 1 · 10:00–13:00');
+    expect(destination(1)).toBe('למאגר — חופף לשורה 1');
+    expect(items[2]).toHaveTextContent('שורה עם בעיה:');
+    expect(destination(3)).toBe('למאגר — מחוץ לשעות הטיול');
+    expect(destination(4)).toBe('למאגר — היום לא קיים בטיול');
+    expect(destination(5)).toBe('למאגר — חסר יום או שעה');
+    expect(destination(6)).toBe('למאגר — יום או שעה לא תקינים');
+    expect(destination(7)).toBe('יום 2 · 12:00–13:00 (השעה עוגלה)');
+    expect(destination(8)).toBe('למאגר');
+    expect(destination(9)).toBe('למאגר — חופף ל-מוזיאון');
+    expect(items[7]).toHaveTextContent('פיצהתגית: אוכלשעה');
+    expect(screen.getByText('שתיים ישובצו, 7 למאגר')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'הוספת 9 אטרקציות' })).toBeEnabled();
+  });
+
+  it('ignores placement fields for the other types', async () => {
+    repo.importMany.mockResolvedValue(banked([activity({ id: 'n1' })]));
+    setup('dialog', [museum]);
+    paste('קולוסיאום; 3; רומא העתיקה; 1; 10:00');
+    expect(screen.queryByText(/יום 1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/תשובץ/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת אטרקציה אחת למאגר' }));
+    await waitFor(() =>
+      expect(repo.importMany).toHaveBeenCalledWith('trip-1', [
+        { name: 'קולוסיאום', durationMinutes: 180, tag: 'רומא העתיקה' },
+      ]),
+    );
+  });
+
+  it('sends placements as dates, puts placed rows in the timetable cache and toasts the outcome', async () => {
+    repo.importMany.mockResolvedValue([
+      placedOutcome(
+        activity({
+          id: 'n1',
+          name: 'קולוסיאום',
+          durationMinutes: 180,
+          placement: { date: '2026-05-01', startMinute: 600 },
+        }),
+      ),
+      {
+        activity: activity({ id: 'n2', name: 'פורום', bankPosition: 2 }),
+        placed: false,
+        bankReason: 'overlaps_import_row',
+        conflictActivityId: 'n1',
+        conflictItem: 1,
+      },
+      ...banked([activity({ id: 'n3', name: 'טרסטוורה', bankPosition: 3 })]),
+    ]);
+    const { queryClient, onClose } = setup('dialog', [museum]);
+    choosePlacement();
+    paste('קולוסיאום; 3; ; 1; 10:00\nפורום; 2; ; 1; 12:00\nטרסטוורה; 1');
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת 3 אטרקציות' }));
+
+    expect(await screen.findByText('נוספו 3: אחת שובצה, שתיים במאגר')).toBeInTheDocument();
+    expect(repo.importMany).toHaveBeenCalledWith('trip-1', [
+      {
+        name: 'קולוסיאום',
+        durationMinutes: 180,
+        placement: { date: '2026-05-01', startMinute: 600 },
+      },
+      { name: 'פורום', durationMinutes: 120, placement: { date: '2026-05-01', startMinute: 720 } },
+      { name: 'טרסטוורה', durationMinutes: 60 },
+    ]);
+    expect(onClose).toHaveBeenCalled();
+    const cached = queryClient.getQueryData<TripWithActivities>(tripKeys.detail('trip-1'));
+    expect(cached?.activities.find((a) => a.id === 'n1')?.placement).toEqual({
+      date: '2026-05-01',
+      startMinute: 600,
+    });
+    expect(cached?.activities.map((a) => a.id)).toEqual(['old', 'n1', 'n2', 'n3']);
+  });
+
+  it('says so when every row was placed', async () => {
+    repo.importMany.mockResolvedValue([
+      placedOutcome(activity({ id: 'n1', placement: { date: '2026-05-01', startMinute: 600 } })),
+    ]);
+    setup();
+    choosePlacement();
+    paste('קפה; 1; ; 1; 10:00');
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת אטרקציה אחת' }));
+    expect(await screen.findByText('נוספה אטרקציה אחת ושובצה בלוח')).toBeInTheDocument();
+  });
+
+  it('follows the server when it banks a row the preview placed (the timetable changed)', async () => {
+    repo.importMany.mockResolvedValue([
+      placedOutcome(activity({ id: 'n1', placement: { date: '2026-05-01', startMinute: 600 } })),
+      {
+        activity: activity({ id: 'n2', name: 'גלידה' }),
+        placed: false,
+        bankReason: 'overlaps_import_row',
+        conflictActivityId: 'n1',
+        conflictItem: 1,
+      },
+    ]);
+    setup();
+    choosePlacement();
+    // Row 1 is invalid, so the server's item 1 is preview row 2.
+    paste('שבור\nקפה; 1; ; 1; 10:00\nגלידה; 1; ; 1; 11:00');
+    expect(screen.getByText('שתיים ישובצו', { exact: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת שתי אטרקציות' }));
+    expect(
+      await screen.findByText('נוספו 2: אחת שובצה, אחת במאגר. „גלידה” לא שובצה: חופף לשורה 2'),
+    ).toBeInTheDocument();
+  });
+
+  it('waits for the placement writes already queued for the trip (DEC-031)', async () => {
+    repo.importMany.mockResolvedValue(banked([activity({ id: 'n1' })]));
+    const { queryClient } = setup();
+    let finishDrop: () => void = () => {};
+    const drop = queryClient
+      .getMutationCache()
+      .build(queryClient, {
+        scope: placementQueueScope('trip-1'),
+        mutationFn: () => new Promise<void>((resolve) => (finishDrop = resolve)),
+      })
+      .execute(undefined);
+    paste('קפה; 1');
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת אטרקציה אחת למאגר' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'ביטול' })).toBeDisabled());
+    expect(repo.importMany).not.toHaveBeenCalled();
+
+    finishDrop();
+    await drop;
+    expect(await screen.findByText('נוספה אטרקציה אחת למאגר')).toBeInTheDocument();
+    expect(repo.importMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('review follow-ups (FEAT-3)', () => {
+  it('leaves a zero count out of the placement summary', () => {
+    setup();
+    fireEvent.click(screen.getByRole('radio', { name: '+ שיבוץ בלוח' }));
+    paste('קפה; 1');
+    expect(screen.getByText('אחת למאגר', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText(/תשובץ|ישובצו/)).not.toBeInTheDocument();
+  });
+
+  it('does not duplicate rows a refetch already brought in, nor move the cursor again', async () => {
+    const created = [
+      activity({ id: 'n1', name: 'קפה', bankPosition: 1 }),
+      activity({ id: 'n2', name: 'גלידה', bankPosition: 2 }),
+    ];
+    const ref: { client?: QueryClient } = {};
+    repo.importMany.mockImplementation(async () => {
+      // A refetch finished first: the cache already holds the rows and the server's cursor.
+      ref.client?.setQueryData<TripWithActivities>(tripKeys.detail('trip-1'), {
+        trip: { ...trip, colorCursor: 3 },
+        activities: created,
+      });
+      return banked(created);
+    });
+    const { queryClient } = setup();
+    ref.client = queryClient;
+    paste('קפה; 1\nגלידה; 1');
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת שתי אטרקציות למאגר' }));
+    expect(await screen.findByText('נוספו שתי אטרקציות למאגר')).toBeInTheDocument();
+    const cached = queryClient.getQueryData<TripWithActivities>(tripKeys.detail('trip-1'));
+    expect(cached?.activities.map((a) => a.id)).toEqual(['n1', 'n2']);
+    expect(cached?.trip.colorCursor).toBe(3);
+  });
+
+  it('names an unexpected overlap from the trip cache when the dialog did not know it', async () => {
+    const intruder = activity({
+      id: 'other',
+      name: 'מכשול',
+      placement: { date: '2026-05-01', startMinute: 660 },
+    });
+    const ref: { client?: QueryClient } = {};
+    repo.importMany.mockImplementation(async () => {
+      // Another device placed it meanwhile; a refetch brought it into the cache.
+      ref.client?.setQueryData<TripWithActivities>(tripKeys.detail('trip-1'), {
+        trip,
+        activities: [intruder],
+      });
+      return [
+        {
+          activity: activity({ id: 'n1', name: 'קולוסיאום' }),
+          placed: false,
+          bankReason: 'overlaps_existing',
+          conflictActivityId: 'other',
+          conflictItem: null,
+        },
+      ] satisfies ImportedActivity[];
+    });
+    const { queryClient } = setup();
+    ref.client = queryClient;
+    fireEvent.click(screen.getByRole('radio', { name: '+ שיבוץ בלוח' }));
+    paste('קולוסיאום; 3; ; 1; 10:00');
+    fireEvent.click(screen.getByRole('button', { name: 'הוספת אטרקציה אחת' }));
+    expect(
+      await screen.findByText('נוספה אטרקציה אחת למאגר. „קולוסיאום” לא שובצה: חופף ל-מכשול'),
+    ).toBeInTheDocument();
   });
 });

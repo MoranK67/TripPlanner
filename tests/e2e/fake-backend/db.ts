@@ -3,7 +3,8 @@
 // It mirrors the parts of the real schema the app talks to: auth users and sessions, the
 // `trips` and `activities` tables (with the insert trigger's colour / bank-position defaults)
 // and the RPCs update_trip_window, update_activity, place_activity, unplace_activity and
-// import_activities. Business errors use the DB error contract (header of
+// import_activities (FEAT-3: with optional placement, see `importPlacement`). Business errors
+// use the DB error contract (header of
 // supabase/migrations/20261112140400_m1_hardening.sql): message = TP_* code, details = reason.
 //
 // FEAT-1/2 (migrations 20261125120000 and 20261125120100): `activities.tag` (normalised: trimmed,
@@ -646,7 +647,7 @@ export class FakeDb {
     const items = args.items;
     if (!Array.isArray(items)) throw tpError('TP_VALIDATION', 'items');
     if (items.length > 200) throw tpError('TP_LIMIT', 'too_many_items');
-    this.ownTrip(userId, args.trip_id);
+    const trip = this.ownTrip(userId, args.trip_id);
     items.forEach((item: unknown, i) => {
       const n = i + 1;
       if (typeof item !== 'object' || item === null || Array.isArray(item)) {
@@ -669,11 +670,94 @@ export class FakeDb {
         }
       }
     });
-    // All validated first: one transaction, nothing half-imported.
-    return items.map((item) =>
-      this.insertActivity(userId, { trip_id: args.trip_id, ...(item as Record<string, unknown>) }),
-    );
+    // All validated first: one transaction, nothing half-imported. FEAT-3: one result row per
+    // item, in input order: the activity columns + the placement outcome.
+    const before = this.activities.filter((a) => a.trip_id === trip.id);
+    const inserted: ActivityRow[] = [];
+    return items.map((raw, i) => {
+      const {
+        scheduled_date: date,
+        start_minute: start,
+        ...fields
+      } = raw as Record<string, unknown>;
+      const duration = fields.duration_minutes as number;
+      const outcome = importPlacement(trip, before, inserted, date, start, duration);
+      const row = this.insertActivity(userId, { ...fields, trip_id: trip.id });
+      if (outcome.placed) {
+        row.scheduled_date = date as string;
+        row.start_minute = start as number;
+      }
+      inserted.push(row);
+      return {
+        ...row,
+        item_index: i + 1,
+        placed: outcome.placed,
+        bank_reason: outcome.reason,
+        conflict_activity_id: outcome.conflictId,
+        conflict_item: outcome.conflictItem,
+      };
+    });
   }
+}
+
+interface ImportPlacementOutcome {
+  placed: boolean;
+  reason: string | null;
+  conflictId: string | null;
+  conflictItem: number | null;
+}
+
+/**
+ * FEAT-3 (20261126120000_feat3_import_placement.sql): whether an import item with
+ * scheduled_date + start_minute is placed, or why it goes to the bank. Never throws. Reasons in
+ * priority order: placement_incomplete → placement_invalid → day_out_of_trip → outside_trip_hours
+ * → overlaps_existing (activities from before the call; earliest start, then id) →
+ * overlaps_import_row (earlier placed items of this call; the earliest item, 1-based). Banked
+ * items block nothing.
+ */
+function importPlacement(
+  trip: TripRow,
+  before: readonly ActivityRow[],
+  inserted: readonly ActivityRow[],
+  date: unknown,
+  start: unknown,
+  duration: number,
+): ImportPlacementOutcome {
+  const bank = (reason: string | null): ImportPlacementOutcome => ({
+    placed: false,
+    reason,
+    conflictId: null,
+    conflictItem: null,
+  });
+  const hasDate = date !== undefined && date !== null;
+  const hasStart = start !== undefined && start !== null;
+  if (!hasDate && !hasStart) return bank(null);
+  if (!hasDate || !hasStart) return bank('placement_incomplete');
+  if (
+    !isIsoDate(date) ||
+    typeof start !== 'number' ||
+    !Number.isInteger(start) ||
+    start < 0 ||
+    start > 1410 ||
+    start % 30 !== 0
+  ) {
+    return bank('placement_invalid');
+  }
+  if (date < trip.start_date || date > trip.end_date) return bank('day_out_of_trip');
+  if (!fitsTripWindow(trip, date, start, duration)) return bank('outside_trip_hours');
+  const existing = before
+    .filter((a) => overlaps(a, date, start, duration))
+    .sort((a, b) => a.start_minute! - b.start_minute! || (a.id < b.id ? -1 : 1))[0];
+  if (existing) return { ...bank('overlaps_existing'), conflictId: existing.id };
+  const index = inserted.findIndex((a) => overlaps(a, date, start, duration));
+  if (index >= 0) {
+    return {
+      ...bank('overlaps_import_row'),
+      conflictId: inserted[index]!.id,
+      conflictItem: index + 1,
+    };
+  }
+  return { placed: true, reason: null, conflictId: null, conflictItem: null };
 }
 
 function remove<T>(list: T[], predicate: (item: T) => boolean): void {

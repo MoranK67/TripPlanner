@@ -65,7 +65,7 @@ Maintained by the Orchestrator. Task IDs and details come from PROJECT_PLAN §9.
 | DES-2 | Short blocks: the name wins; time label degrades (range → start → hidden) | frontend-engineer | — | planned, waiting owner go | same |
 | DES-3 | One-line, smaller bank hint (desktop / phone wording) | frontend-engineer | — | planned, waiting owner go | same |
 | DES-4 | Rename the app to "TripPlanner" (in-app title, tab title, PWA name, iOS home-screen label) | frontend-engineer + platform-engineer | — | planned, waiting owner go | owner request 26.11 |
-| FEAT-3 | AI import with a type choice (name;duration / +tag / +day;start) and automatic placement; failed placements go to the bank with a reason | db → core → frontend | FEAT-2 | planned, waiting owner go | same spec; branch ai-import-placement; owner choices 26.11: bank with reason, day = trip day number |
+| FEAT-3 | AI import with a type choice (name;duration / +tag / +day;start) and automatic placement; failed placements go to the bank with a reason | db → core → frontend | FEAT-2 | owner preview | same spec; branch ai-import-placement; owner choices 26.11: bank with reason, day = trip day number |
 | DOC-1 | Public-facing README (pitch, screenshots, how-it-was-built), MIT LICENSE, screenshots in docs/screenshots | Orchestrator + qa-engineer | — | done | before making the repo public |
 | M6.1-nits | Import dialog nits: separators via i18n/Intl.ListFormat, drop unused `_many` plurals, focus textarea on open | frontend-engineer | M6.1 | done | batch with next UI task |
 | QA-1 | E2E fake-backend fidelity + flaky tests | qa-engineer | M4.5 | done | host guard fixture, PGRST303/301, update_activity fit rule, 2 flaky network tests fixed (148/148 × 2). Note: run vitest from upper-case `C:\` cwd |

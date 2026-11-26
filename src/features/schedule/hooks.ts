@@ -56,6 +56,13 @@ export interface PlacementActions {
  */
 const placementMutationKey = (tripId: string) => ['placement', tripId] as const;
 
+/**
+ * TanStack mutation `scope` of the trip's placement queue: mutations sharing it reach the server one
+ * at a time, in order. A text import with placements (FEAT-3) joins it, so it neither overtakes a
+ * queued drop nor races one; it does not take part in the queue's bookkeeping.
+ */
+export const placementQueueScope = (tripId: string) => ({ id: `placement:${tripId}` });
+
 /** Mutation key of the activity dialog's saves (FEAT-1), for `useIsMutating` in the dialog. */
 export const activityEditMutationKey = (tripId: string) => ['placement', tripId, 'edit'] as const;
 
@@ -241,7 +248,7 @@ function useQueueMutation(tripId: string, mutationKey: readonly unknown[]) {
   return useMutation({
     mutationKey,
     // One queue per trip: writes reach the server in drop order.
-    scope: { id: `placement:${tripId}` },
+    scope: placementQueueScope(tripId),
     mutationFn: runWrite,
     onMutate: async (vars: PlacementVariables) => {
       // Read the cache and bump the counter before any await, so a second drop in the same tick

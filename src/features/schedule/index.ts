@@ -4,6 +4,7 @@ export { TimetableDragRoot, type TimetableDragRootProps } from './drag/Timetable
 export { dragSourceProps, useBankDropZone } from './drag/dragContext';
 export {
   activityEditMutationKey,
+  placementQueueScope,
   usePlacementActions,
   useQueuedActivityUpdate,
   type PlacementActions,
