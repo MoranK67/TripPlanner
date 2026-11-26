@@ -20,16 +20,18 @@ This file **supersedes PROJECT_PLAN §10** where they differ (see DEC-002 … DE
 
 ## 2. The team
 
+> The agent definitions in `.claude/` are kept locally and are not published to the repository.
+
 | Agent | File | Covers roles | Active in milestones |
 |---|---|---|---|
 | **Orchestrator** (main session) | [CLAUDE.md](CLAUDE.md) | Project Orchestrator, architecture authority, integration | all |
-| `db-engineer` | [.claude/agents/db-engineer.md](.claude/agents/db-engineer.md) | Database Specialist + Backend (Supabase SQL, RLS, RPC) | M1, M11 |
-| `core-engineer` | [.claude/agents/core-engineer.md](.claude/agents/core-engineer.md) | Domain logic + data-access layer (repositories, errors) | M1, M2, M5–M7 |
-| `frontend-engineer` | [.claude/agents/frontend-engineer.md](.claude/agents/frontend-engineer.md) | UI system, app shell, all features except the timetable | M1, M3, M4, M6, M7 |
-| `scheduler-engineer` | [.claude/agents/scheduler-engineer.md](.claude/agents/scheduler-engineer.md) | Timetable, drag & drop, tap-to-place, mobile planner view | M5, M7 |
-| `platform-engineer` | [.claude/agents/platform-engineer.md](.claude/agents/platform-engineer.md) | Platform adapter, PWA, Tauri, Capacitor, deploy & release pipelines | M6, M8–M9, M11 |
-| `qa-engineer` | [.claude/agents/qa-engineer.md](.claude/agents/qa-engineer.md) | End-to-end tests, edge-case matrix, bug reports | M4 onward |
-| `code-reviewer` | [.claude/agents/code-reviewer.md](.claude/agents/code-reviewer.md) | Code review, security, architecture-drift guard (read-only) | every task |
+| `db-engineer` | `.claude/agents/db-engineer.md` | Database Specialist + Backend (Supabase SQL, RLS, RPC) | M1, M11 |
+| `core-engineer` | `.claude/agents/core-engineer.md` | Domain logic + data-access layer (repositories, errors) | M1, M2, M5–M7 |
+| `frontend-engineer` | `.claude/agents/frontend-engineer.md` | UI system, app shell, all features except the timetable | M1, M3, M4, M6, M7 |
+| `scheduler-engineer` | `.claude/agents/scheduler-engineer.md` | Timetable, drag & drop, tap-to-place, mobile planner view | M5, M7 |
+| `platform-engineer` | `.claude/agents/platform-engineer.md` | Platform adapter, PWA, Tauri, Capacitor, deploy & release pipelines | M6, M8–M9, M11 |
+| `qa-engineer` | `.claude/agents/qa-engineer.md` | End-to-end tests, edge-case matrix, bug reports | M4 onward |
+| `code-reviewer` | `.claude/agents/code-reviewer.md` | Code review, security, architecture-drift guard (read-only) | every task |
 
 **Not created on purpose:** a separate *Backend Developer* (there is no custom server — the backend is Supabase SQL, owned by `db-engineer`), an *AI/Integrations* agent (AI is Phase 2; create it when P2-2 is scheduled), and a separate *Software Architect* (architecture authority = Orchestrator; drift detection = `code-reviewer` + ESLint).
 
@@ -167,7 +169,7 @@ The owner can say (in Hebrew or English) "continue with the next milestone", or 
 /milestone M1
 ```
 
-The `/milestone` command ([.claude/commands/milestone.md](.claude/commands/milestone.md)) tells the Orchestrator to run the lifecycle above for that milestone.
+The `/milestone` command (`.claude/commands/milestone.md`) tells the Orchestrator to run the lifecycle above for that milestone.
 
 ### Example: first milestone (M1 + the parallel M2/M3 starts)
 

@@ -33,3 +33,6 @@ Thumbs.db
 
 # Owner's private Hebrew progress note (kept locally, not published)
 docs/PROGRESS.he.md
+
+# Agent team definitions (kept locally, not published)
+.claude/

@@ -856,7 +856,7 @@ Priority: P0 = MVP blocker, P1 = MVP should-have, P2 = can slip.
 
 ## 10. Multi-agent architecture
 
-> **Implemented and superseded (2026-11-12):** the working agent setup is defined in [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md), [CLAUDE.md](CLAUDE.md) and [.claude/agents/](.claude/agents/). Differences from this section: the Orchestrator is the main Claude Code session (DEC-002), commit-per-task on `main` replaces branch + PR (DEC-003), and the team has 7 subagents with merged roles (DEC-004). Where this section and AGENT_WORKFLOW.md differ, AGENT_WORKFLOW.md wins.
+> **Implemented and superseded (2026-11-12):** the working agent setup is defined in [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md), [CLAUDE.md](CLAUDE.md) and `.claude/agents/`. Differences from this section: the Orchestrator is the main Claude Code session (DEC-002), commit-per-task on `main` replaces branch + PR (DEC-003), and the team has 7 subagents with merged roles (DEC-004). Where this section and AGENT_WORKFLOW.md differ, AGENT_WORKFLOW.md wins.
 
 This section defines how a **team of AI coding agents** builds the project (confirmed interpretation [C]). AI agents *inside* the product are Phase 2 (P2-2) and not covered here.
 
