@@ -21,7 +21,8 @@ export function useImportActivities(tripId: string) {
   return useMutation({
     mutationKey: importMutationKeys.import(tripId),
     mutationFn: (items: readonly ActivityInput[]) => activitiesRepo.importMany(tripId, items),
-    onSuccess: (created) => {
+    onSuccess: (outcomes) => {
+      const created = outcomes.map((outcome) => outcome.activity);
       // Show them at once (and move the color cursor like the DB did), then reconcile. Rows
       // that joined a tag group (an existing one or one an earlier row started) took its colour
       // and did not move the cursor (DEC-042).

@@ -1,6 +1,6 @@
 import { MAX_IMPORT_ROWS, TAG_MAX } from './constants';
 import { parseImport, parseImportRow } from './importParser';
-import type { ImportRow } from './types';
+import type { ImportPlacementRequest, ImportRow } from './types';
 
 const ok = (
   name: string,
@@ -13,6 +13,8 @@ const ok = (
   durationMinutes,
   rounded,
   tag,
+  placement: null,
+  placementIssue: null,
 });
 const bad = (raw: string, reason: Extract<ImportRow, { ok: false }>['reason']): ImportRow => ({
   ok: false,
@@ -216,6 +218,175 @@ describe('parseImport — tags (FEAT-2)', () => {
   it('counts a row with a bad tag as invalid', () => {
     const result = parseImport(`a; 1; ok\nb; 1; ${'x'.repeat(TAG_MAX + 1)}`);
     expect(result).toMatchObject({ validCount: 1, invalidCount: 1 });
+  });
+});
+
+describe('parseImport — day and start fields (FEAT-3)', () => {
+  const placed = (
+    name: string,
+    durationMinutes: number,
+    tag: string | null,
+    placement: ImportPlacementRequest,
+  ): ImportRow => ({
+    ok: true,
+    name,
+    durationMinutes,
+    rounded: false,
+    tag,
+    placement,
+    placementIssue: null,
+  });
+  const at = (day: number, startMinute: number, startRounded = false) => ({
+    day,
+    startMinute,
+    startRounded,
+  });
+
+  it('reads `name;duration;tag;day;start` in the line format', () => {
+    expect(parseImport('קולוסיאום;3;רומא העתיקה;2;09:30').rows).toEqual([
+      placed('קולוסיאום', 180, 'רומא העתיקה', at(2, 570)),
+    ]);
+  });
+
+  it('reads the fields in the brace format', () => {
+    expect(
+      parseImport('{Louvre;3;מרכז;1;10:00},{Seine;1,5},{Orsay; 2 ; ; 3 ; 1400 }').rows,
+    ).toEqual([
+      placed('Louvre', 180, 'מרכז', at(1, 600)),
+      ok('Seine', 90),
+      placed('Orsay', 120, null, at(3, 840)),
+    ]);
+  });
+
+  it('reads the fields as 4th and 5th Excel columns, including Excel seconds', () => {
+    expect(parseImport('Louvre\t3\tCentre\t1\t09:30:00\r\nOrsay\t2\t\t2\t1330\r\n').rows).toEqual([
+      placed('Louvre', 180, 'Centre', at(1, 570)),
+      placed('Orsay', 120, null, at(2, 810)),
+    ]);
+  });
+
+  it('accepts an empty tag before the placement', () => {
+    expect(parseImportRow('a;2;;2;09:30')).toEqual(placed('a', 120, null, at(2, 570)));
+  });
+
+  it('treats both fields empty as no placement', () => {
+    expect(parseImportRow('a;2;tag;;')).toEqual(ok('a', 120, false, 'tag'));
+    expect(parseImportRow('a;2;tag;  ;  ')).toEqual(ok('a', 120, false, 'tag'));
+    expect(parseImportRow('a;2;tag;')).toEqual(ok('a', 120, false, 'tag'));
+    expect(parseImport('{a;2;;;}').rows).toEqual([ok('a', 120)]);
+    expect(parseImportRow('a\t2\t\t\t')).toEqual(ok('a', 120));
+  });
+
+  it.each([
+    ['H:MM', '9:30', 570],
+    ['HH:MM', '09:30', 570],
+    ['HHMM', '0930', 570],
+    ['HMM', '930', 570],
+    ['whole hours', '9', 540],
+    ['midnight', '00:00', 0],
+    ['the last start slot', '23:30', 1410],
+  ])('accepts a start in %s form (%s)', (_form, start, minute) => {
+    expect(parseImportRow(`a;1;;1;${start}`)).toMatchObject({
+      ok: true,
+      placement: at(1, minute),
+      placementIssue: null,
+    });
+  });
+
+  it.each([
+    ['09:10', 540],
+    ['09:15', 570],
+    ['0944', 570],
+    ['09:45', 600],
+    ['23:14', 1380],
+    ['09:29:59', 570],
+  ])('rounds the start %s to the half-hour grid (DEC-035)', (start, minute) => {
+    expect(parseImportRow(`a;1;;1;${start}`)).toMatchObject({
+      placement: at(1, minute, true),
+    });
+  });
+
+  it('accepts a day written as `יום 2` and large day numbers (checked later against the trip)', () => {
+    expect(parseImportRow('a;1;;יום 2;10:00')).toMatchObject({ placement: at(2, 600) });
+    expect(parseImportRow('a;1;;999;10:00')).toMatchObject({ placement: at(999, 600) });
+  });
+
+  it.each([
+    ['day only', 'a;1;t;2;'],
+    ['start only', 'a;1;t;;09:30'],
+    ['day only, 4 fields', 'a;1;t;2'],
+    ['day only, tab', 'a\t1\tt\t2'],
+    ['start only, brace', '{a;1;t;;0930}'],
+  ])('flags one field only as placement_incomplete (%s)', (_case, line) => {
+    expect(parseImport(line).rows).toEqual([
+      {
+        ok: true,
+        name: 'a',
+        durationMinutes: 60,
+        rounded: false,
+        tag: 't',
+        placement: null,
+        placementIssue: 'placement_incomplete',
+      },
+    ]);
+  });
+
+  it.each([
+    ['day 0', '0', '09:00'],
+    ['negative day', '-1', '09:00'],
+    ['fractional day', '1.5', '09:00'],
+    ['day as a word', 'שני', '09:00'],
+    ['day too long', '1000', '09:00'],
+    ['minutes ≥ 60', '1', '09:60'],
+    ['seconds ≥ 60', '1', '09:00:60'],
+    ['24:00', '1', '24:00'],
+    ['rounds past 23:30', '1', '23:50'],
+    ['hours past 24', '1', '2500'],
+    ['not a time', '1', 'בבוקר'],
+    ['am/pm', '1', '9am'],
+    ['dot separator', '1', '9.30'],
+    ['five digits', '1', '09300'],
+  ])('flags %s as placement_invalid, keeping the row valid', (_case, day, start) => {
+    const line = `a;1;t;${day};${start}`;
+    expect(parseImportRow(line)).toMatchObject({
+      ok: true,
+      name: 'a',
+      tag: 't',
+      placement: null,
+      placementIssue: 'placement_invalid',
+    });
+  });
+
+  it('reports incomplete before invalid', () => {
+    expect(parseImportRow('a;1;t;x;')).toMatchObject({ placementIssue: 'placement_incomplete' });
+  });
+
+  it('still rejects the row for name, duration and tag errors', () => {
+    expect(parseImportRow('a;25;t;1;09:00')).toMatchObject({ reason: 'duration_out_of_range' });
+    expect(parseImportRow(`a;1;${'x'.repeat(TAG_MAX + 1)};1;09:00`)).toMatchObject({
+      reason: 'tag_too_long',
+    });
+    expect(parseImportRow(';1;t;1;09:00')).toMatchObject({ reason: 'missing_name' });
+  });
+
+  it('keeps `;` in names: the widest shape whose duration parses wins', () => {
+    expect(parseImportRow('Rock; Roll;2;t;1;09:00')).toEqual(
+      placed('Rock; Roll', 120, 't', at(1, 540)),
+    );
+    // 3-field rows with `;` in the name split as before (FEAT-2).
+    expect(parseImportRow('Rock; Roll; 2; מוזיקה')).toEqual(ok('Rock; Roll', 120, false, 'מוזיקה'));
+    expect(parseImportRow('Rock; Roll; 2')).toEqual(ok('Rock; Roll', 120));
+  });
+
+  it('counts rows with a placement issue as valid, within the unchanged row limit', () => {
+    const lines = Array.from({ length: MAX_IMPORT_ROWS }, (_, i) => `r${i};1;;${(i % 3) + 1};x`);
+    const result = parseImport(lines.join('\n'));
+    expect(result).toMatchObject({
+      validCount: MAX_IMPORT_ROWS,
+      invalidCount: 0,
+      exceedsLimit: false,
+    });
+    expect(parseImport(`${lines.join('\n')}\nlast;1;;1;09:00`).exceedsLimit).toBe(true);
   });
 });
 

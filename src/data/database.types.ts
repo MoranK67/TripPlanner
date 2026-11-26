@@ -169,23 +169,22 @@ export type Database = {
         Args: { items: Json; trip_id: string }
         Returns: {
           bank_position: number
+          bank_reason: string
           color: string
+          conflict_activity_id: string
+          conflict_item: number
           created_at: string
           duration_minutes: number
           id: string
+          item_index: number
           name: string
-          scheduled_date: string | null
-          start_minute: number | null
-          tag: string | null
+          placed: boolean
+          scheduled_date: string
+          start_minute: number
+          tag: string
           trip_id: string
           updated_at: string
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "activities"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       import_trips: { Args: { trips: Json }; Returns: Json }
       place_activity: {

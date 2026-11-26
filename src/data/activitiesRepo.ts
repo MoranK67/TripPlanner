@@ -7,14 +7,24 @@
 //   - same tag ⇒ same colour is applied by the DB (FEAT-2): the returned colour is authoritative;
 //   - color and bank_position are assigned by the insert trigger when omitted.
 
-import type { Activity, ActivityInput, ActivityPatch, IsoDate, Minute } from '@/domain';
+import type {
+  Activity,
+  ActivityInput,
+  ActivityPatch,
+  ImportItemInput,
+  IsoDate,
+  Minute,
+} from '@/domain';
 import { runDb, runDbRequired, safeClientGetter } from './execute';
 import {
   activityFromRow,
   activityInsertFromInput,
   activityUpdateFromJson,
+  importedActivityFromRow,
   importItemsFromInputs,
   updateActivityArgs,
+  type ImportActivitiesRow,
+  type ImportedActivity,
 } from './mapping';
 import { getSupabase, type TypedSupabaseClient } from './supabaseClient';
 import {
@@ -62,10 +72,15 @@ export interface ActivitiesRepo {
   /** RPC unplace_activity: back to the end of the bank (FR-3.7). */
   unplace(id: string): Promise<Activity>;
   /**
-   * RPC import_activities: up to 200 bank activities in one transaction, in input order, with
-   * optional tags (FEAT-2; same tag ⇒ same colour). Errors: validation `item:<n>:<field>`.
+   * RPC import_activities: up to 200 activities in one transaction, in input order, with
+   * optional tags (FEAT-2; same tag ⇒ same colour) and placements (FEAT-3). One outcome per item,
+   * in input order: an item with a placement is placed when it fits the trip and overlaps nothing
+   * (existing activities first, then earlier placed items), otherwise it goes to the bank with
+   * `bankReason` — never an error. The outcome is authoritative over `planImportPlacements`.
+   * Errors (the whole import rolls back): validation `item:<n>:<field>` / too_many_items,
+   * not_found.
    */
-  importMany(tripId: string, items: readonly ActivityInput[]): Promise<Activity[]>;
+  importMany(tripId: string, items: readonly ImportItemInput[]): Promise<ImportedActivity[]>;
 }
 
 export function createActivitiesRepo(getClient: () => TypedSupabaseClient): ActivitiesRepo {
@@ -136,7 +151,9 @@ export function createActivitiesRepo(getClient: () => TypedSupabaseClient): Acti
       const rows = await runDb(db, () =>
         db.rpc('import_activities', { trip_id: tripId, items: importItemsFromInputs(items) }),
       );
-      return (rows ?? []).map(activityFromRow);
+      // Typegen marks the nullable columns non-null; ImportActivitiesRow corrects that.
+      const result: readonly ImportActivitiesRow[] = rows ?? [];
+      return [...result].sort((a, b) => a.item_index - b.item_index).map(importedActivityFromRow);
     },
   };
 }

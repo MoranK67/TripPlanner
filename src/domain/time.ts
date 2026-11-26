@@ -2,7 +2,13 @@
 // Dates are floating calendar dates (`YYYY-MM-DD`, no time zone); all calendar math is done on
 // UTC epoch days so the device time zone and DST can never shift a day.
 
-import { MAX_END_MINUTE, MINUTES_PER_DAY, SLOT_MINUTES, SLOTS_PER_DAY } from './constants';
+import {
+  MAX_END_MINUTE,
+  MAX_START_MINUTE,
+  MINUTES_PER_DAY,
+  SLOT_MINUTES,
+  SLOTS_PER_DAY,
+} from './constants';
 import type { IsoDate, Minute, TripWindow } from './types';
 
 const MS_PER_DAY = 86_400_000;
@@ -39,6 +45,39 @@ export function slotStartMinute(index: number): Minute {
 /** Start minute of every timetable row of a day: 0, 30, …, 1410 (FR-4.1). */
 export function daySlotStarts(): Minute[] {
   return Array.from({ length: SLOTS_PER_DAY }, (_, i) => slotStartMinute(i));
+}
+
+const CLOCK_WITH_COLON = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+const CLOCK_COMPACT = /^\d{1,4}$/;
+
+/**
+ * Parses a clock start time and rounds it to the nearest slot, ties up (DEC-035), e.g.
+ * `09:30` → 570, `0915` → 570 (rounded), `9` → 540. Accepted: `H:MM`, `HH:MM`, `HH:MM:SS`
+ * (Excel), `HHMM`, `HMM` and whole hours `H` / `HH`; surrounding spaces are ignored. `null` when
+ * the text is not a time, minutes or seconds are 60 or more, or the rounded minute is not a valid
+ * start (after 23:30, e.g. `23:50` → 24:00). Same forms as the typed time fields (UX-5).
+ */
+export function parseClockTime(raw: string): { minute: Minute; rounded: boolean } | null {
+  const s = raw.trim();
+  let hours: number;
+  let mins: number;
+  let secs = 0;
+  const colon = CLOCK_WITH_COLON.exec(s);
+  if (colon) {
+    hours = Number(colon[1]);
+    mins = Number(colon[2]);
+    secs = Number(colon[3] ?? 0);
+  } else if (CLOCK_COMPACT.test(s)) {
+    hours = s.length <= 2 ? Number(s) : Number(s.slice(0, -2));
+    mins = s.length <= 2 ? 0 : Number(s.slice(-2));
+  } else {
+    return null;
+  }
+  if (mins >= 60 || secs >= 60) return null;
+  const exact = hours * 60 + mins + secs / 60;
+  const minute = Math.floor((exact + SLOT_MINUTES / 2) / SLOT_MINUTES) * SLOT_MINUTES;
+  if (minute > MAX_START_MINUTE) return null;
+  return { minute, rounded: minute !== exact };
 }
 
 // --- Calendar dates ------------------------------------------------------------------------

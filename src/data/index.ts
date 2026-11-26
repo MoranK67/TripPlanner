@@ -25,4 +25,4 @@ export {
 export { tripsRepo, type TripWindowUpdate, type TripsRepo } from './tripsRepo';
 export { activitiesRepo, type ActivitiesRepo, type ActivityUpdateResult } from './activitiesRepo';
 export { backupRepo, type BackupRepo } from './backupRepo';
-export type { ImportTripsCounts } from './mapping';
+export type { ImportedActivity, ImportTripsCounts } from './mapping';

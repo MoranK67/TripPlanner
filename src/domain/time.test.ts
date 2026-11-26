@@ -13,6 +13,7 @@ import {
   isDateInTrip,
   localIsoDate,
   minuteLabel,
+  parseClockTime,
   slotIndex,
   slotStartMinute,
   toEpochDay,
@@ -300,4 +301,31 @@ describe('formatDurationHe', () => {
   ])('falls back to minutes for off-grid value %s', (minutes, label) => {
     expect(formatDurationHe(minutes)).toBe(label);
   });
+});
+
+describe('parseClockTime', () => {
+  it.each([
+    ['09:30', 570, false],
+    ['9:30', 570, false],
+    ['0930', 570, false],
+    ['930', 570, false],
+    ['9', 540, false],
+    ['  14:00 ', 840, false],
+    ['09:30:00', 570, false],
+    ['00:00', 0, false],
+    ['23:30', 1410, false],
+    ['09:14', 540, true],
+    ['09:15', 570, true],
+    ['09:45', 600, true],
+    ['09:29:59', 570, true],
+  ])('%s → %i (rounded: %s)', (text, minute, rounded) => {
+    expect(parseClockTime(text)).toEqual({ minute, rounded });
+  });
+
+  it.each(['', ' ', '09:60', '09:00:60', '24:00', '23:45', '2500', '09300', '9.30', '9am', 'x'])(
+    'rejects %j',
+    (text) => {
+      expect(parseClockTime(text)).toBeNull();
+    },
+  );
 });

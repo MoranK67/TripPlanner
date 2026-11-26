@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui';
-import { AppError } from '@/data';
+import { AppError, type ImportedActivity } from '@/data';
 import {
   buildAiPrompt,
   PALETTE,
@@ -30,6 +30,17 @@ const trip: Trip = {
   window: { startDate: '2026-05-01', startMinute: 600, endDate: '2026-05-03', endMinute: 1080 },
   colorCursor: 8,
 };
+
+/** `importMany` outcomes for activities that went to the bank (no placement requested). */
+function banked(activities: Activity[]): ImportedActivity[] {
+  return activities.map((a) => ({
+    activity: a,
+    placed: false,
+    bankReason: null,
+    conflictActivityId: null,
+    conflictItem: null,
+  }));
+}
 
 function activity(overrides: Partial<Activity>): Activity {
   return {
@@ -236,7 +247,7 @@ describe('import', () => {
         bankPosition: 2,
       }),
     ];
-    repo.importMany.mockResolvedValue(created);
+    repo.importMany.mockResolvedValue(banked(created));
     const { queryClient, onClose } = setup();
     paste('קפה; 1\nשבור\n"גלידה"\t40 דקות');
     fireEvent.click(screen.getByRole('button', { name: 'הוספת שתי אטרקציות למאגר' }));
@@ -254,8 +265,8 @@ describe('import', () => {
   });
 
   it('cannot be closed while saving', async () => {
-    let resolve: (value: Activity[]) => void = () => {};
-    repo.importMany.mockReturnValue(new Promise<Activity[]>((r) => (resolve = r)));
+    let resolve: (value: ImportedActivity[]) => void = () => {};
+    repo.importMany.mockReturnValue(new Promise<ImportedActivity[]>((r) => (resolve = r)));
     const { onClose } = setup();
     paste('קפה; 1');
     fireEvent.click(screen.getByRole('button', { name: 'הוספת אטרקציה אחת למאגר' }));
@@ -268,7 +279,7 @@ describe('import', () => {
     fireEvent.click(screen.getByTestId('modal-backdrop'));
     expect(onClose).not.toHaveBeenCalled();
 
-    resolve([activity({ id: 'n1' })]);
+    resolve(banked([activity({ id: 'n1' })]));
     expect(await screen.findByText('נוספה אטרקציה אחת למאגר')).toBeInTheDocument();
     expect(onClose).toHaveBeenCalled();
   });
@@ -329,10 +340,12 @@ describe('translations (M6.1 nits)', () => {
 
 describe('from the bank panel', () => {
   it('opens from the bank and the new activities appear in the bank', async () => {
-    repo.importMany.mockResolvedValue([
-      activity({ id: 'n1', name: 'קפה', bankPosition: 2 }),
-      activity({ id: 'n2', name: 'גלידה', bankPosition: 3 }),
-    ]);
+    repo.importMany.mockResolvedValue(
+      banked([
+        activity({ id: 'n1', name: 'קפה', bankPosition: 2 }),
+        activity({ id: 'n2', name: 'גלידה', bankPosition: 3 }),
+      ]),
+    );
     setup('bank', [activity({ id: 'old', name: 'מוזיאון', bankPosition: 1 })]);
     fireEvent.click(screen.getByRole('button', { name: 'ייבוא רשימה' }));
     expect(screen.getByRole('dialog', { name: 'ייבוא רשימת אטרקציות' })).toBeInTheDocument();
@@ -364,7 +377,7 @@ describe('tags (FEAT-2)', () => {
   });
 
   it('sends the tags with the rows', async () => {
-    repo.importMany.mockResolvedValue([activity({ id: 'n1', tag: 'מרכז העיר' })]);
+    repo.importMany.mockResolvedValue(banked([activity({ id: 'n1', tag: 'מרכז העיר' })]));
     setup();
     paste('מוזיאון; 3; מרכז העיר\nקפה; 1');
     fireEvent.click(screen.getByRole('button', { name: 'הוספת שתי אטרקציות למאגר' }));

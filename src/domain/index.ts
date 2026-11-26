@@ -7,6 +7,7 @@ export * from './duration';
 export * from './exportLayout';
 export * from './guards';
 export * from './importParser';
+export * from './importPlacement';
 export * from './placement';
 export * from './rangePlacement';
 export * from './tags';

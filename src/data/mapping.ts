@@ -14,6 +14,8 @@ import {
   type ActivityInput,
   type ActivityPatch,
   type BackupTrip,
+  type ImportBankReason,
+  type ImportItemInput,
   type Placement,
   type Trip,
   type TripInput,
@@ -39,11 +41,60 @@ export type TripSummaryRow = Pick<
   'id' | 'name' | 'start_date' | 'start_minute' | 'end_date' | 'end_minute'
 >;
 
-/** One item of the `import_activities` RPC payload (snake_case, as the RPC expects). */
+/**
+ * One item of the `import_activities` RPC payload (snake_case, as the RPC expects). FEAT-3: the
+ * placement keys are sent together, only when a placement is requested.
+ */
 export interface ImportItemJson {
-  [key: string]: Json;
+  [key: string]: Json | undefined;
   name: string;
   duration_minutes: number;
+  color?: string;
+  tag?: string;
+  scheduled_date?: string;
+  start_minute?: number;
+}
+
+type ImportActivitiesGeneratedRow =
+  PublicSchema['Functions']['import_activities']['Returns'][number];
+
+/**
+ * One `import_activities` result row (FEAT-3): the activity columns plus the per-item outcome.
+ * Typegen marks every column of a `RETURNS TABLE` non-null; these really can be NULL (bank rows,
+ * no tag, placed rows, no conflict), so they are overridden here rather than in the generated file.
+ */
+export type ImportActivitiesRow = Omit<
+  ImportActivitiesGeneratedRow,
+  | 'scheduled_date'
+  | 'start_minute'
+  | 'tag'
+  | 'bank_reason'
+  | 'conflict_activity_id'
+  | 'conflict_item'
+> & {
+  scheduled_date: string | null;
+  start_minute: number | null;
+  tag: string | null;
+  bank_reason: string | null;
+  conflict_activity_id: string | null;
+  conflict_item: number | null;
+};
+
+/** Outcome of one imported item (`activitiesRepo.importMany`, FEAT-3), in input order. */
+export interface ImportedActivity {
+  /** The created activity, placed or in the bank. */
+  activity: Activity;
+  /** The requested placement was applied. `false` also when none was requested. */
+  placed: boolean;
+  /**
+   * Why a requested placement was not applied (same codes as `planImportPlacements`). `null` when
+   * placed, when no placement was requested, or for a code this client does not know yet.
+   */
+  bankReason: ImportBankReason | null;
+  /** `overlaps_existing` / `overlaps_import_row`: the id of the activity it overlaps. */
+  conflictActivityId: string | null;
+  /** `overlaps_import_row`: 1-based index of the earlier item (in the items sent) it overlaps. */
+  conflictItem: number | null;
 }
 
 /** One activity of an `import_trips` trip (snake_case, as the RPC expects). */
@@ -197,14 +248,54 @@ export function updateActivityArgs(id: string, patch: ActivityPatch): UpdateActi
   return args;
 }
 
-export function importItemsFromInputs(items: readonly ActivityInput[]): ImportItemJson[] {
+/**
+ * RPC `import_activities` items. `scheduled_date` + `start_minute` are sent only for an item with
+ * a placement (FEAT-3); without one the RPC behaves exactly as before. The placement is not
+ * validated here: the RPC banks a malformed one with `placement_invalid` instead of failing.
+ */
+export function importItemsFromInputs(items: readonly ImportItemInput[]): ImportItemJson[] {
   return items.map((item) => {
     const json: ImportItemJson = { name: item.name, duration_minutes: item.durationMinutes };
     if (item.color !== undefined) json.color = normalizeHexColor(item.color);
     const tag = normalizeTag(item.tag);
     if (tag !== null) json.tag = tag;
+    if (item.placement) {
+      json.scheduled_date = item.placement.date;
+      json.start_minute = item.placement.startMinute;
+    }
     return json;
   });
+}
+
+const IMPORT_BANK_REASONS: ReadonlySet<string> = new Set<ImportBankReason>([
+  'placement_incomplete',
+  'placement_invalid',
+  'day_out_of_trip',
+  'outside_trip_hours',
+  'overlaps_existing',
+  'overlaps_import_row',
+]);
+
+function isImportBankReason(value: string): value is ImportBankReason {
+  return IMPORT_BANK_REASONS.has(value);
+}
+
+/**
+ * Maps one `import_activities` result row. An unknown `bank_reason` (a newer server) becomes
+ * `null` rather than an error: the import is already committed, so failing here would invite a
+ * duplicate retry. A placed row must carry a placement.
+ */
+export function importedActivityFromRow(row: ImportActivitiesRow): ImportedActivity {
+  const activity = activityFromRow(row);
+  if (row.placed && activity.placement === null) throw invalidResponse(row);
+  const reason = row.bank_reason;
+  return {
+    activity,
+    placed: row.placed,
+    bankReason: reason !== null && isImportBankReason(reason) ? reason : null,
+    conflictActivityId: row.conflict_activity_id,
+    conflictItem: row.conflict_item,
+  };
 }
 
 /**
