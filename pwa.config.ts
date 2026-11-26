@@ -48,8 +48,8 @@ export const pwaOptions: Partial<VitePWAOptions> = {
   includeAssets: ['icon.svg', 'apple-touch-icon-180x180.png'],
   manifest: {
     id: '/',
-    name: 'מתכנן הטיולים',
-    short_name: 'מתכנן טיולים',
+    name: 'TripPlanner',
+    short_name: 'TripPlanner',
     description: 'תכנון לוח זמנים לטיולים: מאגר אטרקציות וגרירה ללוח לפי ימים ושעות.',
     lang: 'he',
     dir: 'rtl',

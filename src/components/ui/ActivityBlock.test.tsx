@@ -51,7 +51,7 @@ describe('ActivityBlock', () => {
     expect(block(container)).not.toHaveAttribute('data-short');
   });
 
-  it('shrinks the × and the time line to fit a one-slot block at the phone scale', () => {
+  it('shrinks the × to fit a one-slot block at the phone scale', () => {
     const { container, rerender } = render(
       <ActivityBlock
         name="קפה"
@@ -63,10 +63,8 @@ describe('ActivityBlock', () => {
     );
     expect(block(container).style.height).toBe('19px');
     expect(screen.getByRole('button', { name: 'מחיקת קפה' })).toHaveClass('size-4');
-    expect(screen.getByText('חצי שעה')).toHaveClass('leading-[1.3]');
     rerender(<ActivityBlock name="קפה" durationMinutes={30} color="#FFD6E0" onDelete={() => {}} />);
     expect(screen.getByRole('button', { name: 'מחיקת קפה' })).toHaveClass('size-5');
-    expect(screen.getByText('חצי שעה')).toHaveClass('leading-[1.5]');
   });
 
   it('uses the short single-line layout for one slot only', () => {
@@ -98,6 +96,93 @@ describe('ActivityBlock', () => {
     expect(screen.getByText(longName).style.getPropertyValue('--name-lines')).toBe('2');
     rerender(<ActivityBlock name={longName} durationMinutes={30} color="#FFD6E0" />);
     expect(screen.getByText(longName).style.getPropertyValue('--name-lines')).toBe('');
+  });
+
+  describe('one-row blocks: the name wins (DES-2)', () => {
+    function row(container: HTMLElement): HTMLElement {
+      const el = container.querySelector('[data-block-row]');
+      if (!(el instanceof HTMLElement)) throw new Error('no row');
+      return el;
+    }
+
+    it.each([
+      ['a 30-minute block', 30, 28],
+      ['a one-hour block at the phone scale', 60, 22],
+    ])('%s: one clipped line that wraps the time out before the name truncates', (_, min, slot) => {
+      const { container } = render(
+        <ActivityBlock
+          name="קפה"
+          durationMinutes={min}
+          color="#FFD6E0"
+          slotHeight={slot}
+          meta="14:30–15:00"
+          onOpen={() => {}}
+        />,
+      );
+      expect(row(container)).toHaveClass('flex-wrap', 'overflow-hidden', 'h-[17px]');
+      // The name comes first and only shrinks when it alone is wider than the row.
+      const nameEl = screen.getByText('קפה');
+      expect(nameEl).toHaveClass('truncate', 'min-w-0');
+      expect(nameEl).not.toHaveClass('flex-1');
+      // The range is two items, so the end time wraps out first, then the start.
+      const items = Array.from(row(container).children).map((el) => [
+        el.getAttribute('data-time'),
+        el.getAttribute('data-text') ?? el.textContent,
+      ]);
+      expect(items).toEqual([
+        [null, 'קפה'],
+        [null, '14:30–15:00'],
+        ['start', '14:30'],
+        ['end', '–15:00'],
+      ]);
+      // Screen readers get the range whole (browsers would read "14:30 –15:00" from two flex
+      // items); the split copy is drawn by CSS, hidden from them and out of the text content.
+      expect(screen.getByText('14:30–15:00')).toHaveClass('sr-only');
+      for (const part of row(container).querySelectorAll('[data-time]')) {
+        expect(part).toHaveAttribute('aria-hidden', 'true');
+        expect(part).toHaveClass(
+          'shrink-0',
+          'whitespace-nowrap',
+          'before:content-[attr(data-text)]',
+        );
+        expect(part).toBeEmptyDOMElement();
+      }
+      expect(screen.getByRole('button').textContent).toBe('קפה 14:30–15:00');
+    });
+
+    it('keeps the full name and range in the title and the accessible name', () => {
+      const { container } = render(
+        <ActivityBlock
+          name="קפה"
+          tag="מרכז"
+          durationMinutes={30}
+          color="#FFD6E0"
+          meta="14:30–15:00"
+          onOpen={() => {}}
+        />,
+      );
+      expect(block(container)).toHaveAttribute('title', 'קפה · מרכז · 14:30–15:00');
+      expect(screen.getByRole('button')).toHaveAccessibleName('קפה 14:30–15:00 (תגית: מרכז)');
+    });
+
+    it('treats a duration (bank) as one item that is shown or wrapped out whole', () => {
+      const { container } = render(
+        <ActivityBlock name="קפה" durationMinutes={30} color="#FFD6E0" />,
+      );
+      expect(row(container).lastElementChild).toHaveAttribute('data-time', 'meta');
+      expect(screen.getByText('חצי שעה')).toHaveClass('shrink-0', 'whitespace-nowrap');
+      // The bank keeps the plain title.
+      expect(block(container)).toHaveAttribute('title', 'קפה');
+    });
+
+    it('leaves taller blocks stacked, with the range whole', () => {
+      const { container } = render(
+        <ActivityBlock name="קפה" durationMinutes={60} color="#FFD6E0" meta="14:30–15:30" />,
+      );
+      expect(container.querySelector('[data-block-row]')).toBeNull();
+      expect(screen.getByText('14:30–15:30')).toBeInTheDocument();
+      expect(block(container)).toHaveAttribute('title', 'קפה');
+    });
   });
 
   it('sets the block color, normalized, with a palette fallback for bad values', () => {

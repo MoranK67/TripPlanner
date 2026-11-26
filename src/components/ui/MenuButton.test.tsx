@@ -124,4 +124,62 @@ describe('MenuButton', () => {
     expect(edit).not.toHaveBeenCalled();
     expect(screen.getByRole('menu')).toBeInTheDocument();
   });
+
+  describe('choice menus (DES-1)', () => {
+    function renderChoice(onPick = vi.fn()) {
+      render(
+        <MenuButton
+          label="סינון לפי תגית"
+          triggerVariant="text"
+          trigger={
+            <>
+              סינון: הכול<span aria-hidden="true">▾</span>
+            </>
+          }
+          items={[
+            { id: 'all', label: 'הכול', checked: true, onSelect: () => onPick('all') },
+            {
+              id: 'a',
+              label: 'מרכז (2)',
+              checked: false,
+              icon: <span data-testid="dot" />,
+              onSelect: () => onPick('a'),
+            },
+          ]}
+        />,
+      );
+      return onPick;
+    }
+
+    it('names a text trigger by its visible content and the menu by the label', () => {
+      renderChoice();
+      const trigger = screen.getByRole('button', { name: 'סינון: הכול' });
+      expect(trigger).not.toHaveAttribute('aria-label');
+      fireEvent.click(trigger);
+      screen.getByRole('menu', { name: 'סינון לפי תגית' });
+    });
+
+    it('renders checked items as menuitemradio with a hidden ✓ and icon', () => {
+      const onPick = renderChoice();
+      fireEvent.click(screen.getByRole('button', { name: 'סינון: הכול' }));
+      const all = screen.getByRole('menuitemradio', { name: 'הכול' });
+      const tag = screen.getByRole('menuitemradio', { name: 'מרכז (2)' });
+      expect(all).toHaveAttribute('aria-checked', 'true');
+      expect(tag).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByTestId('dot').parentElement).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.queryAllByRole('menuitem')).toHaveLength(0);
+      fireEvent.keyDown(all, { key: 'ArrowDown' });
+      expect(tag).toHaveFocus();
+      fireEvent.click(tag);
+      expect(onPick).toHaveBeenCalledWith('a');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+
+    it('keeps plain items as menuitem', () => {
+      const { trigger } = setup();
+      fireEvent.click(trigger);
+      expect(screen.getAllByRole('menuitem')).toHaveLength(3);
+      expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
+    });
+  });
 });

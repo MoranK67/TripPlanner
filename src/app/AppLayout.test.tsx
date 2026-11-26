@@ -55,7 +55,7 @@ describe('AppLayout', () => {
   it('has a header bar with the app title linking to the trips list', () => {
     renderLayout(<p>תוכן</p>);
     const banner = screen.getByRole('banner');
-    const title = within(banner).getByRole('heading', { level: 1, name: 'מתכנן הטיולים' });
+    const title = within(banner).getByRole('heading', { level: 1, name: 'TripPlanner' });
     expect(title.closest('a')).toHaveAttribute('href', '/trips');
   });
 
@@ -216,7 +216,7 @@ describe('AppLayout on phones (PHONE-1)', () => {
   it('keeps the title (as a home link) and shows the server status as a labelled dot', () => {
     renderLayout(<p>תוכן</p>);
     const banner = screen.getByRole('banner');
-    const title = within(banner).getByRole('heading', { level: 1, name: 'מתכנן הטיולים' });
+    const title = within(banner).getByRole('heading', { level: 1, name: 'TripPlanner' });
     expect(title.closest('a')).toHaveAttribute('href', '/trips');
     // Supabase is not configured in these tests: the dot says so for screen readers.
     const status = within(banner).getByRole('status');

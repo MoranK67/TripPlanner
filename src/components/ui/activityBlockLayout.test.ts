@@ -2,11 +2,13 @@ import { SLOT_MINUTES } from '@/domain';
 import {
   activityBlockHeight,
   BLOCK_GAP_PX,
+  BLOCK_SHORT_ROW_PX,
   BLOCK_TEXT_METRICS,
   blockSlots,
   isShortBlock,
   nameLineLimit,
   SLOT_HEIGHT_PX,
+  splitTimeRange,
 } from './activityBlockLayout';
 
 describe('activity block layout (FR-3.3)', () => {
@@ -64,5 +66,32 @@ describe('name line limit (UX-8)', () => {
 
   it('never drops below one line', () => {
     expect(nameLineLimit(60, 10)).toBe(1);
+  });
+});
+
+describe('short blocks: the name wins (DES-2)', () => {
+  it('fits the one-row line in every short block, down to the phone scale', () => {
+    for (const slotHeight of [28, 22]) {
+      for (let minutes = SLOT_MINUTES; minutes <= 1440; minutes += SLOT_MINUTES) {
+        if (!isShortBlock(minutes, slotHeight)) continue;
+        expect(BLOCK_SHORT_ROW_PX).toBeLessThanOrEqual(
+          activityBlockHeight(minutes, slotHeight) - 2,
+        );
+      }
+    }
+    // The line itself: the 13 px name at its 1.3 line height.
+    expect(BLOCK_SHORT_ROW_PX).toBeGreaterThanOrEqual(BLOCK_TEXT_METRICS.nameLine);
+  });
+
+  it('splits a time range into the start and the rest, so the end gives way first', () => {
+    expect(splitTimeRange('14:30–15:00')).toEqual({ start: '14:30', rest: '–15:00' });
+    expect(splitTimeRange('9:00-10:30')).toEqual({ start: '9:00', rest: '-10:30' });
+  });
+
+  it('leaves anything else whole', () => {
+    expect(splitTimeRange('חצי שעה')).toBeNull();
+    expect(splitTimeRange('14:30')).toBeNull();
+    expect(splitTimeRange(undefined)).toBeNull();
+    expect(splitTimeRange(1430)).toBeNull();
   });
 });

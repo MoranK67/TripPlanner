@@ -17,6 +17,13 @@ export interface MenuItem {
   disabledReason?: string;
   /** `danger` for destructive actions (delete). */
   tone?: 'default' | 'danger';
+  /**
+   * Makes the item a `menuitemradio` with this `aria-checked` state, marked with a ✓ (a choice
+   * such as the bank's tag filter, DES-1). Leave it out for plain actions.
+   */
+  checked?: boolean;
+  /** Decoration before the label (e.g. a colour dot); hidden from screen readers. */
+  icon?: ReactNode;
 }
 
 export interface MenuButtonProps {
@@ -27,6 +34,11 @@ export interface MenuButtonProps {
   trigger?: ReactNode;
   /** Optional muted text at the top of the popover (e.g. the trip's dates); describes the menu. */
   note?: ReactNode;
+  /**
+   * `icon` (default): a round icon button named by `label`. `text`: a small outlined pill whose
+   * visible `trigger` content is its accessible name (WCAG 2.5.3); `label` then names the menu.
+   */
+  triggerVariant?: 'icon' | 'text';
   className?: string;
 }
 
@@ -40,7 +52,15 @@ export interface MenuButtonProps {
  * opened by the item gives focus back to the trigger). A press outside closes it in place.
  * The popover opens below the trigger, aligned to its inline end, so it works in RTL and LTR.
  */
-export function MenuButton({ label, items, trigger, note, className }: MenuButtonProps) {
+export function MenuButton({
+  label,
+  items,
+  trigger,
+  note,
+  triggerVariant = 'icon',
+  className,
+}: MenuButtonProps) {
+  const textTrigger = triggerVariant === 'text';
   const baseId = useId();
   const triggerId = `${baseId}-trigger`;
   const menuId = `${baseId}-menu`;
@@ -145,8 +165,8 @@ export function MenuButton({ label, items, trigger, note, className }: MenuButto
         ref={triggerRef}
         id={triggerId}
         variant="ghost"
-        size="icon"
-        aria-label={label}
+        size={textTrigger ? 'sm' : 'icon'}
+        aria-label={textTrigger ? undefined : label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -154,7 +174,11 @@ export function MenuButton({ label, items, trigger, note, className }: MenuButto
         // Mouse / touch toggle. Keyboard Enter / Space are handled on key down (which cancels the
         // button's own click), so the menu opens on its first item.
         onClick={() => (open ? close(false) : openAt('first'))}
-        className={cx(open && 'bg-line text-ink')}
+        className={cx(
+          // An outline drawn as an inset ring (the Button's own `border-0` would win over a border).
+          textTrigger && 'max-w-full gap-1.5 text-ink ring-1 ring-line-strong ring-inset',
+          open && 'bg-line text-ink',
+        )}
       >
         {trigger ?? (
           <span aria-hidden="true" className="text-xl font-bold">
@@ -175,7 +199,10 @@ export function MenuButton({ label, items, trigger, note, className }: MenuButto
           <div
             id={menuId}
             role="menu"
-            aria-labelledby={triggerId}
+            // A text trigger names itself by its current value ("סינון: הכול"), so the menu takes
+            // the general label instead.
+            aria-labelledby={textTrigger ? undefined : triggerId}
+            aria-label={textTrigger ? label : undefined}
             aria-describedby={note ? noteId : undefined}
             onKeyDown={onMenuKeyDown}
           >
@@ -183,6 +210,7 @@ export function MenuButton({ label, items, trigger, note, className }: MenuButto
               const labelId = `${baseId}-item-${i}`;
               const reasonId = `${baseId}-reason-${i}`;
               const showReason = item.disabled && item.disabledReason;
+              const radio = item.checked !== undefined;
               return (
                 <button
                   key={item.id}
@@ -190,7 +218,8 @@ export function MenuButton({ label, items, trigger, note, className }: MenuButto
                     itemRefs.current[i] = el;
                   }}
                   type="button"
-                  role="menuitem"
+                  role={radio ? 'menuitemradio' : 'menuitem'}
+                  aria-checked={radio ? item.checked : undefined}
                   tabIndex={-1}
                   aria-disabled={item.disabled || undefined}
                   aria-labelledby={labelId}
@@ -203,7 +232,23 @@ export function MenuButton({ label, items, trigger, note, className }: MenuButto
                     item.disabled && 'cursor-not-allowed opacity-55',
                   )}
                 >
-                  <span id={labelId}>{item.label}</span>
+                  {radio || item.icon ? (
+                    <span className="flex items-center gap-2">
+                      {radio && (
+                        <span aria-hidden="true" className="w-3.5 shrink-0 text-accent-ink">
+                          {item.checked ? '✓' : ''}
+                        </span>
+                      )}
+                      {item.icon && (
+                        <span aria-hidden="true" className="flex shrink-0">
+                          {item.icon}
+                        </span>
+                      )}
+                      <span id={labelId}>{item.label}</span>
+                    </span>
+                  ) : (
+                    <span id={labelId}>{item.label}</span>
+                  )}
                   {showReason && (
                     <span
                       id={reasonId}

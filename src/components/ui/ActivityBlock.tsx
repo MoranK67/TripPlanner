@@ -5,6 +5,7 @@ import {
   activityBlockHeight,
   isShortBlock,
   nameLineLimit,
+  splitTimeRange,
   useSlotHeight,
 } from './activityBlockLayout';
 import { cx } from './cx';
@@ -61,8 +62,9 @@ function hasOwnPosition(className: string | undefined, style: CSSProperties | un
 /**
  * A colored activity block, used in the bank and in the timetable (prototype `.block`).
  * Height is proportional to the duration; a one-slot block switches to a single-line "short"
- * layout; taller blocks clamp the name (ellipsis, full name in `title`) so the meta line always
- * stays visible (UX-8). Text uses the `block-ink` tokens, which pass WCAG AA on every palette color.
+ * layout where the name wins and the time gives way (DES-2); taller blocks clamp the name
+ * (ellipsis, full name in `title`) so the meta line always stays visible (UX-8). Text uses the
+ * `block-ink` tokens, which pass WCAG AA on every palette color.
  *
  * Structure: an outer `div` (gets `ref`, `style`, `className` and any extra props — position it,
  * or attach drag handlers to it), an inner open button, and a sibling × button (buttons can't nest).
@@ -88,57 +90,94 @@ export const ActivityBlock = forwardRef<HTMLDivElement, ActivityBlockProps>(func
   const contextSlotHeight = useSlotHeight();
   const slotHeight = slotHeightProp ?? contextSlotHeight;
   const short = isShortBlock(durationMinutes, slotHeight);
-  // The phone's denser scale (PHONE-2): a one-slot block is ~19 px, so the × and the time line
-  // shrink to fit its inner height.
+  // The phone's denser scale (PHONE-2): a one-slot block is ~19 px, so the × shrinks to fit
+  // its inner height.
   const dense = slotHeight < DENSE_SLOT_HEIGHT_PX;
   const blockColor = isHexColor(color) ? normalizeHexColor(color) : FALLBACK_COLOR;
   const subtitle = meta ?? formatDurationHe(durationMinutes);
+  // DES-2: in the one-row layout a time range gives way in two steps (end, then start).
+  const range = short ? splitTimeRange(subtitle) : null;
   const deleteDisabled = deleteDisabledReason !== undefined;
-  const title = tag ? t('common.activityBlock.titleWithTag', { name, tag }) : name;
+  const nameAndTag = tag ? t('common.activityBlock.titleWithTag', { name, tag }) : name;
+  // The range may be hidden in a short block, so the tooltip keeps it (DES-2).
+  const title =
+    range && typeof subtitle === 'string'
+      ? t('common.activityBlock.titleWithTime', { title: nameAndTag, time: subtitle })
+      : nameAndTag;
 
   const bodyClass = cx(
     'flex size-full min-w-0 px-2.5 text-start text-block-ink',
-    short ? 'flex-row items-center gap-1.5 py-0' : 'flex-col items-stretch justify-start py-1.5',
+    short ? 'flex-row items-center py-0' : 'flex-col items-stretch justify-start py-1.5',
     onDelete && 'pe-7',
   );
 
-  const content = (
+  // Screen readers only, after the visible text, so the name still starts with what is shown
+  // (WCAG 2.5.3). Absolutely positioned (sr-only), so the block layout is unchanged (UX-8).
+  const tagNote = tag && (
+    <>
+      {' '}
+      <span className="sr-only">{t('common.activityBlock.tag', { tag })}</span>
+    </>
+  );
+
+  const metaClass = 'text-[11.5px] text-block-ink-soft';
+  const splitClass = 'shrink-0 whitespace-nowrap before:content-[attr(data-text)]';
+
+  const content = short ? (
+    // DES-2: the name wins. One line of fixed height that wraps between its items: the name comes
+    // first and only truncates when it alone is wider than the row; the time items that don't fit
+    // after it wrap onto the clipped second line, end time first, then the start. Pure CSS, so it
+    // follows the real width (day column, bank grid, drag ghost) with no measuring.
     <>
       <span
-        className={cx(
-          'text-[13px] leading-[1.3] font-semibold',
-          short
-            ? 'block min-w-0 flex-1 truncate'
-            : // UX-8: clamp the name so the meta line below always fits the fixed height.
-              'line-clamp-(--name-lines) shrink-0 [overflow-wrap:anywhere]',
+        data-block-row=""
+        className="flex h-[17px] min-w-0 flex-1 flex-wrap items-center overflow-hidden leading-[17px]"
+      >
+        <span className="block min-w-0 flex-[0_1_auto] truncate text-[13px] font-semibold">
+          {name}
+        </span>
+        {/* A real space so the name computed from content reads "קפה 09:00–10:00" whatever the
+            CSS display. Whitespace-only text between flex items is not rendered. */}{' '}
+        {range ? (
+          <>
+            {/* Browsers put a space between flex items when they compute the name ("14:30
+                –15:00"), so screen readers get the range whole from this sr-only copy (out of
+                the flex flow, so the layout is unchanged). The split copy is drawn from
+                `data-text` by CSS: hidden from screen readers and absent from the text content,
+                so the block's text still reads once. */}
+            <span className="sr-only">{subtitle}</span>
+            <span
+              aria-hidden="true"
+              data-time="start"
+              data-text={range.start}
+              className={cx(metaClass, splitClass, 'ms-1.5')}
+            />
+            <span
+              aria-hidden="true"
+              data-time="end"
+              data-text={range.rest}
+              className={cx(metaClass, splitClass)}
+            />
+          </>
+        ) : (
+          <span data-time="meta" className={cx(metaClass, 'ms-1.5 shrink-0 whitespace-nowrap')}>
+            {subtitle}
+          </span>
         )}
-        style={
-          short
-            ? undefined
-            : ({ '--name-lines': nameLineLimit(durationMinutes, slotHeight) } as CSSProperties)
-        }
+      </span>
+      {tagNote}
+    </>
+  ) : (
+    <>
+      <span
+        // UX-8: clamp the name so the meta line below always fits the fixed height.
+        className="line-clamp-(--name-lines) shrink-0 text-[13px] leading-[1.3] font-semibold [overflow-wrap:anywhere]"
+        style={{ '--name-lines': nameLineLimit(durationMinutes, slotHeight) } as CSSProperties}
       >
         {name}
-      </span>
-      {/* A real space so the name computed from content reads "קפה 09:00–10:00" whatever the CSS
-          display. Whitespace-only text between flex items is not rendered, so layout is unchanged. */}{' '}
-      <span
-        className={cx(
-          'block text-[11.5px] text-block-ink-soft',
-          short && dense ? 'leading-[1.3]' : 'leading-[1.5]',
-          short ? 'shrink-0 whitespace-nowrap' : 'mt-px shrink-0',
-        )}
-      >
-        {subtitle}
-      </span>
-      {/* Screen readers only, after the visible text, so the name still starts with what is shown
-          (WCAG 2.5.3). Absolutely positioned (sr-only), so the block layout is unchanged (UX-8). */}
-      {tag && (
-        <>
-          {' '}
-          <span className="sr-only">{t('common.activityBlock.tag', { tag })}</span>
-        </>
-      )}
+      </span>{' '}
+      <span className={cx(metaClass, 'mt-px block shrink-0 leading-[1.5]')}>{subtitle}</span>
+      {tagNote}
     </>
   );
 
