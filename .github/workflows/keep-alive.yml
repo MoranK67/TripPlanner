@@ -1,0 +1,105 @@
+# Keeps the free Supabase project from pausing (it pauses after ~7 days without database
+# activity). Every 3 days it sends one read query through PostgREST with the publishable key.
+#
+# Expected answer: HTTP 401 with Postgres error code 42501 ("permission denied for table trips").
+# anon has no grants on app tables (M1.1), so Postgres itself rejects the query. That error comes
+# from the database, which proves the request reached Postgres and counts as activity.
+# Any other answer fails the job, so GitHub emails the owner:
+#   - 401 without 42501 -> wrong/revoked key ("Invalid API key"), nothing reached the database
+#   - 200               -> anon can read `trips`: grants changed, check the migrations
+#   - 5xx / timeout     -> project paused or down (restore it in the Supabase dashboard)
+#
+# Secrets (repository → Settings → Secrets and variables → Actions):
+#   SUPABASE_URL              https://<ref>.supabase.co (same value as VITE_SUPABASE_URL)
+#   SUPABASE_PUBLISHABLE_KEY  sb_publishable_... (same value as VITE_SUPABASE_PUBLISHABLE_KEY)
+# Never put a secret / service_role key here: the job refuses any key that is not sb_publishable_.
+# Nothing is uploaded and the response body is only inspected, never printed.
+
+name: keep-alive
+
+on:
+  schedule:
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping Supabase database
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query the database once through PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]; then
+            echo "::error::Missing repository secrets SUPABASE_URL and/or SUPABASE_PUBLISHABLE_KEY. See docs/deploy/keep-alive.md."
+            exit 1
+          fi
+
+          case "$SUPABASE_PUBLISHABLE_KEY" in
+            sb_publishable_*) ;;
+            *)
+              echo "::error::SUPABASE_PUBLISHABLE_KEY is not a publishable key (must start with sb_publishable_). Replace it; never store a secret/service_role key here."
+              exit 1
+              ;;
+          esac
+
+          base="${SUPABASE_URL%/}"
+          if ! [[ "$base" =~ ^https://[a-z0-9]+\.supabase\.co$ ]]; then
+            echo "::error::SUPABASE_URL must look like https://<project-ref>.supabase.co"
+            exit 1
+          fi
+
+          body_file="$(mktemp)"
+          trap 'rm -f "$body_file"' EXIT
+
+          ping() {
+            local status code
+            status="$(curl --silent --show-error --connect-timeout 10 --max-time 30 \
+              --output "$body_file" --write-out '%{http_code}' \
+              --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+              --header 'Accept: application/json' \
+              "$base/rest/v1/trips?select=id&limit=1")" || status="curl-error"
+            code="$(jq -r '.code // empty' "$body_file" 2>/dev/null || true)"
+
+            if [ "$status" = "401" ] && [ "$code" = "42501" ]; then
+              echo "OK: the database answered (HTTP 401, Postgres 42501 permission denied for anon)."
+              return 0
+            fi
+            if [ "$status" = "200" ]; then
+              echo "::error::HTTP 200: anon can read public.trips. Table grants changed; check the migrations."
+              return 2
+            fi
+            if [ "$status" = "401" ]; then
+              echo "::warning::HTTP 401 without a database error: the publishable key is wrong or was revoked."
+            else
+              echo "::warning::Unexpected answer: HTTP ${status}${code:+, code $code}. The project may be paused or down."
+            fi
+            return 1
+          }
+
+          rc=0
+          ping || rc=$?
+          if [ "$rc" -eq 1 ]; then
+            echo "Retrying in 30 seconds..."
+            sleep 30
+            rc=0
+            ping || rc=$?
+          fi
+
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Keep-alive failed. If the project is paused, restore it in the Supabase dashboard, then run this workflow again."
+            exit 1
+          fi
