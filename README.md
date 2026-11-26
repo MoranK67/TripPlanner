@@ -36,6 +36,14 @@ and grew into a real product with a cloud database, accounts and a phone experie
 - **Safe by design:** the database itself rejects overlapping activities, activities outside the
   trip and trips longer than 90 days. Shortening a trip automatically returns activities that no
   longer fit to the bank.
+- **Tags and colours:** give activities a tag (a city, a neighbourhood, a theme); activities with
+  the same tag share a colour, and the bank can be filtered by tag.
+- **Edit to place:** besides dragging, an activity can be placed from its edit dialog by choosing a
+  day and a from–to time.
+- **AI-assisted import:** the app writes a prompt for ChatGPT or Claude from the trip's days and free
+  hours. Paste the answer back to import activities with durations, tags and, optionally, a day and
+  start time. Each row is placed in the timetable when it fits; otherwise it goes to the bank with
+  the reason (overlap, outside trip hours, day not in the trip).
 - **Bulk import:** paste a list of activities from Excel or plain text.
 - **Export and backup:** export the timetable as an image or PDF; back up and restore trips as JSON.
 - **Accessible:** keyboard placement, screen-reader labels and contrast checks (axe) in the
@@ -65,9 +73,9 @@ and the test suite below.
 
 ## Quality
 
-- Over 1,400 unit and component tests (Vitest), about 100 end-to-end browser tests on desktop and
-  phone sizes (Playwright, against an in-process fake backend), and over 350 database tests for
-  constraints and row-level security.
+- About 1,900 unit and component tests (Vitest), about 140 end-to-end browser tests on desktop and
+  phone sizes (Playwright, against an in-process fake backend), and over 700 database test
+  assertions (pgTAP) for constraints, row-level security and the SQL functions.
 - Every change runs lint, type checks and tests in GitHub Actions.
 - Every task passed an automated code and security review before it was committed.
 
@@ -86,8 +94,9 @@ and the test suite below.
 ## Status
 
 In active development and in daily use. The core planner, phone view, offline reading,
-import/export, tags, AI-assisted import and the installable PWA are done, and the web app is
-deployed on Cloudflare Pages. See [TASKS.md](TASKS.md) and [DECISIONS.md](DECISIONS.md).
+import/export, tags, AI-assisted import with automatic placement and the installable PWA are done,
+and the web app is deployed on Cloudflare Pages. Every change is previewed on its own branch
+deployment and reaches the live site only after the owner approves it. See [TASKS.md](TASKS.md) and [DECISIONS.md](DECISIONS.md).
 
 ## For developers
 
